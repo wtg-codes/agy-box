@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Antigravity
+Comment=Google Antigravity 2.0 Hub
+Exec=antigravity
+Icon=antigravity
+Type=Application
+Categories=Development;IDE;

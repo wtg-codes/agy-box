@@ -24,6 +24,9 @@ apt-get update && apt-get install -y --no-install-recommends \
     openbox \
     novnc \
     websockify \
+    xterm \
+    tint2 \
+    feh \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
