@@ -182,7 +182,11 @@ fi
 # 5b. Launch tint2 taskbar panel
 if command -v tint2 &>/dev/null; then
     echo -e "${BLUE}[INFO] Starting taskbar panel...${NC}"
-    tint2 &
+    if [[ -f /usr/share/agy-box/tint2rc ]]; then
+        tint2 -c /usr/share/agy-box/tint2rc &
+    else
+        tint2 &
+    fi
 fi
 
 # 5c. Launch a terminal on the desktop
