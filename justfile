@@ -57,6 +57,9 @@ agy-test:
 # Setup local development workspace and export tools
 setup-box:
     @./agy-box-manager dev
+    @mkdir -p ~/.local/share/bash-completion/completions
+    @./agy-box-manager autocomplete bash > ~/.local/share/bash-completion/completions/agy-box-manager
+    @./agy-box-manager autocomplete bash > ~/.local/share/bash-completion/completions/agy
 
 # Teardown local development workspace and cleanup tools
 teardown-box:
