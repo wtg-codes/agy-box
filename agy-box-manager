@@ -921,6 +921,8 @@ cmd_interactive() {
                     echo ""
 
                     local manage_options=()
+
+                    # Official workspace options — always visible
                     if check_container_exists "$CONTAINER_NAME"; then
                         manage_options+=("♻️  Update/Recreate Official Workspace")
                         manage_options+=("🗑️  Remove Official Workspace")
@@ -928,13 +930,14 @@ cmd_interactive() {
                         manage_options+=("🚀 Install Official Workspace (Pull from GHCR)")
                     fi
 
+                    # Dev workspace options — always visible (not mutually exclusive with official)
                     if check_container_exists "$DEV_CONTAINER_NAME"; then
                         manage_options+=("♻️  Rebuild Dev Workspace")
                         manage_options+=("🗑️  Remove Dev Workspace")
+                    elif [ -f "Containerfile" ]; then
+                        manage_options+=("🛠️  Build Dev Workspace (From local source)")
                     else
-                        if [ -f "Containerfile" ]; then
-                            manage_options+=("🛠️  Build Dev Workspace (From local source)")
-                        fi
+                        manage_options+=("🛠️  Build Dev Workspace (Requires Containerfile in CWD)")
                     fi
 
                     manage_options+=("🔙 Back to Main Menu")
@@ -960,6 +963,13 @@ cmd_interactive() {
                             ;;
                         "🗑️  Remove Dev Workspace")
                             cmd_clean "$DEV_CONTAINER_NAME"
+                            echo ""
+                            read -n 1 -s -r -p "Press any key to continue..."
+                            ;;
+                        "🛠️  Build Dev Workspace (Requires Containerfile in CWD)")
+                            gum style --foreground 214 "⚠️  No Containerfile found in the current directory."
+                            echo -e "To build a dev workspace, run this command from the agy-box repo root:"
+                            echo -e "  cd /path/to/agy-box && agy-box-manager"
                             echo ""
                             read -n 1 -s -r -p "Press any key to continue..."
                             ;;
