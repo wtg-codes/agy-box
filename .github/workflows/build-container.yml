@@ -79,11 +79,17 @@ jobs:
           subject-digest: ${{ steps.build-push.outputs.digest }}
           push-to-registry: true
 
+      - name: Get primary tag
+        id: primary-tag
+        run: |
+          TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n 1)
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
       - name: Generate SBOM
         if: github.event_name != 'pull_request'
         uses: anchore/sbom-action@v0
         with:
-          image: ${{ steps.meta.outputs.tags }}
+          image: ${{ steps.primary-tag.outputs.tag }}
           format: spdx-json
           output-file: sbom.spdx.json
 
