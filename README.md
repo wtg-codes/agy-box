@@ -5,6 +5,29 @@
 
 agy-box is agy and friends in a box of your choice! This repository builds the `agy-box`, which is the Distrobox workspace container for the `bluefin-wtg` ecosystem. It contains scripts to scaffold the necessary tools and dependencies for an AI agent developer environment.
 
+---
+
+## Navigation & Guides
+
+- 🏛️ **[System Architecture Guide](file:///var/home/wtg/Repos/agy-box/docs/architecture.md)** — Detailed walkthrough of the host-to-container bridging, D-Bus session keyring pipelines, and interactive setup assistant sequence flows.
+- 🤝 **[Developer Contribution Guide](file:///var/home/wtg/Repos/agy-box/CONTRIBUTING.md)** — Learn how to set up your environment, build from source, and run verification lints.
+
+---
+
+## Table of Contents
+
+- [Quick Start (No Clone Required)](#quick-start-no-clone-required)
+- [Prerequisites](#prerequisites)
+- [Architecture](#architecture)
+  - [Host-Integrated Sandbox Model](#host-integrated-sandbox-model)
+  - [Layered Architecture](#layered-architecture)
+  - [Product Deep Dive: The Antigravity Suite](#product-deep-dive-the-antigravity-suite)
+- [First-Time Setup Assistant](#first-time-setup-assistant)
+- [Setup and Management](#setup-and-management)
+- [Testing](#testing)
+- [Troubleshooting](#troubleshooting)
+- [CI/CD Pipeline](#cicd-pipeline)
+
 ## Quick Start (No Clone Required)
 
 You can launch the interactive workspace manager and install the environment directly from your terminal without even cloning this repository:
@@ -41,40 +64,69 @@ Unlike traditional isolated virtual machines or containers, Distrobox provides a
 
 ### Layered Architecture
 
-The diagram below outlines the layering stack of the `agy-box` sandbox developer environment:
+The diagram below outlines the layering stack and the host integration bridge of the `agy-box` sandbox developer environment:
 
 ```mermaid
 graph TD
-    subgraph Host ["Host OS Environment (e.g., Bluefin, Ubuntu, Fedora)"]
-        HostOS["Immutable / Mutable Host OS"]
-        DisplayServer["Display Server (X11 / Wayland)"]
-        UserHome["User Home Directory (~/)"]
+    subgraph Host ["Host OS (Immutable/Atomic e.g., Bluefin, Silverblue)"]
+        UserHome["User Home (~/) <br> stores .config/environment.d/agy-box.conf"]
+        Display["Display Server (Wayland / X11)"]
+        DBus["D-Bus Session Bus <br> (Secret Service / GNOME Keyring)"]
+        FlatpakChrome["Un-sandboxed Chrome Binary <br> (/var/lib/flatpak/.../chrome)"]
     end
 
-    subgraph ContainerEngine ["Container Layer"]
-        Engine["Container Runtime (Podman / Docker)"]
-        Distrobox["Distrobox Orchestration"]
+    subgraph Bridge ["Distrobox Bridge"]
+        MountHome["Home Volume Mount"]
+        ForwardSockets["Socket Forwarding (X11/Wayland/DBUS)"]
     end
 
     subgraph Sandbox ["agy-box Sandbox Container (Ubuntu Toolbox Base)"]
-        BaseImage["ghcr.io/ublue-os/ubuntu-toolbox:latest"]
-        subgraph ToolSuite ["Developer Tools Suite"]
-            CNCF["CNCF Tooling (kubectl, helm, k9s)"]
-            Chrome["Google Chrome (Headless / Headed Wrapper)"]
-            AGY_IDE["Antigravity 2.0 (Electron Desktop IDE)"]
-            AGY_CLI["Antigravity CLI (agy)"]
-            AGY_SDK["Antigravity Python SDK (google-antigravity)"]
-            ADK["Google ADK (Agent Dev Kit)"]
-            GeminiCLI["Gemini CLI"]
+        BaseOS["Base OS Layer (Ubuntu)"]
+        KeyringClient["Keyring integration (libsecret-1-0)"]
+        
+        subgraph Setup ["First-Time Setup Assistant"]
+            SetupHelper["agy-setup-helper <br> (checks API Keys, Keyring, Git, Chrome)"]
+            ProfileHook["/etc/profile.d/agy-setup-check.sh"]
+        end
+
+        subgraph Suite ["Antigravity Developer Suite"]
+            IDE["Antigravity 2.0 IDE <br> (canvas workspace, terminal, course labs)"]
+            CLI["Antigravity CLI (agy) <br> (WebSocket loops, lab submission)"]
+            SDK["Antigravity Python SDK (google-antigravity) <br> (GCS auth, local Port 8080 API)"]
+            ChromeWrapper["Google Chrome <br> (google-chrome-stable wrapper)"]
         end
     end
 
-    DisplayServer <-->|"X11 / Wayland Socket Forwarding"| AGY_IDE
-    DisplayServer <-->|"Browser Rendering"| Chrome
-    UserHome <-->|"Automatic Volume Mount (~/)"| BaseImage
-    HostOS --> Engine
-    Engine --> Distrobox
-    Distrobox --> BaseImage
+    UserHome <-->|"Mounts to /var/home/wtg"| MountHome
+    MountHome <--> BaseOS
+    
+    DBus -->|"Forward D-Bus Socket"| ForwardSockets
+    ForwardSockets --> KeyringClient
+    KeyringClient -->|"Decrypt tokens"| ChromeWrapper
+    KeyringClient -->|"Decrypt tokens"| IDE
+    
+    Display -->|"X11 / Wayland Socket Forwarding"| ForwardSockets
+    ForwardSockets --> IDE
+    ForwardSockets --> ChromeWrapper
+    
+    IDE <-->|"WebSocket Loop"| CLI
+    SDK -->|"Local API calls (Port 8080)"| IDE
+    IDE -->|"Chrome DevTools Protocol (CDP)"| ChromeWrapper
+    ChromeWrapper -->|"Launch un-sandboxed"| FlatpakChrome
+    
+    ProfileHook -->|"Trigger on first bash login"| SetupHelper
+    SetupHelper -->|"Verify & write keys"| UserHome
+
+    %% Modern Theme Styling
+    classDef host fill:#e0f2fe,stroke:#0284c7,stroke-width:2px,color:#0369a1;
+    classDef bridge fill:#fffbeb,stroke:#d97706,stroke-width:2px,color:#b45309;
+    classDef sandbox fill:#f0fdf4,stroke:#16a34a,stroke-width:2px,color:#15803d;
+    classDef setup fill:#faf5ff,stroke:#9333ea,stroke-width:2px,color:#7e22ce;
+
+    class UserHome,Display,DBus,FlatpakChrome host;
+    class MountHome,ForwardSockets bridge;
+    class BaseOS,KeyringClient,IDE,CLI,SDK,ChromeWrapper sandbox;
+    class SetupHelper,ProfileHook setup;
 ```
 
 ---
@@ -104,6 +156,13 @@ flowchart LR
     IDE --> GCS
     SDK --> GCS
     CLI --> GH
+
+    %% Styling
+    classDef container fill:#f0fdf4,stroke:#16a34a,stroke-width:2px,color:#15803d;
+    classDef external fill:#f3f4f6,stroke:#4b5563,stroke-width:2px,color:#374151;
+
+    class SDK,CLI,IDE,Chrome container;
+    class GCS,GH external;
 ```
 
 #### 1. Antigravity 2.0 (The IDE)
@@ -145,6 +204,19 @@ flowchart LR
     *   **Import:** Used in Python files by running `import google.antigravity`.
     *   **API Control:** Commands are sent programmatically from the script to the local IDE backend server running on port `8080` (or dynamically mapped ports).
     *   **Cloud Authentication:** Can interface with Google Cloud Platform services (such as Gemini/Vertex AI) using Application Default Credentials (ADC) configured in the active environment.
+
+---
+
+## First-Time Setup Assistant
+
+When you enter the `agy-box` container for the first time, a setup helper script (`agy-setup-helper`) launches automatically to guide you through environment initialization and sanity checks:
+
+1. **Host Keyring Verification**: Asserts that D-Bus socket forwarding is configured correctly and `libsecret` is available inside the container to communicate with the host's GNOME Keyring.
+2. **Antigravity API Keys**: Prompts you to input your Gemini or Antigravity API keys if they are not already set in the environment, and securely writes them to `~/.config/environment.d/agy-box.conf` so they are automatically loaded in all subsequent container and IDE sessions.
+3. **Browser Execution Health**: Verifies that Google Chrome is correctly wrapped and can be executed inside the container without sandboxing collisions.
+4. **Git Identity**: Validates that your git username and email are set so you can immediately commit code.
+
+*(Note: The setup helper creates a flag file `~/.config/agy-box/.setup_done` upon completion. You can re-run it manually at any time using the `agy-setup-helper` command).*
 
 ---
 

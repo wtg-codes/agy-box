@@ -39,7 +39,9 @@ RUN --mount=type=cache,target=/root/.npm \
 
 # 8. Copy rootfs and configure entrypoint
 COPY rootfs/ /
-RUN chmod +x /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh \
+             /usr/local/bin/agy-setup-helper \
+             /etc/profile.d/agy-setup-check.sh
 
 VOLUME ["/workspace", "/config"]
 
