@@ -191,6 +191,15 @@ if command -v xterm &>/dev/null; then
     xterm -fa 'Monospace' -fs 12 -bg '#1a1b2e' -fg '#e0e0e0' -geometry 100x35+50+50 -T 'agy-box Terminal' &
 fi
 
+# 5d. Launch default desktop applications inside the VDI display
+if command -v antigravity-ide &>/dev/null; then
+    echo -e "${BLUE}[INFO] Automatically starting Antigravity IDE...${NC}"
+    antigravity-ide &
+elif command -v antigravity &>/dev/null; then
+    echo -e "${BLUE}[INFO] Automatically starting Google Antigravity...${NC}"
+    antigravity &
+fi
+
 # Block and keep shell open while monitoring all critical services
 while true; do
     if ! kill -0 %1 2>/dev/null; then

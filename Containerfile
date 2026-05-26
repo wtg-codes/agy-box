@@ -14,6 +14,10 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 COPY scripts/install-antigravity-2.0.sh /tmp/
 RUN /tmp/install-antigravity-2.0.sh && rm /tmp/install-antigravity-2.0.sh
 
+# 2b. Install Antigravity IDE (Stable 1.23.2)
+COPY scripts/install-antigravity-ide.sh /tmp/
+RUN /tmp/install-antigravity-ide.sh && rm /tmp/install-antigravity-ide.sh
+
 # 3. Install Antigravity CLI
 COPY scripts/install-antigravity-cli.sh /tmp/
 RUN /tmp/install-antigravity-cli.sh && rm /tmp/install-antigravity-cli.sh
