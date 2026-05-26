@@ -172,18 +172,32 @@ echo -e "${BLUE}Access the desktop inside your web browser at:${NC}"
 echo -e "👉 ${GREEN}http://localhost:${WEB_PORT}/vnc.html?autoconnect=true${NC}\n"
 echo -e "${YELLOW}Press [Ctrl+C] to stop the virtual desktop session.${NC}"
 
-# 5. Launch default desktop applications inside the VDI display
+# 5. Set up the desktop environment
+# 5a. Set wallpaper
+if command -v feh &>/dev/null && [[ -f /usr/share/agy-box/wallpaper.png ]]; then
+    echo -e "${BLUE}[INFO] Setting desktop wallpaper...${NC}"
+    feh --bg-fill /usr/share/agy-box/wallpaper.png &
+fi
+
+# 5b. Launch tint2 taskbar panel
+if command -v tint2 &>/dev/null; then
+    echo -e "${BLUE}[INFO] Starting taskbar panel...${NC}"
+    tint2 &
+fi
+
+# 5c. Launch a terminal on the desktop
+if command -v xterm &>/dev/null; then
+    echo -e "${BLUE}[INFO] Launching terminal...${NC}"
+    xterm -fa 'Monospace' -fs 12 -bg '#1a1b2e' -fg '#e0e0e0' -geometry 100x35+50+50 -T 'agy-box Terminal' &
+fi
+
+# 5d. Launch default desktop applications inside the VDI display
 if command -v antigravity-ide &>/dev/null; then
     echo -e "${BLUE}[INFO] Automatically starting Antigravity IDE...${NC}"
     antigravity-ide &
 elif command -v antigravity &>/dev/null; then
     echo -e "${BLUE}[INFO] Automatically starting Google Antigravity...${NC}"
     antigravity &
-fi
-
-if command -v google-chrome-stable &>/dev/null; then
-    echo -e "${BLUE}[INFO] Automatically starting Google Chrome...${NC}"
-    google-chrome-stable --no-sandbox &
 fi
 
 # Block and keep shell open while monitoring all critical services

@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Chrome
+Comment=Google Chrome Browser
+Exec=google-chrome-stable --no-sandbox
+Icon=google-chrome
+Type=Application
+Categories=Network;WebBrowser;
