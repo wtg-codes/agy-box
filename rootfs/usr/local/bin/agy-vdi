@@ -8,6 +8,10 @@
 
 set -Eeuo pipefail
 
+# Force Mesa to use software rendering to suppress hardware GPU device probing errors inside the container
+export LIBGL_ALWAYS_SOFTWARE=1
+export GALLIUM_DRIVER=llvmpipe
+
 DISPLAY_PORT=99
 VNC_PORT=5900
 WEB_PORT=6080
