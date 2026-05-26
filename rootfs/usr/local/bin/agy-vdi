@@ -12,6 +12,9 @@ set -Eeuo pipefail
 export LIBGL_ALWAYS_SOFTWARE=1
 export GALLIUM_DRIVER=llvmpipe
 
+# Unset WAYLAND_DISPLAY to prevent x11vnc from attempting to connect to a Wayland host display
+unset WAYLAND_DISPLAY
+
 DISPLAY_PORT=99
 VNC_PORT=5900
 WEB_PORT=6080
