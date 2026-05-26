@@ -335,6 +335,9 @@ cmd_install_official() {
     if [ "$(get_runtime)" = "docker" ]; then
         dbx_flags+=("--additional-flags" "--user $(id -u):$(id -g)")
     fi
+    if [[ -n "${SSH_AUTH_SOCK:-}" && -S "$SSH_AUTH_SOCK" ]]; then
+        dbx_flags+=("--additional-flags" "-v $SSH_AUTH_SOCK:/run/ssh-agent -e SSH_AUTH_SOCK=/run/ssh-agent")
+    fi
     if [ "$systemd" = "true" ]; then
         dbx_flags+=("--init")
     fi
@@ -388,6 +391,9 @@ cmd_build_dev() {
     local dbx_flags=()
     if [ "$runtime" = "docker" ]; then
         dbx_flags+=("--additional-flags" "--user $(id -u):$(id -g)")
+    fi
+    if [[ -n "${SSH_AUTH_SOCK:-}" && -S "$SSH_AUTH_SOCK" ]]; then
+        dbx_flags+=("--additional-flags" "-v $SSH_AUTH_SOCK:/run/ssh-agent -e SSH_AUTH_SOCK=/run/ssh-agent")
     fi
     if [ "$systemd" = "true" ]; then
         dbx_flags+=("--init")
