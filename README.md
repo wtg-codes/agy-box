@@ -11,6 +11,7 @@ agy-box is agy and friends in a box of your choice! This repository builds the `
 
 - 🏛️ **[System Architecture Guide](file:///var/home/wtg/Repos/agy-box/docs/architecture.md)** — Detailed walkthrough of the host-to-container bridging, D-Bus session keyring pipelines, and interactive setup assistant sequence flows.
 - 🤝 **[Developer Contribution Guide](file:///var/home/wtg/Repos/agy-box/CONTRIBUTING.md)** — Learn how to set up your environment, build from source, and run verification lints.
+- 🛠️ **[Setup & Troubleshooting Guide](file:///var/home/wtg/Repos/agy-box/docs/SETUP.md)** — Comprehensive guidelines on prerequisites, rootless configurations, toolchain exporting, and detailed troubleshooting solutions.
 
 ---
 
@@ -303,9 +304,7 @@ This will automatically:
 
 ## Troubleshooting
 
-
-- **Distrobox entry fails**: Ensure your host system paths and environment variables are compatible. Try `distrobox rm agy-box-dev` and re-create it.
-- **Tools not found**: Sometimes pipx pathing needs to be sourced. Check `echo $PATH` and ensure `/usr/local/bin` and `/opt/pipx` are present.
+For detailed installation prerequisites, rootless engine configurations (Podman vs Docker), permission lockout fixes, and a comprehensive FAQ guide, please refer to the dedicated **[Setup & Troubleshooting Guide](file:///var/home/wtg/Repos/agy-box/docs/SETUP.md)**.
 
 ## CI/CD Pipeline
 

@@ -54,4 +54,12 @@ agy-uninstall-global:
 agy-test:
     @./scripts/test-box.sh
 
+# Setup local development workspace and export tools
+setup-box:
+    @./agy-box-manager dev
+
+# Teardown local development workspace and cleanup tools
+teardown-box:
+    @./agy-box-manager clean dev
+
 

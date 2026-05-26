@@ -29,6 +29,38 @@ get_os_name() {
     fi
 }
 
+probe_host_capabilities() {
+    local mode=${1:-}
+    if command -v podman >/dev/null 2>&1; then
+        export DBX_CONTAINER_MANAGER="podman"
+    elif command -v docker >/dev/null 2>&1; then
+        export DBX_CONTAINER_MANAGER="docker"
+        
+        if [ "$mode" != "menu" ]; then
+            # Check if Docker daemon is running and user has access
+            if ! docker info >/dev/null 2>&1; then
+                gum style --foreground 196 --border rounded --padding "0 2" --margin "1 0" \
+                    "❌ ERROR: Docker daemon is unreachable!" \
+                    "Please check if the Docker service is active, or add your user" \
+                    "to the 'docker' Unix group:" \
+                    "  sudo usermod -aG docker $USER" \
+                    "You may need to log out and log back in for changes to apply."
+            elif ! docker info 2>/dev/null | grep -q "rootless"; then
+                gum style --foreground 214 --border rounded --padding "0 2" --margin "1 0" \
+                    "⚠️ CAUTION: Rootful Docker detected!" \
+                    "Since standard Docker runs as a root daemon, files written to" \
+                    "your mounted home directory may be saved with root ownership." \
+                    "Consider setting up rootless Docker or installing Podman."
+            fi
+        fi
+    elif [ "$mode" != "menu" ]; then
+        gum style --foreground 196 --border rounded --padding "0 2" --margin "1 0" \
+            "❌ ERROR: No container runtime found!" \
+            "Please install either Podman (Highly Recommended) or Docker."
+        exit 1
+    fi
+}
+
 # --- Dependency Management ---
 install_gum() {
     echo -e "${CYAN}Gum is required for the UI but is not installed.${NC}"
@@ -82,6 +114,9 @@ check_deps() {
     if ! command -v gum &> /dev/null; then
         install_gum
     fi
+
+    # Initialize container engine binding
+    probe_host_capabilities "$mode"
 
     if [ "$mode" = "menu" ]; then
         return 0
@@ -190,8 +225,20 @@ cmd_install_official() {
         fi
     fi
 
+    local dbx_flags=()
+    if [ "$(get_runtime)" = "docker" ]; then
+        dbx_flags+=("--additional-flags" "--user $(id -u):$(id -g)")
+    fi
+
     gum style --foreground 39 "🚀 Pulling official image and creating Distrobox environment..."
-    distrobox create -i "$IMAGE_NAME" -n "$CONTAINER_NAME"
+    distrobox create -i "$IMAGE_NAME" -n "$CONTAINER_NAME" "${dbx_flags[@]}"
+
+    # Export CLI tools to host ~/.local/bin
+    if distrobox enter "$CONTAINER_NAME" -- command -v distrobox-export &>/dev/null; then
+        gum style --foreground 39 "🔗 Exporting toolchain CLI 'agy' to host (~/.local/bin)..."
+        distrobox enter "$CONTAINER_NAME" -- distrobox-export --bin /usr/bin/agy --export-path "$HOME/.local/bin"
+    fi
+
     gum style --foreground 46 --margin "1 0" "✓ Created successfully! Run 'agy-box-manager enter' to start."
 }
 
@@ -216,8 +263,19 @@ cmd_build_dev() {
     gum style --foreground 39 "🛠️  Building development image with $runtime (this may take a while)..."
     "$runtime" build -t "$DEV_IMAGE_NAME" -f Containerfile .
 
+    local dbx_flags=()
+    if [ "$runtime" = "docker" ]; then
+        dbx_flags+=("--additional-flags" "--user $(id -u):$(id -g)")
+    fi
+
     gum style --foreground 39 "📦 Creating development Distrobox environment..."
-    distrobox create -i "$DEV_IMAGE_NAME" -n "$DEV_CONTAINER_NAME"
+    distrobox create -i "$DEV_IMAGE_NAME" -n "$DEV_CONTAINER_NAME" "${dbx_flags[@]}"
+
+    # Export CLI tools to host ~/.local/bin
+    if distrobox enter "$DEV_CONTAINER_NAME" -- command -v distrobox-export &>/dev/null; then
+        gum style --foreground 39 "🔗 Exporting toolchain CLI 'agy' to host (~/.local/bin)..."
+        distrobox enter "$DEV_CONTAINER_NAME" -- distrobox-export --bin /usr/bin/agy --export-path "$HOME/.local/bin"
+    fi
 
     gum style --foreground 46 --margin "1 0" "✓ Dev environment ready! Run 'agy-box-manager enter dev' to start."
 }
@@ -253,6 +311,11 @@ cmd_enter() {
 cmd_clean() {
     local target_name=${1:-$CONTAINER_NAME}
     if check_container_exists "$target_name"; then
+        # Clean up exported host wrapper scripts if they exist
+        if distrobox enter "$target_name" -- command -v distrobox-export &>/dev/null; then
+            gum style --foreground 214 "Cleaning up exported binaries..."
+            distrobox enter "$target_name" -- distrobox-export --delete --bin /usr/bin/agy || true
+        fi
         gum spin --spinner dot --title "Removing environment: $target_name..." -- distrobox rm --yes "$target_name"
         gum style --foreground 46 "✓ Removed $target_name"
     else
@@ -452,7 +515,7 @@ cmd_interactive() {
             show_banner
             # Show a brief spinner to indicate loading
             gum spin --spinner dot --title "Analyzing system dependencies and status..." -- sleep 0.5
-            check_deps "menu"
+            check_deps "quiet"
             show_system_status
             echo ""
             read -n 1 -s -r -p "Press any key to continue to Main Menu..."
