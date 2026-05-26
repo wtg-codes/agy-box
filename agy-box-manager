@@ -569,16 +569,7 @@ cmd_install_official() {
     # Set up ujust/just integration by default
     setup_shell_integration
 
-    gum style --foreground 46 --margin "1 0" "✓ Created successfully!"
-
-    # Offer to run the setup helper immediately
-    if [[ -t 0 && -t 1 ]]; then
-        if gum confirm "Would you like to run the first-time setup assistant now?"; then
-            distrobox enter "$CONTAINER_NAME" -- /usr/local/bin/agy-setup-helper
-        else
-            gum style --foreground 214 "Skipping setup. It will run automatically on your first 'agy-box-manager enter'."
-        fi
-    fi
+    gum style --foreground 46 --margin "1 0" "✓ Created successfully! Run 'agy-box-manager enter' to launch."
 }
 
 cmd_build_dev() {
@@ -685,16 +676,7 @@ cmd_build_dev() {
     # Set up ujust/just integration by default
     setup_shell_integration
 
-    gum style --foreground 46 --margin "1 0" "✓ Dev environment ready!"
-
-    # Offer to run the setup helper immediately
-    if [[ -t 0 && -t 1 ]]; then
-        if gum confirm "Would you like to run the first-time setup assistant now?"; then
-            distrobox enter "$DEV_CONTAINER_NAME" -- /usr/local/bin/agy-setup-helper
-        else
-            gum style --foreground 214 "Skipping setup. It will run automatically on your first 'agy-box-manager enter dev'."
-        fi
-    fi
+    gum style --foreground 46 --margin "1 0" "✓ Dev environment ready! Run 'agy-box-manager enter dev' to launch."
 }
 
 cmd_desktop() {
