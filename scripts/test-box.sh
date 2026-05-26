@@ -10,7 +10,7 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 CONTAINER_NAME="agy-box-test"
-IMAGE_NAME="localhost/agy-box:dev"
+IMAGE_NAME="${IMAGE_NAME:-localhost/agy-box:dev}"
 
 log_info() {
     echo -e "${CYAN}[INFO]${NC} $1"
