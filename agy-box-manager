@@ -282,6 +282,174 @@ EOF
     esac
 }
 
+ensure_justfile_copied() {
+    local target_dir="$HOME/.config/agy-box"
+    local target_file="$target_dir/justfile"
+    mkdir -p "$target_dir"
+
+    # Find the current directory of the script if running locally
+    local script_dir
+    script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+
+    if [ -f "$script_dir/justfile" ]; then
+        cp "$script_dir/justfile" "$target_file"
+    else
+        # If not running locally, download it
+        local remote_justfile_url="https://raw.githubusercontent.com/wtg-codes/agy-box/main/justfile"
+        curl -fsSL "$remote_justfile_url" -o "$target_file" 2>/dev/null || true
+    fi
+}
+
+# shellcheck disable=SC2016
+setup_shell_integration() {
+    local config_dir="$HOME/.config/agy-box"
+    mkdir -p "$config_dir"
+    
+    # Ensure justfile is copied/updated
+    ensure_justfile_copied
+
+    # Write the bash/zsh shell integration script
+    cat << 'EOF' > "$config_dir/shell_integration.sh"
+# --- Added by agy-box-manager: just/ujust integration ---
+ujust() {
+    if [[ $# -eq 0 ]]; then
+        if command -v /usr/bin/ujust &>/dev/null; then
+            /usr/bin/ujust "$@"
+        fi
+        if [[ -f "$HOME/.config/agy-box/justfile" ]]; then
+            echo ""
+            echo "Antigravity Dev Box commands (run with ujust <command>):"
+            just --justfile "$HOME/.config/agy-box/justfile" --list --list-heading "" --list-prefix " - "
+        fi
+    elif [[ "$1" == agy-* || "$1" == agy ]]; then
+        if [[ -f "$HOME/.config/agy-box/justfile" ]]; then
+            just --justfile "$HOME/.config/agy-box/justfile" "$@"
+        else
+            echo "Error: Antigravity justfile not found. Please run agy-box-manager install first." >&2
+            return 1
+        fi
+    else
+        if command -v /usr/bin/ujust &>/dev/null; then
+            /usr/bin/ujust "$@"
+        else
+            echo "ujust: command not found" >&2
+            return 1
+        fi
+    fi
+}
+
+just() {
+    if [[ "$1" == agy-* || "$1" == agy ]]; then
+        local dir="$PWD"
+        local found=false
+        while [[ "$dir" != "/" ]]; do
+            if [[ -f "$dir/justfile" || -f "$dir/Justfile" || -f "$dir/.justfile" || -f "$dir/.Justfile" ]]; then
+                found=true
+                break
+            fi
+            dir="$(dirname "$dir")"
+        done
+        if [[ "$found" == true ]]; then
+            command just "$@"
+        else
+            if [[ -f "$HOME/.config/agy-box/justfile" ]]; then
+                command just --justfile "$HOME/.config/agy-box/justfile" "$@"
+            else
+                command just "$@"
+            fi
+        fi
+    else
+        command just "$@"
+    fi
+}
+# --- End agy-box-manager integration ---
+EOF
+
+    # Add sourcing to ~/.bashrc
+    if [ -f "$HOME/.bashrc" ]; then
+        if ! grep -q "shell_integration.sh" "$HOME/.bashrc"; then
+            echo -e '\n# Added by agy-box-manager\nif [ -f "$HOME/.config/agy-box/shell_integration.sh" ]; then\n    . "$HOME/.config/agy-box/shell_integration.sh"\nfi' >> "$HOME/.bashrc"
+        fi
+    fi
+
+    # Add sourcing to ~/.zshrc
+    if [ -f "$HOME/.zshrc" ]; then
+        if ! grep -q "shell_integration.sh" "$HOME/.zshrc"; then
+            echo -e '\n# Added by agy-box-manager\nif [ -f "$HOME/.config/agy-box/shell_integration.sh" ]; then\n    . "$HOME/.config/agy-box/shell_integration.sh"\nfi' >> "$HOME/.zshrc"
+        fi
+    fi
+
+    # Fish Integration
+    local fish_func_dir="$HOME/.config/fish/functions"
+    if [ -d "$HOME/.config/fish" ]; then
+        mkdir -p "$fish_func_dir"
+        
+        # ujust.fish
+        cat << 'EOF' > "$fish_func_dir/ujust.fish"
+function ujust
+    if not set -q argv[1]
+        if test -f /usr/bin/ujust
+            /usr/bin/ujust
+        end
+        if test -f "$HOME/.config/agy-box/justfile"
+            echo ""
+            echo "Antigravity Dev Box commands (run with ujust <command>):"
+            just --justfile "$HOME/.config/agy-box/justfile" --list --list-heading "" --list-prefix " - "
+        end
+    else
+        set -l cmd $argv[1]
+        if string match -q "agy-*" "$cmd"; or test "$cmd" = "agy"
+            if test -f "$HOME/.config/agy-box/justfile"
+                just --justfile "$HOME/.config/agy-box/justfile" $argv
+            else
+                echo "Error: Antigravity justfile not found. Please run agy-box-manager install first." >&2
+                return 1
+            end
+        else
+            if test -f /usr/bin/ujust
+                /usr/bin/ujust $argv
+            else
+                echo "ujust: command not found" >&2
+                return 1
+            end
+        end
+    end
+end
+EOF
+
+        # just.fish
+        cat << 'EOF' > "$fish_func_dir/just.fish"
+function just
+    if set -q argv[1]
+        set -l cmd $argv[1]
+        if string match -q "agy-*" "$cmd"; or test "$cmd" = "agy"
+            set -l dir "$PWD"
+            set -l found false
+            while test "$dir" != "/"
+                if test -f "$dir/justfile"; or test -f "$dir/Justfile"; or test -f "$dir/.justfile"; or test -f "$dir/.Justfile"
+                    set found true
+                    break
+                end
+                set dir (dirname "$dir")
+            end
+            if test "$found" = "true"
+                command just $argv
+            else
+                if test -f "$HOME/.config/agy-box/justfile"
+                    command just --justfile "$HOME/.config/agy-box/justfile" $argv
+                else
+                    command just $argv
+                end
+            end
+            return
+        end
+    end
+    command just $argv
+end
+EOF
+    fi
+}
+
 setup_completions() {
     # Bash Auto-Completions
     local bash_comp_dir="$HOME/.local/share/bash-completion/completions"
@@ -381,7 +549,22 @@ cmd_install_official() {
         distrobox enter "$CONTAINER_NAME" -- distrobox-export --bin /usr/bin/agy --export-path "$HOME/.local/bin"
     fi
 
-    gum style --foreground 46 --margin "1 0" "✓ Created successfully! Run 'agy-box-manager enter' to start."
+    # Clear setup_done flag so the setup helper runs on first interactive entry
+    rm -f "$HOME/.config/agy-box/.setup_done"
+
+    # Set up ujust/just integration by default
+    setup_shell_integration
+
+    gum style --foreground 46 --margin "1 0" "✓ Created successfully!"
+
+    # Offer to run the setup helper immediately
+    if [[ -t 0 && -t 1 ]]; then
+        if gum confirm "Would you like to run the first-time setup assistant now?"; then
+            distrobox enter "$CONTAINER_NAME" -- /usr/local/bin/agy-setup-helper
+        else
+            gum style --foreground 214 "Skipping setup. It will run automatically on your first 'agy-box-manager enter'."
+        fi
+    fi
 }
 
 cmd_build_dev() {
@@ -468,7 +651,22 @@ cmd_build_dev() {
         distrobox enter "$DEV_CONTAINER_NAME" -- distrobox-export --bin /usr/bin/agy --export-path "$HOME/.local/bin"
     fi
 
-    gum style --foreground 46 --margin "1 0" "✓ Dev environment ready! Run 'agy-box-manager enter dev' to start."
+    # Clear setup_done flag so the setup helper runs on first interactive entry
+    rm -f "$HOME/.config/agy-box/.setup_done"
+
+    # Set up ujust/just integration by default
+    setup_shell_integration
+
+    gum style --foreground 46 --margin "1 0" "✓ Dev environment ready!"
+
+    # Offer to run the setup helper immediately
+    if [[ -t 0 && -t 1 ]]; then
+        if gum confirm "Would you like to run the first-time setup assistant now?"; then
+            distrobox enter "$DEV_CONTAINER_NAME" -- /usr/local/bin/agy-setup-helper
+        else
+            gum style --foreground 214 "Skipping setup. It will run automatically on your first 'agy-box-manager enter dev'."
+        fi
+    fi
 }
 
 cmd_desktop() {
@@ -545,6 +743,9 @@ cmd_install_global() {
     else
         gum style --foreground 214 "Make sure $target_dir is added to your \$PATH variable."
     fi
+
+    # Set up ujust/just integration by default
+    setup_shell_integration
 }
 
 cmd_uninstall_global() {
@@ -558,7 +759,40 @@ cmd_uninstall_global() {
         rm -f "$HOME/.zfunc/_agy-box-manager"
         rm -f "$HOME/.config/agy-box-manager/.completions_installed"
 
-        gum style --foreground 46 --margin "1 0" "✓ Removed globally installed CLI and auto-completions."
+        # Clean up ujust/just shell integration
+        rm -f "$HOME/.config/agy-box/shell_integration.sh"
+        rm -f "$HOME/.config/agy-box/justfile"
+        rm -f "$HOME/.config/fish/functions/just.fish"
+        rm -f "$HOME/.config/fish/functions/ujust.fish"
+
+        # Clean up sourcing in ~/.bashrc and ~/.zshrc using python
+        if [ -f "$HOME/.bashrc" ] || [ -f "$HOME/.zshrc" ]; then
+            # shellcheck disable=SC2016
+            python3 -c '
+import os
+def clean_file(path):
+    if not os.path.exists(path): return
+    with open(path, "r") as f:
+        content = f.read()
+    block = """
+# Added by agy-box-manager
+if [ -f "$HOME/.config/agy-box/shell_integration.sh" ]; then
+    . "$HOME/.config/agy-box/shell_integration.sh"
+fi"""
+    content = content.replace(block, "")
+    block_fpath = """
+# Added by agy-box-manager
+fpath=(~/.zfunc \$fpath)"""
+    content = content.replace(block_fpath, "")
+    with open(path, "w") as f:
+        f.write(content)
+
+clean_file(os.path.expanduser("~/.bashrc"))
+clean_file(os.path.expanduser("~/.zshrc"))
+'
+        fi
+
+        gum style --foreground 46 --margin "1 0" "✓ Removed globally installed CLI, auto-completions, and shell integrations."
     else
         gum style --foreground 212 "Skipping uninstall."
     fi
