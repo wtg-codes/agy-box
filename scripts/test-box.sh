@@ -79,7 +79,7 @@ if distrobox list --no-color | grep -qw "$CONTAINER_NAME"; then
     distrobox rm --yes "$CONTAINER_NAME" >/dev/null
 fi
 
-distrobox create -i "$IMAGE_NAME" -n "$CONTAINER_NAME" --yes
+distrobox create -i "$IMAGE_NAME" -n "$CONTAINER_NAME" --hostname "$CONTAINER_NAME" --yes
 log_success "Created distrobox container '$CONTAINER_NAME'."
 
 # --- Run Assertions Inside Distrobox ---
