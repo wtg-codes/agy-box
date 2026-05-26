@@ -615,7 +615,6 @@ show_system_status() {
     left_text=$(printf "🖥️  Host OS: %s\n\n%s\n%s\n%s" "$os_name" "$podman_status" "$docker_status" "$distrobox_status")
     local left_card
     left_card=$(gum style --border rounded --border-foreground 39 --padding "1 2" --margin "0 1" --width 28 "$left_text")
-
     # Right Card: Workspace Status
     local right_text
     right_text=$(printf "📦 Workspaces\n\n%s\n%s\n%s" "$official_status" "$dev_status" "$source_status")
@@ -624,6 +623,93 @@ show_system_status() {
 
     # Join horizontally
     gum join --horizontal "$left_card" "$right_card"
+}
+
+cmd_doctor() {
+    # Ensure dependencies and host capabilities are probed
+    check_deps "quiet"
+
+    echo -e "${CYAN}==================================================${NC}"
+    echo -e "${CYAN}             AGY Box Doctor Diagnostics           ${NC}"
+    echo -e "${CYAN}==================================================${NC}"
+
+    local errors=0
+    local warnings=0
+
+    # 1. Path Check
+    echo -n "Checking if ~/.local/bin is in PATH... "
+    if [[ ":$PATH:" == *":$HOME/.local/bin:"* ]]; then
+        echo -e "${GREEN}[OK]${NC}"
+    else
+        echo -e "${YELLOW}[WARN]${NC}"
+        echo -e "  -> ~/.local/bin is not in your PATH. Exported commands may not be directly accessible."
+        warnings=$((warnings + 1))
+    fi
+
+    # 2. DNS / Internet Check
+    echo -n "Checking DNS resolution and internet connectivity... "
+    if curl -s --connect-timeout 3 https://www.google.com &>/dev/null; then
+        echo -e "${GREEN}[OK]${NC}"
+    else
+        echo -e "${RED}[ERROR]${NC}"
+        echo -e "  -> Failed to connect to Google. Check your internet connection and DNS settings."
+        errors=$((errors + 1))
+    fi
+
+    # 3. Mount and Directory Permissions
+    echo -n "Checking ~/.config write permissions... "
+    if [ -w "$HOME/.config" ]; then
+        echo -e "${GREEN}[OK]${NC}"
+    else
+        echo -e "${RED}[ERROR]${NC}"
+        echo -e "  -> ~/.config directory is not writable."
+        errors=$((errors + 1))
+    fi
+
+    echo -n "Checking ~/.local/bin write permissions... "
+    if [ -d "$HOME/.local/bin" ] && [ ! -w "$HOME/.local/bin" ]; then
+        echo -e "${RED}[ERROR]${NC}"
+        echo -e "  -> ~/.local/bin directory exists but is not writable."
+        errors=$((errors + 1))
+    else
+        echo -e "${GREEN}[OK]${NC}"
+    fi
+
+    # 4. Container engine check
+    echo -n "Checking container manager runtime... "
+    if [ -n "${DBX_CONTAINER_MANAGER:-}" ]; then
+        echo -e "${GREEN}[OK] ($DBX_CONTAINER_MANAGER)${NC}"
+    else
+        echo -e "${RED}[ERROR]${NC}"
+        echo -e "  -> No container manager detected."
+        errors=$((errors + 1))
+    fi
+
+    # 5. Distrobox check
+    echo -n "Checking distrobox installation... "
+    if command -v distrobox &>/dev/null; then
+        echo -e "${GREEN}[OK]${NC}"
+    else
+        echo -e "${RED}[ERROR]${NC}"
+        echo -e "  -> distrobox command not found on host."
+        errors=$((errors + 1))
+    fi
+
+    # Summary
+    echo -e "\n${CYAN}--------------------------------------------------${NC}"
+    if [ "$errors" -eq 0 ] && [ "$warnings" -eq 0 ]; then
+        echo -e "${GREEN}System is healthy! No issues detected.${NC}"
+    elif [ "$errors" -eq 0 ]; then
+        echo -e "${YELLOW}System is functional but has $warnings warning(s).${NC}"
+    else
+        echo -e "${RED}System has $errors error(s) and $warnings warning(s). Actions required!${NC}"
+    fi
+    echo -e "${CYAN}--------------------------------------------------${NC}\n"
+
+    if [ "$errors" -gt 0 ]; then
+        return 1
+    fi
+    return 0
 }
 
 cmd_ports() {
@@ -894,6 +980,7 @@ cmd_interactive() {
                     local tools_options=()
                     tools_options+=("📊 Show Distrobox List")
                     tools_options+=("🔌 Show Port Mappings")
+                    tools_options+=("🩺 Run Doctor Diagnostics")
                     tools_options+=("📦 Check Package Dependencies")
 
                     if [ -f "$HOME/.local/bin/agy-box-manager" ]; then
@@ -914,6 +1001,10 @@ cmd_interactive() {
                             ;;
                         "🔌 Show Port Mappings")
                             cmd_ports
+                            read -n 1 -s -r -p "Press any key to continue..."
+                            ;;
+                        "🩺 Run Doctor Diagnostics")
+                            cmd_doctor
                             read -n 1 -s -r -p "Press any key to continue..."
                             ;;
                         "📦 Check Package Dependencies")
@@ -962,6 +1053,7 @@ show_help() {
     echo "  desktop dev         Launch VDI Web Desktop inside development environment"
     echo "  status              List AGY Box environments"
     echo "  ports               Show sandboxed port mappings"
+    echo "  doctor              Run system diagnostics health check"
     echo "  clean               Remove the official environment"
     echo "  clean dev           Remove the development environment"
     echo "  install-global      Copy the CLI to ~/.local/bin for system-wide access"
@@ -982,6 +1074,7 @@ case "${1:-}" in
     clean)            check_deps "quiet"; if [ "${2:-}" = "dev" ]; then cmd_clean "$DEV_CONTAINER_NAME"; else cmd_clean "$CONTAINER_NAME"; fi ;;
     status)           check_deps "quiet"; cmd_status ;;
     ports)            check_deps "quiet"; cmd_ports ;;
+    doctor)           check_deps "quiet"; cmd_doctor ;;
     install-global)   check_deps "quiet"; cmd_install_global ;;
     uninstall-global) check_deps "quiet"; cmd_uninstall_global ;;
     autocomplete)     cmd_autocomplete "${2:-bash}" ;;
