@@ -65,4 +65,21 @@ setup-box:
 teardown-box:
     @./agy-box-manager clean dev
 
+# Sync config directories/dotfiles to backup directory
+sync-workspace:
+    @mkdir -p ~/.config/agy-box/backup
+    @if [ -d ~/.config/environment.d ]; then \
+        mkdir -p ~/.config/agy-box/backup/environment.d; \
+        rsync -a --delete ~/.config/environment.d/ ~/.config/agy-box/backup/environment.d/; \
+    fi
+    @if [ -d ~/.config/agy-box ]; then \
+        mkdir -p ~/.config/agy-box/backup/agy-box; \
+        rsync -a --delete --exclude=backup ~/.config/agy-box/ ~/.config/agy-box/backup/agy-box/; \
+    fi
+    @if [ -d ~/.config/python_keyring ]; then \
+        mkdir -p ~/.config/agy-box/backup/python_keyring; \
+        rsync -a --delete ~/.config/python_keyring/ ~/.config/agy-box/backup/python_keyring/; \
+    fi
+    @echo "Workspace state successfully synchronized to ~/.config/agy-box/backup/"
+
 
