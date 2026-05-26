@@ -1,0 +1,21 @@
+{
+  "name": "agy-box",
+  "image": "ghcr.io/wtg-codes/agy-box:latest",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      },
+      "extensions": [
+        "timonwong.shellcheck",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-azuretools.vscode-docker",
+        "oderwat.indent-rainbow"
+      ]
+    }
+  },
+  "features": {},
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+  "workspaceFolder": "/workspace"
+}
