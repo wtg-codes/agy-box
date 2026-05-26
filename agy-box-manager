@@ -364,102 +364,214 @@ show_system_status() {
         status_text+="📁 Local Repository: No Containerfile Found\n"
     fi
 
-    gum style --border rounded --border-foreground 39 --padding "0 2" --margin "0 2" "$status_text"
+    gum style --border double --border-foreground 39 --padding "0 2" --margin "0 2" "$status_text"
+}
+
+cmd_check_dependencies() {
+    local missing=0
+    if ! command -v distrobox &> /dev/null; then
+        echo -e "${RED}✗ Error: distrobox is not installed on the host system.${NC}" >&2
+        missing=1
+    fi
+    if ! command -v podman &> /dev/null && ! command -v docker &> /dev/null; then
+        echo -e "${RED}✗ Error: Neither podman nor docker is installed on the host system.${NC}" >&2
+        missing=1
+    fi
+    if [ "$missing" -eq 0 ]; then
+        gum style --foreground 46 --margin "1 0" "✓ All dependencies (distrobox, podman/docker) are satisfied."
+    else
+        echo -e "\n${CYAN}Would you like to try installing the missing container dependencies now?${NC}"
+        exec < /dev/tty
+        if gum confirm "Install missing dependencies?"; then
+            if command -v apt-get &> /dev/null; then
+                sudo apt update && sudo apt install -y podman distrobox
+            elif command -v dnf &> /dev/null; then
+                sudo dnf install -y podman distrobox
+            elif command -v pacman &> /dev/null; then
+                sudo pacman -S --noconfirm podman distrobox
+            elif command -v zypper &> /dev/null; then
+                sudo zypper install -y podman distrobox
+            elif command -v brew &> /dev/null; then
+                brew install podman distrobox
+            else
+                echo -e "${RED}Could not detect a supported package manager. Please install manually.${NC}"
+            fi
+        else
+            echo -e "\nPlease install the missing container dependencies manually."
+        fi
+    fi
+    read -n 1 -s -r -p "Press any key to continue..."
 }
 
 cmd_interactive() {
+    # 1. Splash Screen
+    clear
     show_banner
     check_deps "menu"
     show_system_status
+    sleep 1.5
 
-    local options=()
+    while true; do
+        clear
+        show_banner
 
-    if ! command -v distrobox &> /dev/null; then
-        options+=("📦 Install Distrobox")
-    fi
+        local main_options=(
+            "🚪 Workspaces (Enter/VDI Desktop) >"
+            "🛠️  Manage Environments >"
+            "⚙️  System Tools >"
+            "❌ Exit"
+        )
 
-    if ! command -v podman &> /dev/null && ! command -v docker &> /dev/null; then
-        if command -v apt-get &> /dev/null || command -v zypper &> /dev/null; then
-            options+=("📦 Install Docker (Recommended)")
-            options+=("📦 Install Podman")
-        else
-            options+=("📦 Install Podman (Recommended)")
-            options+=("📦 Install Docker")
-        fi
-    fi
+        local choice
+        choice=$(gum choose --cursor="➜ " --cursor.foreground="212" --selected.foreground="212" "${main_options[@]}")
 
-    # Check Official State
-    if check_container_exists "$CONTAINER_NAME"; then
-        options+=("🚪 Enter Official Workspace")
-        options+=("🖥️  Start VDI Web Desktop (Official)")
-        options+=("♻️  Update/Recreate Official Workspace")
-        options+=("🗑️  Remove Official Workspace")
-    else
-        options+=("🚀 Install Official Workspace (Pull from GHCR)")
-    fi
+        case "$choice" in
+            "🚪 Workspaces (Enter/VDI Desktop) >")
+                while true; do
+                    clear
+                    show_banner
 
-    # Check Dev State
-    if check_container_exists "$DEV_CONTAINER_NAME"; then
-        options+=("💻 Enter Dev Workspace")
-        options+=("🖥️  Start VDI Web Desktop (Dev)")
-        options+=("♻️  Rebuild Dev Workspace")
-        options+=("🗑️  Remove Dev Workspace")
-    elif [ -f "Containerfile" ]; then
-        options+=("🛠️  Build Dev Workspace (From local source)")
-    fi
+                    local workspace_options=()
+                    if check_container_exists "$CONTAINER_NAME"; then
+                        workspace_options+=("🚪 Enter Official Workspace")
+                        workspace_options+=("🖥️  Start VDI Web Desktop (Official)")
+                    fi
+                    if check_container_exists "$DEV_CONTAINER_NAME"; then
+                        workspace_options+=("💻 Enter Dev Workspace")
+                        workspace_options+=("🖥️  Start VDI Web Desktop (Dev)")
+                    fi
 
-    # Always available
-    options+=("📊 Show Distrobox List")
+                    workspace_options+=("🔙 Back to Main Menu")
 
-    # Global Path State Toggle
-    if [ -f "$HOME/.local/bin/agy-box-manager" ]; then
-        options+=("🔥 Uninstall CLI Globally")
-    else
-        options+=("🌍 Install CLI Globally (~/.local/bin)")
-    fi
+                    local sub_choice
+                    sub_choice=$(gum choose --cursor="➜ " --cursor.foreground="212" --selected.foreground="212" "${workspace_options[@]}")
 
-    options+=("❌ Exit")
+                    case "$sub_choice" in
+                        "🚪 Enter Official Workspace")
+                            cmd_enter prod
+                            ;;
+                        "🖥️  Start VDI Web Desktop (Official)")
+                            cmd_desktop prod
+                            ;;
+                        "💻 Enter Dev Workspace")
+                            cmd_enter dev
+                            ;;
+                        "🖥️  Start VDI Web Desktop (Dev)")
+                            cmd_desktop dev
+                            ;;
+                        "🔙 Back to Main Menu")
+                            break
+                            ;;
+                    esac
+                done
+                ;;
 
-    CHOICE=$(gum choose "${options[@]}")
+            "🛠️  Manage Environments >")
+                while true; do
+                    clear
+                    show_banner
 
-    case $CHOICE in
-        "📦 Install Distrobox")
-            if command -v apt-get &> /dev/null; then sudo apt update && sudo apt install -y distrobox;
-            elif command -v dnf &> /dev/null; then sudo dnf install -y distrobox;
-            elif command -v pacman &> /dev/null; then sudo pacman -S --noconfirm distrobox;
-            elif command -v zypper &> /dev/null; then sudo zypper install -y distrobox;
-            elif command -v brew &> /dev/null; then brew install distrobox;
-            else gum style --foreground 196 "Unsupported package manager for automatic install."; fi
-            ;;
-        "📦 Install Docker"|"📦 Install Docker (Recommended)")
-            if command -v apt-get &> /dev/null; then sudo apt update && sudo apt install -y docker.io;
-            elif command -v zypper &> /dev/null; then sudo zypper install -y docker;
-            elif command -v pacman &> /dev/null; then sudo pacman -S --noconfirm docker;
-            elif command -v dnf &> /dev/null; then sudo dnf install -y docker;
-            elif command -v brew &> /dev/null; then brew install docker;
-            else gum style --foreground 196 "Unsupported package manager for automatic install."; fi
-            ;;
-        "📦 Install Podman"|"📦 Install Podman (Recommended)")
-            if command -v apt-get &> /dev/null; then sudo apt update && sudo apt install -y podman;
-            elif command -v dnf &> /dev/null; then sudo dnf install -y podman;
-            elif command -v pacman &> /dev/null; then sudo pacman -S --noconfirm podman;
-            elif command -v zypper &> /dev/null; then sudo zypper install -y podman;
-            elif command -v brew &> /dev/null; then brew install podman;
-            else gum style --foreground 196 "Unsupported package manager for automatic install."; fi
-            ;;
-        "🚀 Install Official Workspace (Pull from GHCR)"|"♻️  Update/Recreate Official Workspace") cmd_install_official ;;
-        "🛠️  Build Dev Workspace (From local source)"|"♻️  Rebuild Dev Workspace") cmd_build_dev ;;
-        "🚪 Enter Official Workspace") cmd_enter prod ;;
-        "💻 Enter Dev Workspace") cmd_enter dev ;;
-        "🖥️  Start VDI Web Desktop (Official)") cmd_desktop prod ;;
-        "🖥️  Start VDI Web Desktop (Dev)") cmd_desktop dev ;;
-        "🗑️  Remove Official Workspace") cmd_clean "$CONTAINER_NAME" ;;
-        "🗑️  Remove Dev Workspace") cmd_clean "$DEV_CONTAINER_NAME" ;;
-        "📊 Show Distrobox List") cmd_status ;;
-        "🌍 Install CLI Globally (~/.local/bin)") cmd_install_global ;;
-        "🔥 Uninstall CLI Globally") cmd_uninstall_global ;;
-        "❌ Exit") gum style --foreground 212 "Goodbye!"; exit 0 ;;
-    esac
+                    local manage_options=()
+                    if check_container_exists "$CONTAINER_NAME"; then
+                        manage_options+=("♻️  Update/Recreate Official Workspace")
+                        manage_options+=("🗑️  Remove Official Workspace")
+                    else
+                        manage_options+=("🚀 Install Official Workspace (Pull from GHCR)")
+                    fi
+
+                    if check_container_exists "$DEV_CONTAINER_NAME"; then
+                        manage_options+=("♻️  Rebuild Dev Workspace")
+                        manage_options+=("🗑️  Remove Dev Workspace")
+                    else
+                        if [ -f "Containerfile" ]; then
+                            manage_options+=("🛠️  Build Dev Workspace (From local source)")
+                        fi
+                    fi
+
+                    manage_options+=("🔙 Back to Main Menu")
+
+                    local sub_choice
+                    sub_choice=$(gum choose --cursor="➜ " --cursor.foreground="212" --selected.foreground="212" "${manage_options[@]}")
+
+                    case "$sub_choice" in
+                        "🚀 Install Official Workspace (Pull from GHCR)"|"♻️  Update/Recreate Official Workspace")
+                            cmd_install_official
+                            echo ""
+                            read -n 1 -s -r -p "Press any key to continue..."
+                            ;;
+                        "🛠️  Build Dev Workspace (From local source)"|"♻️  Rebuild Dev Workspace")
+                            cmd_build_dev
+                            echo ""
+                            read -n 1 -s -r -p "Press any key to continue..."
+                            ;;
+                        "🗑️  Remove Official Workspace")
+                            cmd_clean "$CONTAINER_NAME"
+                            echo ""
+                            read -n 1 -s -r -p "Press any key to continue..."
+                            ;;
+                        "🗑️  Remove Dev Workspace")
+                            cmd_clean "$DEV_CONTAINER_NAME"
+                            echo ""
+                            read -n 1 -s -r -p "Press any key to continue..."
+                            ;;
+                        "🔙 Back to Main Menu")
+                            break
+                            ;;
+                    esac
+                done
+                ;;
+
+            "⚙️  System Tools >")
+                while true; do
+                    clear
+                    show_banner
+
+                    local tools_options=()
+                    tools_options+=("📊 Show Distrobox List")
+                    tools_options+=("📦 Check Package Dependencies")
+
+                    if [ -f "$HOME/.local/bin/agy-box-manager" ]; then
+                        tools_options+=("🔥 Uninstall CLI Globally")
+                    else
+                        tools_options+=("🌍 Install CLI Globally (~/.local/bin)")
+                    fi
+
+                    tools_options+=("🔙 Back to Main Menu")
+
+                    local sub_choice
+                    sub_choice=$(gum choose --cursor="➜ " --cursor.foreground="212" --selected.foreground="212" "${tools_options[@]}")
+
+                    case "$sub_choice" in
+                        "📊 Show Distrobox List")
+                            cmd_status
+                            read -n 1 -s -r -p "Press any key to continue..."
+                            ;;
+                        "📦 Check Package Dependencies")
+                            cmd_check_dependencies
+                            ;;
+                        "🌍 Install CLI Globally (~/.local/bin)")
+                            cmd_install_global
+                            echo ""
+                            read -n 1 -s -r -p "Press any key to continue..."
+                            ;;
+                        "🔥 Uninstall CLI Globally")
+                            cmd_uninstall_global
+                            echo ""
+                            read -n 1 -s -r -p "Press any key to continue..."
+                            ;;
+                        "🔙 Back to Main Menu")
+                            break
+                            ;;
+                    esac
+                done
+                ;;
+
+            "❌ Exit")
+                gum style --foreground 212 "Goodbye!"
+                exit 0
+                ;;
+        esac
+    done
 }
 
 show_help() {
