@@ -215,8 +215,31 @@ When you enter the `agy-box` container for the first time, a setup helper script
 2. **Antigravity API Keys**: Prompts you to input your Gemini or Antigravity API keys if they are not already set in the environment, and securely writes them to `~/.config/environment.d/agy-box.conf` so they are automatically loaded in all subsequent container and IDE sessions.
 3. **Browser Execution Health**: Verifies that Google Chrome is correctly wrapped and can be executed inside the container without sandboxing collisions.
 4. **Git Identity**: Validates that your git username and email are set so you can immediately commit code.
+5. **Security & Skills Pack Audits (Optional)**: Runs an interactive check to:
+   - Verify privilege boundaries (ensure non-root container execution).
+   - Scan for wildcard listener port exposure (scanning `/proc/net/tcp` to ensure dev servers aren't exposed).
+   - Harden permissions of sensitive config files (`~/.config/environment.d/agy-box.conf`, `~/.ssh/`, GCP ADC credentials) to `600`/`700` automatically.
+   - Verify Developer Skills Pack requirements (Android USB `/dev/bus/usb` mounts, `gcloud` configs, VDI desktop packages).
 
 *(Note: The setup helper creates a flag file `~/.config/agy-box/.setup_done` upon completion. You can re-run it manually at any time using the `agy-setup-helper` command).*
+
+---
+
+## VDI Web Desktop (Headless VDI)
+
+For developers on remote VM instances, headless cloudtops, or those who prefer running the container's graphical user interface (Antigravity IDE & Google Chrome) in a standalone window, we provide a pre-packaged **noVNC HTML5 VDI virtual desktop**.
+
+To start the desktop session, run:
+```bash
+# Using agy-box-manager:
+agy-box-manager desktop
+
+# Or using just:
+just agy-desktop
+```
+This will automatically launch `Xvfb` (Virtual Framebuffer), `openbox` (window manager), `x11vnc` (VNC server), and `websockify` (noVNC gateway) inside the container. 
+
+Simply open **`http://localhost:6080/vnc.html?autoconnect=true`** in your host browser to access the complete container desktop!
 
 ---
 
@@ -252,6 +275,8 @@ You can also bypass the interactive menu by passing commands directly, which is 
 | **Build Dev Env** | `agy-box-manager dev` | `just agy-box-dev` |
 | **Enter Official Env** | `agy-box-manager enter` | `just agy-enter` |
 | **Enter Dev Env** | `agy-box-manager enter dev` | `just agy-enter-dev` |
+| **VDI Desktop (Official)** | `agy-box-manager desktop` | `just agy-desktop` |
+| **VDI Desktop (Dev)** | `agy-box-manager desktop dev` | `just agy-desktop-dev` |
 | **Clean Official Env** | `agy-box-manager clean` | `just agy-clean` |
 | **Global Install** | `agy-box-manager install-global` | `just agy-install-global` |
 | **Global Uninstall** | `agy-box-manager uninstall-global` | `just agy-uninstall-global` |

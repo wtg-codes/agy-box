@@ -217,6 +217,20 @@ cmd_build_dev() {
     gum style --foreground 46 --margin "1 0" "✓ Dev environment ready! Run 'agy-box-manager enter dev' to start."
 }
 
+cmd_desktop() {
+    local env_type=${1:-prod}
+    local target_name=$CONTAINER_NAME
+    [ "$env_type" = "dev" ] && target_name=$DEV_CONTAINER_NAME
+
+    if ! check_container_exists "$target_name"; then
+        gum style --foreground 196 "Environment '$target_name' does not exist. Please install or build it first."
+        exit 1
+    fi
+
+    echo -e "Starting VDI Virtual Desktop inside ${CYAN}$target_name${NC}..."
+    distrobox enter "$target_name" -- /usr/local/bin/agy-vdi
+}
+
 cmd_enter() {
     local env_type=${1:-prod}
     local target_name=$CONTAINER_NAME
@@ -377,6 +391,7 @@ cmd_interactive() {
     # Check Official State
     if check_container_exists "$CONTAINER_NAME"; then
         options+=("🚪 Enter Official Workspace")
+        options+=("🖥️  Start VDI Web Desktop (Official)")
         options+=("♻️  Update/Recreate Official Workspace")
         options+=("🗑️  Remove Official Workspace")
     else
@@ -386,6 +401,7 @@ cmd_interactive() {
     # Check Dev State
     if check_container_exists "$DEV_CONTAINER_NAME"; then
         options+=("💻 Enter Dev Workspace")
+        options+=("🖥️  Start VDI Web Desktop (Dev)")
         options+=("♻️  Rebuild Dev Workspace")
         options+=("🗑️  Remove Dev Workspace")
     elif [ -f "Containerfile" ]; then
@@ -435,6 +451,8 @@ cmd_interactive() {
         "🛠️  Build Dev Workspace (From local source)"|"♻️  Rebuild Dev Workspace") cmd_build_dev ;;
         "🚪 Enter Official Workspace") cmd_enter prod ;;
         "💻 Enter Dev Workspace") cmd_enter dev ;;
+        "🖥️  Start VDI Web Desktop (Official)") cmd_desktop prod ;;
+        "🖥️  Start VDI Web Desktop (Dev)") cmd_desktop dev ;;
         "🗑️  Remove Official Workspace") cmd_clean "$CONTAINER_NAME" ;;
         "🗑️  Remove Dev Workspace") cmd_clean "$DEV_CONTAINER_NAME" ;;
         "📊 Show Distrobox List") cmd_status ;;
@@ -454,6 +472,8 @@ show_help() {
     echo "  dev                 Build the image from local source and create dev environment"
     echo "  enter               Enter the official environment"
     echo "  enter dev           Enter the development environment"
+    echo "  desktop             Launch VDI Web Desktop inside official environment"
+    echo "  desktop dev         Launch VDI Web Desktop inside development environment"
     echo "  status              List AGY Box environments"
     echo "  clean               Remove the official environment"
     echo "  clean dev           Remove the development environment"
@@ -470,6 +490,7 @@ case "${1:-}" in
     install)          check_deps "quiet"; cmd_install_official ;;
     dev)              check_deps "quiet"; cmd_build_dev ;;
     enter)            check_deps "quiet"; if [ "${2:-}" = "dev" ]; then cmd_enter dev; else cmd_enter prod; fi ;;
+    desktop)          check_deps "quiet"; if [ "${2:-}" = "dev" ]; then cmd_desktop dev; else cmd_desktop prod; fi ;;
     clean)            check_deps "quiet"; if [ "${2:-}" = "dev" ]; then cmd_clean "$DEV_CONTAINER_NAME"; else cmd_clean "$CONTAINER_NAME"; fi ;;
     status)           check_deps "quiet"; cmd_status ;;
     install-global)   check_deps "quiet"; cmd_install_global ;;

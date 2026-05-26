@@ -19,6 +19,11 @@ apt-get update && apt-get install -y --no-install-recommends \
     libsecret-1-0 \
     tini \
     gosu \
+    xvfb \
+    x11vnc \
+    openbox \
+    novnc \
+    websockify \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

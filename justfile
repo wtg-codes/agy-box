@@ -22,6 +22,14 @@ agy-enter:
 agy-enter-dev:
     @./agy-box-manager enter dev
 
+# Start VDI Desktop inside official workspace
+agy-desktop:
+    @./agy-box-manager desktop
+
+# Start VDI Desktop inside development workspace
+agy-desktop-dev:
+    @./agy-box-manager desktop dev
+
 # Check the status of AGY Boxes
 agy-status:
     @./agy-box-manager status

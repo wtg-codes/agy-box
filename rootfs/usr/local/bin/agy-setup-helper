@@ -217,6 +217,132 @@ main() {
         log_success "Git configured (Name: $git_name, Email: $git_email)."
     fi
 
+    # 4.5. Optional Skills Pack & Security Auditing
+    if [[ "$is_interactive" == "true" ]]; then
+        echo -e "\n${BLUE}==================================================${NC}"
+        echo -e "${BLUE}    Optional Skills Pack & Security Auditing     ${NC}"
+        echo -e "${BLUE}==================================================${NC}"
+        printf "Would you like to run the optional Developer Skills Pack & Security Audit? [y/N]: "
+        read -r run_audit
+        run_audit="${run_audit:-N}"
+        if [[ "$run_audit" =~ ^[Yy]$ ]]; then
+            # A. Container Boundary & Access Auditing
+            log_info "Auditing container privilege boundaries..."
+            if [[ "$EUID" -eq 0 ]]; then
+                log_warn "Running as root! It is highly recommended to run the container shell as a non-root user to avoid host escape vulnerabilities."
+            else
+                log_success "Running securely as non-root user (EUID: $EUID)."
+            fi
+
+            # D-Bus Socket Owner Check
+            if [[ -n "${DBUS_SESSION_BUS_ADDRESS:-}" && "$DBUS_SESSION_BUS_ADDRESS" =~ unix:path=([^,]+) ]]; then
+                local socket_path="${BASH_REMATCH[1]}"
+                if [[ -S "$socket_path" ]]; then
+                    local socket_owner
+                    socket_owner=$(stat -c "%U" "$socket_path" 2>/dev/null || stat -f "%Su" "$socket_path" 2>/dev/null)
+                    if [[ "$socket_owner" != "$USER" && "$socket_owner" != "root" ]]; then
+                        log_warn "D-Bus session socket at $socket_path is owned by $socket_owner, not current user ($USER)."
+                    else
+                        log_success "D-Bus socket owner matches session user securely ($socket_owner)."
+                    fi
+                fi
+            fi
+
+            # B. Insecure Permissions Hardening
+            log_info "Auditing critical file permissions..."
+            audit_and_harden() {
+                local target="$1"
+                local expected_perm="$2"
+                local label="$3"
+                if [[ -e "$target" ]]; then
+                    local current_perm
+                    current_perm=$(stat -c "%a" "$target" 2>/dev/null || stat -f "%Lp" "$target" 2>/dev/null)
+                    if [[ "$current_perm" -ne "$expected_perm" ]]; then
+                        log_warn "Insecure permissions on $label $target: $current_perm (expected $expected_perm)."
+                        printf "Would you like to auto-harden permissions to %s? [Y/n]: " "$expected_perm"
+                        read -r harden_input
+                        harden_input="${harden_input:-Y}"
+                        if [[ "$harden_input" =~ ^[Yy]$ ]]; then
+                            chmod "$expected_perm" "$target"
+                            log_success "Hardened permissions of $target to $expected_perm."
+                        fi
+                    else
+                        log_success "Permissions on $target are secure ($current_perm)."
+                    fi
+                fi
+            }
+            audit_and_harden "$config_file" 600 "API config file"
+            audit_and_harden "$HOME/.ssh" 700 "SSH directory"
+            audit_and_harden "$HOME/.config/gcloud/application_default_credentials.json" 600 "GCP Credentials file"
+
+            # C. Sockets / Wildcard Ports Binding Scan
+            log_info "Auditing active wildcard network port listeners..."
+            local insecure_listeners=0
+            if [[ -f /proc/net/tcp ]]; then
+                while read -r line || [[ -n "$line" ]]; do
+                    # shellcheck disable=SC2206
+                    local fields=($line)
+                    local local_addr="${fields[1]:-}"
+                    # 00000000 translates to wildcard 0.0.0.0
+                    if [[ "$local_addr" =~ ^00000000:([0-9A-F]+)$ ]]; then
+                        local port_hex="${BASH_REMATCH[1]}"
+                        local port_dec=$((16#$port_hex))
+                        log_warn "Exposed port listener: Port $port_dec is bound to 0.0.0.0 (exposed outside sandbox!)."
+                        insecure_listeners=$((insecure_listeners + 1))
+                    fi
+                done < <(tail -n +2 /proc/net/tcp)
+            fi
+            if [[ "$insecure_listeners" -eq 0 ]]; then
+                log_success "No wildcard listeners detected. All port bindings are secure."
+            else
+                log_warn "Exposed listeners detected ($insecure_listeners). Please ensure container servers bind strictly to 127.0.0.1."
+            fi
+
+            # D. Developer Skills Pack Checks
+            log_info "Auditing Developer Skills Pack toolchains..."
+            
+            # Android Pack
+            log_info "--- Android Developer Skills Pack ---"
+            if command -v adb &>/dev/null; then
+                log_success "adb CLI tool is installed."
+            else
+                log_warn "adb CLI tool not found."
+            fi
+            if [[ -d /dev/bus/usb ]]; then
+                log_success "USB bus mounts are present (/dev/bus/usb)."
+            else
+                log_warn "USB bus (/dev/bus/usb) not found. Android hardware debugging is unavailable."
+            fi
+
+            # Cloud Pack
+            log_info "--- GCP / Cloud Developer Skills Pack ---"
+            if command -v gcloud &>/dev/null; then
+                log_success "gcloud CLI tool is installed."
+            else
+                log_warn "gcloud CLI tool not found."
+            fi
+
+            # Web/noVNC VDI Pack
+            log_info "--- VDI Virtual Desktop Skills Pack ---"
+            local missing_vdi=0
+            for cmd in Xvfb x11vnc openbox websockify; do
+                if command -v "$cmd" &>/dev/null; then
+                    log_success "VDI component '$cmd' is available."
+                else
+                    log_warn "VDI component '$cmd' is missing."
+                    missing_vdi=$((missing_vdi + 1))
+                fi
+            done
+            if [[ "$missing_vdi" -eq 0 ]]; then
+                log_success "VDI virtual desktop capabilities are fully configured."
+            else
+                log_info "Optional VDI desktop components are incomplete."
+            fi
+        else
+            log_info "Skipping optional Skills Pack & Security Audit."
+        fi
+    fi
+
     # 5. Flag File writing
     local flag_dir="$HOME/.config/agy-box"
     local flag_file="$flag_dir/.setup_done"

@@ -129,6 +129,13 @@ sequenceDiagram
                 Helper->>Helper: Write global git configs
             end
 
+            Note over Helper: Stage 4.5: Optional Skills Pack & Security Auditing
+            alt User opts-in to Audit
+                Helper->>Helper: Audit root boundary, DBus owner, and scan wildcard ports
+                Helper->>Helper: Verify Android USB, gcloud, VDI toolchains
+                Helper->>HostFS: Offer to harden key file permissions (chmod 600)
+            end
+
             Note over Helper,HostFS: Stage 5: Flag Completion
             Helper->>HostFS: Create ~/.config/agy-box/.setup_done
             Helper-->>User: Success message & exit
@@ -199,4 +206,43 @@ The components of the Antigravity developer suite communicate over a series of p
 | :--- | :--- | :--- | :--- | :--- |
 | **8080** | HTTP | Python SDK (`google-antigravity`) | Antigravity 2.0 IDE | Localhost developer API server mapping workspace canvases. |
 | **9222** | WebSocket / CDP | Antigravity 2.0 IDE | `google-chrome-stable` | Chrome DevTools Protocol port to dynamically execute web commands. |
+| **5900** | RFB | VNC Clients | `x11vnc` | Internal virtual display VNC server stream (bound securely to `127.0.0.1`). |
+| **6080** | HTTP / WS | Web Browsers | `websockify` / noVNC | noVNC HTML5 client portal enabling remote/VDI browser desktop access. |
 | **dynamic** | WebSocket | Antigravity CLI (`agy`) | Antigravity 2.0 IDE | Active loop coordinating lab course task completion updates. |
+
+---
+
+## 5. VDI Web Desktop (Headless Display Routing)
+
+To support remote development, headless environments (e.g. Google Cloud Shell, VMs), and easy environment debugging, the workspace provides a built-in virtual desktop environment utilizing **noVNC** and **Xvfb**.
+
+```mermaid
+graph TD
+    subgraph Browser ["Host Web Browser"]
+        noVNC["noVNC HTML5 Client <br> (http://localhost:6080/vnc.html)"]
+    end
+
+    subgraph Sandbox ["agy-box Container (Headless)"]
+        Websockify["websockify <br> (Port 6080)"]
+        X11VNC["x11vnc <br> (Port 5900, 127.0.0.1)"]
+        Openbox["Openbox Window Manager <br> (DISPLAY=:99)"]
+        Xvfb["Xvfb virtual display <br> (DISPLAY=:99)"]
+        IDE["Antigravity 2.0 IDE <br> (renders inside Xvfb)"]
+        Chrome["Google Chrome <br> (renders inside Xvfb)"]
+    end
+
+    noVNC <-->|"WebSocket Stream"| Websockify
+    Websockify <-->|"RFB Loop"| X11VNC
+    X11VNC -->|"Inspect frame buffer"| Xvfb
+    Openbox -->|"Manage Windows"| Xvfb
+    IDE -->|"Draw GUI"| Xvfb
+    Chrome -->|"Draw GUI"| Xvfb
+
+    %% Styling
+    classDef client fill:#e0f2fe,stroke:#0284c7,stroke-width:2px,color:#0369a1;
+    classDef server fill:#f0fdf4,stroke:#16a34a,stroke-width:2px,color:#15803d;
+
+    class noVNC client;
+    class Websockify,X11VNC,Openbox,Xvfb,IDE,Chrome server;
+```
+
