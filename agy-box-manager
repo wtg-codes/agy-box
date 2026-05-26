@@ -174,40 +174,131 @@ check_container_exists() {
     if distrobox list --no-color | grep -qw "$name"; then return 0; else return 1; fi
 }
 
-setup_completions() {
-    # Bash Auto-Completions
-    local bash_comp_dir="$HOME/.local/share/bash-completion/completions"
-    mkdir -p "$bash_comp_dir"
-    cat << 'EOF_COMP' > "$bash_comp_dir/agy-box-manager"
+cmd_autocomplete() {
+    local shell=${1:-bash}
+    case "$shell" in
+        bash)
+            cat << 'EOF'
 _agy_box_manager() {
-    local cur opts
+    local cur opts prev
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
-    opts="install dev enter clean status install-global uninstall-global test"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    opts="install dev enter desktop clean status install-global uninstall-global test autocomplete ports doctor"
+    
+    case "$prev" in
+        enter|desktop|clean)
+            COMPREPLY=( $(compgen -W "dev prod" -- "$cur") )
+            return 0
+            ;;
+        autocomplete)
+            COMPREPLY=( $(compgen -W "bash zsh fish" -- "$cur") )
+            return 0
+            ;;
+    esac
+
     COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
     return 0
 }
 complete -F _agy_box_manager agy-box-manager
-EOF_COMP
+
+_agy() {
+    local cur opts prev
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    opts="changelog help install plugin plugins update --add-dir -c --continue --conversation --dangerously-skip-permissions -i --log-file -p --print --print-timeout --prompt --prompt-interactive --sandbox"
+    
+    case "$prev" in
+        plugin|plugins)
+            COMPREPLY=( $(compgen -W "install uninstall list enable disable" -- "$cur") )
+            return 0
+            ;;
+    esac
+
+    COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+    return 0
+}
+complete -F _agy agy
+EOF
+            ;;
+        zsh)
+            cat << 'EOF'
+#compdef _agy_box_manager agy-box-manager agy
+
+_agy_box_manager() {
+    local -a commands
+    commands=(
+        'install:Pull official image'
+        'dev:Build dev image'
+        'enter:Enter workspace'
+        'desktop:Launch VDI Web Desktop'
+        'clean:Remove workspace'
+        'status:Show status'
+        'install-global:Install globally'
+        'uninstall-global:Remove global install'
+        'test:Run local integration tests'
+        'autocomplete:Generate shell completion'
+        'ports:Show active container port mappings'
+        'doctor:Run system diagnostics'
+    )
+    _describe 'command' commands
+}
+
+_agy() {
+    local -a commands
+    commands=(
+        'changelog:Show changelog and release notes'
+        'help:Show help for subcommands'
+        'install:Configure environment paths'
+        'plugin:Manage plugins'
+        'plugins:Alias for plugin'
+        'update:Update CLI'
+    )
+    _describe 'command' commands
+}
+
+if [[ "$service" == "agy" ]]; then
+    _agy
+else
+    _agy_box_manager
+fi
+EOF
+            ;;
+        fish)
+            cat << 'EOF'
+complete -c agy-box-manager -f
+complete -c agy-box-manager -a "install dev enter desktop clean status install-global uninstall-global test autocomplete ports doctor"
+complete -c agy -f
+complete -c agy -a "changelog help install plugin plugins update"
+EOF
+            ;;
+        *)
+            echo "Unsupported shell: $shell" >&2
+            exit 1
+            ;;
+    esac
+}
+
+setup_completions() {
+    # Bash Auto-Completions
+    local bash_comp_dir="$HOME/.local/share/bash-completion/completions"
+    mkdir -p "$bash_comp_dir"
+    cmd_autocomplete bash > "$bash_comp_dir/agy-box-manager"
+    cmd_autocomplete bash > "$bash_comp_dir/agy"
 
     # Zsh Auto-Completions
     local zsh_comp_dir="$HOME/.zfunc"
     mkdir -p "$zsh_comp_dir"
-    cat << 'EOF_COMP' > "$zsh_comp_dir/_agy-box-manager"
-#compdef agy-box-manager
-local -a commands
-commands=(
-    'install:Pull official image'
-    'dev:Build dev image'
-    'enter:Enter workspace'
-    'clean:Remove workspace'
-    'status:Show status'
-    'install-global:Install globally'
-    'uninstall-global:Remove global install'
-    'test:Run local integration tests'
-)
-_describe 'command' commands
-EOF_COMP
+    cmd_autocomplete zsh > "$zsh_comp_dir/_agy-box-manager"
+    cmd_autocomplete zsh > "$zsh_comp_dir/_agy"
+
+    # Fish Auto-Completions
+    local fish_comp_dir="$HOME/.config/fish/completions"
+    mkdir -p "$fish_comp_dir"
+    cmd_autocomplete fish > "$fish_comp_dir/agy-box-manager.fish"
+    cmd_autocomplete fish > "$fish_comp_dir/agy.fish"
+
     if [ -f "$HOME/.zshrc" ] && ! grep -q "fpath=(~/.zfunc \$fpath)" "$HOME/.zshrc"; then
         # shellcheck disable=SC2016
         echo -e '\n# Added by agy-box-manager\nfpath=(~/.zfunc \$fpath)' >> "$HOME/.zshrc"
@@ -728,6 +819,7 @@ show_help() {
     echo "  clean dev           Remove the development environment"
     echo "  install-global      Copy the CLI to ~/.local/bin for system-wide access"
     echo "  uninstall-global    Remove the globally installed CLI and auto-completions"
+    echo "  autocomplete [sh]   Generate shell autocompletions (bash, zsh, fish)"
     echo "  test                Run the local integration test suite"
     echo ""
 }
@@ -744,6 +836,7 @@ case "${1:-}" in
     status)           check_deps "quiet"; cmd_status ;;
     install-global)   check_deps "quiet"; cmd_install_global ;;
     uninstall-global) check_deps "quiet"; cmd_uninstall_global ;;
+    autocomplete)     cmd_autocomplete "${2:-bash}" ;;
     test)             check_deps "quiet"; if [ -f "scripts/test-box.sh" ]; then ./scripts/test-box.sh; else gum style --foreground 196 "Test script not found. Please run this command inside the repository."; exit 1; fi ;;
     version|--version|-v) echo "agy-box-manager version $VERSION"; exit 0 ;;
     help|--help|-h)   show_help ;;

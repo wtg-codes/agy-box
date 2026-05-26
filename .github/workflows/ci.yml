@@ -175,9 +175,17 @@ jobs:
     permissions:
       id-token: write
       attestations: write
+      packages: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Attest Build Provenance
         uses: actions/attest-build-provenance@v2.2.0
