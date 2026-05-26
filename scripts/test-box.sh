@@ -128,7 +128,7 @@ distrobox enter "$CONTAINER_NAME" -- bash -euo pipefail -c '
 
     # Assert Desktop Apps (Checking path & permissions)
     assert_cmd "Google Chrome" "google-chrome-stable" "google-chrome-stable --version" || errors=$((errors+1))
-    assert_cmd "Antigravity 2.0" "antigravity" "test -x /usr/bin/antigravity" || errors=$((errors+1))
+    assert_cmd "Google Antigravity (Agent UI)" "antigravity" "test -x /usr/bin/antigravity" || errors=$((errors+1))
     assert_cmd "Antigravity IDE" "antigravity-ide" "test -x /usr/bin/antigravity-ide" || errors=$((errors+1))
 
     if [ "$errors" -gt 0 ]; then

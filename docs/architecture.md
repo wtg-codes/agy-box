@@ -32,7 +32,7 @@ graph TD
         end
 
         subgraph Suite ["Antigravity Developer Suite"]
-            IDE["Antigravity 2.0 IDE <br> (canvas workspace, terminal, course labs)"]
+            IDE["Google Antigravity (Agent UI) <br> (canvas workspace, terminal, course labs)"]
             CLI["Antigravity CLI (agy) <br> (WebSocket loops, lab submission)"]
             SDK["Antigravity Python SDK (google-antigravity) <br> (GCS auth, local Port 8080 API)"]
             ChromeWrapper["Google Chrome <br> (google-chrome-stable wrapper)"]
@@ -154,14 +154,14 @@ sequenceDiagram
 
 ## 3. D-Bus session keyring pipelines
 
-Google Chrome and Antigravity 2.0 (an Electron-based desktop IDE) encrypt credentials (e.g. Google sign-in tokens, saved passwords) using the host OS keyring manager (GNOME Keyring or KWallet). 
+Google Chrome and Google Antigravity (Agent UI) encrypt credentials (e.g. Google sign-in tokens, saved passwords) using the host OS keyring manager (GNOME Keyring or KWallet). 
 
 Even though the D-Bus socket is forwarded into the sandbox container by Distrobox, client applications must have the `libsecret` library installed inside the container to make method calls over D-Bus to request credentials decryption. Without `libsecret-1-0`, these apps fail to authenticate silently.
 
 ```mermaid
 graph LR
     subgraph Sandbox ["agy-box Container"]
-        IDE["Antigravity 2.0 IDE"]
+        IDE["Google Antigravity (Agent UI)"]
         Chrome["Google Chrome"]
         LibSecret["libsecret-1.0 Client"]
     end
@@ -204,11 +204,11 @@ The components of the Antigravity developer suite communicate over a series of p
 
 | Port | Protocol | Source | Target | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| **8080** | HTTP | Python SDK (`google-antigravity`) | Antigravity 2.0 IDE | Localhost developer API server mapping workspace canvases. |
-| **9222** | WebSocket / CDP | Antigravity 2.0 IDE | `google-chrome-stable` | Chrome DevTools Protocol port to dynamically execute web commands. |
+| **8080** | HTTP | Python SDK (`google-antigravity`) | Google Antigravity (Agent UI) | Localhost developer API server mapping workspace canvases. |
+| **9222** | WebSocket / CDP | Google Antigravity (Agent UI) | `google-chrome-stable` | Chrome DevTools Protocol port to dynamically execute web commands. |
 | **5900** | RFB | VNC Clients | `x11vnc` | Internal virtual display VNC server stream (bound securely to `127.0.0.1`). |
 | **6080** | HTTP / WS | Web Browsers | `websockify` / noVNC | noVNC HTML5 client portal enabling remote/VDI browser desktop access. |
-| **dynamic** | WebSocket | Antigravity CLI (`agy`) | Antigravity 2.0 IDE | Active loop coordinating lab course task completion updates. |
+| **dynamic** | WebSocket | Antigravity CLI (`agy`) | Google Antigravity (Agent UI) | Active loop coordinating lab course task completion updates. |
 
 ---
 
@@ -227,7 +227,7 @@ graph TD
         X11VNC["x11vnc <br> (Port 5900, 127.0.0.1)"]
         Openbox["Openbox Window Manager <br> (DISPLAY=:99)"]
         Xvfb["Xvfb virtual display <br> (DISPLAY=:99)"]
-        IDE["Antigravity 2.0 IDE <br> (renders inside Xvfb)"]
+        IDE["Google Antigravity (Agent UI) <br> (renders inside Xvfb)"]
         Chrome["Google Chrome <br> (renders inside Xvfb)"]
     end
 

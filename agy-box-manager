@@ -821,7 +821,7 @@ show_banner() {
         --foreground 212 --border-foreground 212 --border rounded \
         --align center --width 50 --margin "1 2" --padding "0 2" \
         "🚀 AGY Box Manager v${VERSION} 🧑‍🚀" \
-        "Antigravity 2.0 Developer Sandbox"
+        "Antigravity Developer Sandbox"
 }
 
 show_system_status() {

@@ -67,7 +67,7 @@ The `agy-box` is designed to run via **Distrobox** on the `bluefin-wtg` immutabl
 Unlike traditional isolated virtual machines or containers, Distrobox provides a highly integrated environment that bridges the gap between isolation and usability. Key host integrations include:
 
 *   **Home Directory Mounting:** The user's host home directory (`~/`) is mounted directly inside the container. This shares all code workspace directories (such as `~/my-antigravity-work`), host Git configurations, and standard shell settings seamlessly.
-*   **Graphical Application Forwarding (GUI):** By mounting the host's X11 or Wayland sockets (`/tmp/.X11-unix` or `$WAYLAND_DISPLAY`) and sharing access to GPU devices (`/dev/dri`), graphical tools like **Antigravity 2.0 (Electron IDE)** and **Google Chrome** render natively on the host's desktop environment without a VNC server or separate window manager.
+*   **Graphical Application Forwarding (GUI):** By mounting the host's X11 or Wayland sockets (`/tmp/.X11-unix` or `$WAYLAND_DISPLAY`) and sharing access to GPU devices (`/dev/dri`), graphical tools like **Google Antigravity (Agent UI)** and **Google Chrome** render natively on the host's desktop environment without a VNC server or separate window manager.
 *   **Inter-Process Communication (IPC):** Sockets and networking are shared, allowing local host applications (like VS Code or browser tabs) to communicate with containerized agent servers over `localhost` ports.
 *   **Audio & Devices:** Audio devices (PulseAudio/PipeWire) are forwarded to support sound notifications, and USB devices (e.g. for Android development via the ADK) can be shared directly with the sandbox.
 
@@ -101,7 +101,7 @@ graph TD
         end
 
         subgraph Suite ["Antigravity Developer Suite"]
-            IDE["Antigravity 2.0 IDE <br> (canvas workspace, terminal, course labs)"]
+            IDE["Google Antigravity (Agent UI) <br> (canvas workspace, terminal, course labs)"]
             CLI["Antigravity CLI (agy) <br> (WebSocket loops, lab submission)"]
             SDK["Antigravity Python SDK (google-antigravity) <br> (GCS auth, local Port 8080 API)"]
             ChromeWrapper["Google Chrome <br> (google-chrome-stable wrapper)"]
@@ -151,7 +151,7 @@ flowchart LR
     subgraph Sandbox ["agy-box Distrobox Container"]
         SDK["Antigravity Python SDK<br>('google-antigravity')"]
         CLI["Antigravity CLI<br>('agy')"]
-        IDE["Antigravity 2.0 IDE<br>('/usr/bin/antigravity')"]
+        IDE["Google Antigravity (Agent UI)<br>('/usr/bin/antigravity')"]
         Chrome["Google Chrome<br>('google-chrome-stable')"]
         
         SDK -->|"Local Host API Calls (Port 8080)"| IDE
@@ -176,10 +176,10 @@ flowchart LR
     class GCS,GH external;
 ```
 
-#### 1. Antigravity 2.0 (The IDE)
-*   **Role & Description:** The central desktop IDE providing a canvas-based workspace, integrated terminal shells, agent canvas debugging tools, and lab course modules. It hosts the Gemini-powered software engineering assistant.
+#### 1. Google Antigravity (Agent UI)
+*   **Role & Description:** The central desktop agent-first UI providing a canvas-based workspace, integrated terminal shells, agent canvas debugging tools, and lab course modules. It hosts the Gemini-powered software engineering assistant.
 *   **Install & Build Mechanics:**
-    *   **Source Script:** Built using `scripts/install-antigravity-2.0.sh` during the container image build.
+    *   **Source Script:** Built using `scripts/install-antigravity.sh` during the container image build.
     *   **Package Origin:** Linux x64 tarball fetched from the Google Cloud Storage bucket:
         `https://storage.googleapis.com/antigravity-public/antigravity-hub/2.0.1-6566078776737792/linux-x64/Antigravity.tar.gz`
     *   **Integrity Check:** Validated via SHA-256 hash `0727e1f56961b6d2347941f278da69cc6c17de3befe988524848cd167380e9ab`.
@@ -309,7 +309,7 @@ just agy-test
 This will automatically:
 1. Build the local dev image `localhost/agy-box:dev`.
 2. Spin up a temporary distrobox container named `agy-box-test`.
-3. Assert that all dependencies (`kubectl`, `helm`, `k9s`, `gemini-cli`, `google-adk`, `google-chrome-stable`, `Antigravity 2.0`, `antigravity-cli`, and `antigravity-sdk`) exist in the container and can be executed.
+3. Assert that all dependencies (`kubectl`, `helm`, `k9s`, `gemini-cli`, `google-adk`, `google-chrome-stable`, `Google Antigravity (Agent UI)`, `antigravity-cli`, and `antigravity-sdk`) exist in the container and can be executed.
 4. Clean up and remove the temporary distrobox container `agy-box-test` regardless of success or failure.
 
 ## Troubleshooting

@@ -10,9 +10,9 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     /tmp/install-agent-deps.sh && rm /tmp/install-agent-deps.sh
 
-# 2. Install Google Antigravity 2.0
-COPY scripts/install-antigravity-2.0.sh /tmp/
-RUN /tmp/install-antigravity-2.0.sh && rm /tmp/install-antigravity-2.0.sh
+# 2. Install Google Antigravity (Agent UI)
+COPY scripts/install-antigravity.sh /tmp/
+RUN /tmp/install-antigravity.sh && rm /tmp/install-antigravity.sh
 
 # 2b. Install Antigravity IDE (Stable 1.23.2)
 COPY scripts/install-antigravity-ide.sh /tmp/
