@@ -481,6 +481,30 @@ EOF
         harden_if_needed "$HOME/.config/gcloud/application_default_credentials.json" 600 "GCP Credentials file"
     fi
 
+    # Optional Skills Pack Installation
+    if gum confirm "Would you like to install the default Developer Skills Pack (Git, Bash, CI/CD, and Container skills)?"; then
+        gum style --foreground 39 "Installing Developer Skills Pack..."
+        
+        local skills=(
+            "vercel-labs/skills@find-skills"
+            "anthropics/skills@mcp-builder"
+            "xixu-me/skills@github-actions-docs"
+            "wshobson/agents@github-actions-templates"
+            "aj-geddes/useful-ai-prompts@container-registry-management"
+            "jeffreyyvdb/dokploy-ghcr-deploy@dokploy-ghcr-deploy"
+            "aj-geddes/useful-ai-prompts@bash-defensive-patterns"
+            "aj-geddes/useful-ai-prompts@bash-linux"
+            "pjt222/development-guides@shellcheck-configuration"
+            "aj-geddes/useful-ai-prompts@mcp-cli"
+        )
+        
+        for skill in "${skills[@]}"; do
+            gum spin --spinner dot --title "Installing $skill..." -- npx -y skills add "$skill" -g -y || true
+        done
+        
+        gum style --foreground 46 "✓ Developer Skills Pack successfully installed!"
+    fi
+
     # End Screen Success Card
     local success_msg
     success_msg=$(printf "Setup Assistant Complete!\n\nAll baseline services and keys are verified.\nYour environment is ready for Cloud-Native Laboratory development.\n\nEnjoy using agy-box!")

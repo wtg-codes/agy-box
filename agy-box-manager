@@ -500,6 +500,20 @@ cmd_install_official() {
     fi
 
     local dbx_flags=()
+    local isolated_home="$HOME/.config/agy-box/home"
+    mkdir -p "$isolated_home"
+    dbx_flags+=("--home" "$isolated_home")
+
+    if [ -d "$HOME/.ssh" ]; then
+        dbx_flags+=("--volume" "$HOME/.ssh:$isolated_home/.ssh:ro")
+    fi
+    if [ -d "$HOME/.config/gcloud" ]; then
+        dbx_flags+=("--volume" "$HOME/.config/gcloud:$isolated_home/.config/gcloud:ro")
+    fi
+    if [ -f "$HOME/.gitconfig" ]; then
+        dbx_flags+=("--volume" "$HOME/.gitconfig:$isolated_home/.gitconfig:ro")
+    fi
+
     if [ "$(get_runtime)" = "docker" ]; then
         dbx_flags+=("--additional-flags" "--user $(id -u):$(id -g)")
     fi
@@ -602,6 +616,20 @@ cmd_build_dev() {
     "$runtime" build -t "$DEV_IMAGE_NAME" -f Containerfile .
 
     local dbx_flags=()
+    local isolated_home="$HOME/.config/agy-box/home"
+    mkdir -p "$isolated_home"
+    dbx_flags+=("--home" "$isolated_home")
+
+    if [ -d "$HOME/.ssh" ]; then
+        dbx_flags+=("--volume" "$HOME/.ssh:$isolated_home/.ssh:ro")
+    fi
+    if [ -d "$HOME/.config/gcloud" ]; then
+        dbx_flags+=("--volume" "$HOME/.config/gcloud:$isolated_home/.config/gcloud:ro")
+    fi
+    if [ -f "$HOME/.gitconfig" ]; then
+        dbx_flags+=("--volume" "$HOME/.gitconfig:$isolated_home/.gitconfig:ro")
+    fi
+
     if [ "$runtime" = "docker" ]; then
         dbx_flags+=("--additional-flags" "--user $(id -u):$(id -g)")
     fi
