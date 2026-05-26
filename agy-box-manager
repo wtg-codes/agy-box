@@ -4,7 +4,7 @@
 set -euo pipefail
 
 # --- Configuration ---
-VERSION="2.1.0"
+VERSION="0.4.2"
 IMAGE_NAME="ghcr.io/wtg-codes/agy-box:latest"
 DEV_IMAGE_NAME="agy-box:dev"
 CONTAINER_NAME="agy-box"
