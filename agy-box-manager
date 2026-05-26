@@ -437,13 +437,31 @@ choose_option() {
 }
 
 cmd_interactive() {
-    # 1. Splash Screen Flow
+    # 1. Splash Screen Flow (Instant rendering)
     clear
     show_banner
     check_deps "menu"
-    show_system_status
     echo ""
-    choose_option "🚀 Continue to Main Menu" >/dev/null
+
+    local splash_choice
+    splash_choice=$(choose_option "🚀 Enter Main Menu" "📊 View Host System Info & Dependencies" "❌ Exit")
+
+    case "$splash_choice" in
+        "📊 View Host System Info & Dependencies")
+            clear
+            show_banner
+            # Show a brief spinner to indicate loading
+            gum spin --spinner dot --title "Analyzing system dependencies and status..." -- sleep 0.5
+            check_deps "menu"
+            show_system_status
+            echo ""
+            read -n 1 -s -r -p "Press any key to continue to Main Menu..."
+            ;;
+        "❌ Exit")
+            gum style --foreground 212 "Goodbye!"
+            exit 0
+            ;;
+    esac
 
     while true; do
         clear
