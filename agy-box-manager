@@ -339,37 +339,37 @@ show_banner() {
 show_system_status() {
     local os_name
     os_name=$(get_os_name)
-    local status_text=""
 
-    status_text+="🖥️  Host OS: ${os_name}\n\n"
+    local podman_status="❌ Podman: Missing"
+    local docker_status="❌ Docker: Missing"
+    local distrobox_status="❌ Distrobox: Missing"
 
-    # Check tool availability
-    if command -v podman &> /dev/null; then status_text+="✅ Podman: Installed\n"; else status_text+="❌ Podman: Not Found\n"; fi
-    if command -v docker &> /dev/null; then status_text+="✅ Docker: Installed\n"; else status_text+="❌ Docker: Not Found\n"; fi
-    if command -v distrobox &> /dev/null; then status_text+="✅ Distrobox: Installed\n"; else status_text+="❌ Distrobox: Not Found\n"; fi
+    if command -v podman &> /dev/null; then podman_status="✅ Podman: Installed"; fi
+    if command -v docker &> /dev/null; then docker_status="✅ Docker: Installed"; fi
+    if command -v distrobox &> /dev/null; then distrobox_status="✅ Distrobox: Installed"; fi
 
-    status_text+="\n"
+    local official_status="🚀 Official: Not Installed"
+    local dev_status="🛠️  Dev Env: Not Installed"
+    local source_status="📁 Source: Missing"
 
-    # Check Environment States
-    if check_container_exists "$CONTAINER_NAME"; then
-        status_text+="🚀 Official Env: Ready\n"
-    else
-        status_text+="🚀 Official Env: Not Installed\n"
-    fi
+    if check_container_exists "$CONTAINER_NAME"; then official_status="🚀 Official: Ready"; fi
+    if check_container_exists "$DEV_CONTAINER_NAME"; then dev_status="🛠️  Dev Env: Ready"; fi
+    if [ -f "Containerfile" ]; then source_status="📁 Source: Ready"; fi
 
-    if check_container_exists "$DEV_CONTAINER_NAME"; then
-        status_text+="🛠️  Dev Env: Ready\n"
-    else
-        status_text+="🛠️  Dev Env: Not Installed\n"
-    fi
+    # Left Card: Host Environment
+    local left_text
+    left_text=$(printf "🖥️  Host OS: %s\n\n%s\n%s\n%s" "$os_name" "$podman_status" "$docker_status" "$distrobox_status")
+    local left_card
+    left_card=$(gum style --border rounded --border-foreground 39 --padding "1 2" --margin "0 1" --width 28 "$left_text")
 
-    if [ -f "Containerfile" ]; then
-        status_text+="📁 Local Repository: Found (Ready for Dev Build)\n"
-    else
-        status_text+="📁 Local Repository: No Containerfile Found\n"
-    fi
+    # Right Card: Workspace Status
+    local right_text
+    right_text=$(printf "📦 Workspaces\n\n%s\n%s\n%s" "$official_status" "$dev_status" "$source_status")
+    local right_card
+    right_card=$(gum style --border rounded --border-foreground 212 --padding "1 2" --margin "0 1" --width 28 "$right_text")
 
-    gum style --border double --border-foreground 39 --padding "0 2" --margin "0 2" "$status_text"
+    # Join horizontally
+    gum join --horizontal "$left_card" "$right_card"
 }
 
 cmd_check_dependencies() {
