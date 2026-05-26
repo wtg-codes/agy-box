@@ -307,6 +307,19 @@ setup_completions() {
 
 # --- Core Commands ---
 cmd_install_official() {
+    local systemd=false
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -s|--systemd)
+                systemd=true
+                shift
+                ;;
+            *)
+                shift
+                ;;
+        esac
+    done
+
     if check_container_exists "$CONTAINER_NAME"; then
         if gum confirm "Container '$CONTAINER_NAME' already exists. Recreate it?"; then
             cmd_clean "$CONTAINER_NAME"
@@ -319,6 +332,9 @@ cmd_install_official() {
     local dbx_flags=()
     if [ "$(get_runtime)" = "docker" ]; then
         dbx_flags+=("--additional-flags" "--user $(id -u):$(id -g)")
+    fi
+    if [ "$systemd" = "true" ]; then
+        dbx_flags+=("--init")
     fi
 
     gum style --foreground 39 "🚀 Pulling official image and creating Distrobox environment..."
@@ -334,6 +350,19 @@ cmd_install_official() {
 }
 
 cmd_build_dev() {
+    local systemd=false
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -s|--systemd)
+                systemd=true
+                shift
+                ;;
+            *)
+                shift
+                ;;
+        esac
+    done
+
     if [ ! -f "Containerfile" ]; then
         gum style --foreground 196 "✗ Error: Containerfile not found in current directory. Please clone the repository first to build from source."
         exit 1
@@ -357,6 +386,9 @@ cmd_build_dev() {
     local dbx_flags=()
     if [ "$runtime" = "docker" ]; then
         dbx_flags+=("--additional-flags" "--user $(id -u):$(id -g)")
+    fi
+    if [ "$systemd" = "true" ]; then
+        dbx_flags+=("--init")
     fi
 
     gum style --foreground 39 "📦 Creating development Distrobox environment..."
@@ -803,7 +835,11 @@ show_help() {
     echo "Commands:"
     echo "  (none)              Launch the interactive UI"
     echo "  install             Pull the official image and create the environment"
+    echo "                      Options:"
+    echo "                        -s, --systemd     Enable user-mode systemd support"
     echo "  dev                 Build the image from local source and create dev environment"
+    echo "                      Options:"
+    echo "                        -s, --systemd     Enable user-mode systemd support"
     echo "  enter               Enter the official environment"
     echo "  enter dev           Enter the development environment"
     echo "  desktop             Launch VDI Web Desktop inside official environment"
@@ -822,8 +858,8 @@ show_help() {
 setup_completions
 
 case "${1:-}" in
-    install)          check_deps "quiet"; cmd_install_official ;;
-    dev)              check_deps "quiet"; cmd_build_dev ;;
+    install)          check_deps "quiet"; cmd_install_official "${@:2}" ;;
+    dev)              check_deps "quiet"; cmd_build_dev "${@:2}" ;;
     enter)            check_deps "quiet"; if [ "${2:-}" = "dev" ]; then cmd_enter dev; else cmd_enter prod; fi ;;
     desktop)          check_deps "quiet"; if [ "${2:-}" = "dev" ]; then cmd_desktop dev; else cmd_desktop prod; fi ;;
     clean)            check_deps "quiet"; if [ "${2:-}" = "dev" ]; then cmd_clean "$DEV_CONTAINER_NAME"; else cmd_clean "$CONTAINER_NAME"; fi ;;
