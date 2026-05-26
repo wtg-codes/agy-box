@@ -342,6 +342,36 @@ cmd_install_official() {
         dbx_flags+=("--init")
     fi
 
+    # Resource limits
+    local limits_conf="$HOME/.config/agy-box/limits.conf"
+    local cpu_limit=""
+    local memory_limit=""
+    if [[ -f "$limits_conf" ]]; then
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            line=$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/#.*//')
+            [[ -z "$line" ]] && continue
+            if [[ "$line" =~ ^CPU_LIMIT=(.*)$ ]]; then
+                cpu_limit="${BASH_REMATCH[1]}"
+                cpu_limit="${cpu_limit%\"}"
+                cpu_limit="${cpu_limit#\"}"
+                cpu_limit="${cpu_limit%\'}"
+                cpu_limit="${cpu_limit#\'}"
+            elif [[ "$line" =~ ^MEMORY_LIMIT=(.*)$ ]]; then
+                memory_limit="${BASH_REMATCH[1]}"
+                memory_limit="${memory_limit%\"}"
+                memory_limit="${memory_limit#\"}"
+                memory_limit="${memory_limit%\'}"
+                memory_limit="${memory_limit#\'}"
+            fi
+        done < "$limits_conf"
+    fi
+    if [[ -n "$cpu_limit" ]]; then
+        dbx_flags+=("--additional-flags" "--cpus=$cpu_limit")
+    fi
+    if [[ -n "$memory_limit" ]]; then
+        dbx_flags+=("--additional-flags" "-m $memory_limit")
+    fi
+
     gum style --foreground 39 "🚀 Pulling official image and creating Distrobox environment..."
     distrobox create -i "$IMAGE_NAME" -n "$CONTAINER_NAME" "${dbx_flags[@]}"
 
@@ -397,6 +427,36 @@ cmd_build_dev() {
     fi
     if [ "$systemd" = "true" ]; then
         dbx_flags+=("--init")
+    fi
+
+    # Resource limits
+    local limits_conf="$HOME/.config/agy-box/limits.conf"
+    local cpu_limit=""
+    local memory_limit=""
+    if [[ -f "$limits_conf" ]]; then
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            line=$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/#.*//')
+            [[ -z "$line" ]] && continue
+            if [[ "$line" =~ ^CPU_LIMIT=(.*)$ ]]; then
+                cpu_limit="${BASH_REMATCH[1]}"
+                cpu_limit="${cpu_limit%\"}"
+                cpu_limit="${cpu_limit#\"}"
+                cpu_limit="${cpu_limit%\'}"
+                cpu_limit="${cpu_limit#\'}"
+            elif [[ "$line" =~ ^MEMORY_LIMIT=(.*)$ ]]; then
+                memory_limit="${BASH_REMATCH[1]}"
+                memory_limit="${memory_limit%\"}"
+                memory_limit="${memory_limit#\"}"
+                memory_limit="${memory_limit%\'}"
+                memory_limit="${memory_limit#\'}"
+            fi
+        done < "$limits_conf"
+    fi
+    if [[ -n "$cpu_limit" ]]; then
+        dbx_flags+=("--additional-flags" "--cpus=$cpu_limit")
+    fi
+    if [[ -n "$memory_limit" ]]; then
+        dbx_flags+=("--additional-flags" "-m $memory_limit")
     fi
 
     gum style --foreground 39 "📦 Creating development Distrobox environment..."
