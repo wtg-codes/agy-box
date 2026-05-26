@@ -24,6 +24,7 @@ apt-get update && apt-get install -y --no-install-recommends \
     openbox \
     novnc \
     websockify \
+    xterm \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 

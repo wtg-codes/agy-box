@@ -172,6 +172,12 @@ echo -e "${BLUE}Access the desktop inside your web browser at:${NC}"
 echo -e "👉 ${GREEN}http://localhost:${WEB_PORT}/vnc.html?autoconnect=true${NC}\n"
 echo -e "${YELLOW}Press [Ctrl+C] to stop the virtual desktop session.${NC}"
 
+# 5. Launch a terminal on the desktop so the user has something to interact with
+if command -v xterm &>/dev/null; then
+    echo -e "${BLUE}[INFO] Launching xterm terminal on desktop...${NC}"
+    xterm -fa 'Monospace' -fs 12 -bg black -fg white -geometry 100x35+50+50 &
+fi
+
 # Block and keep shell open while monitoring all critical services
 while true; do
     if ! kill -0 %1 2>/dev/null; then
