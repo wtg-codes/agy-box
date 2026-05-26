@@ -309,6 +309,19 @@ setup_completions() {
 
 # --- Core Commands ---
 cmd_install_official() {
+    local systemd=false
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -s|--systemd)
+                systemd=true
+                shift
+                ;;
+            *)
+                shift
+                ;;
+        esac
+    done
+
     if check_container_exists "$CONTAINER_NAME"; then
         if gum confirm "Container '$CONTAINER_NAME' already exists. Recreate it?"; then
             cmd_clean "$CONTAINER_NAME"
@@ -321,6 +334,9 @@ cmd_install_official() {
     local dbx_flags=()
     if [ "$(get_runtime)" = "docker" ]; then
         dbx_flags+=("--additional-flags" "--user $(id -u):$(id -g)")
+    fi
+    if [ "$systemd" = "true" ]; then
+        dbx_flags+=("--init")
     fi
 
     gum style --foreground 39 "🚀 Pulling official image and creating Distrobox environment..."
@@ -336,6 +352,19 @@ cmd_install_official() {
 }
 
 cmd_build_dev() {
+    local systemd=false
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -s|--systemd)
+                systemd=true
+                shift
+                ;;
+            *)
+                shift
+                ;;
+        esac
+    done
+
     if [ ! -f "Containerfile" ]; then
         gum style --foreground 196 "✗ Error: Containerfile not found in current directory. Please clone the repository first to build from source."
         exit 1
@@ -359,6 +388,9 @@ cmd_build_dev() {
     local dbx_flags=()
     if [ "$runtime" = "docker" ]; then
         dbx_flags+=("--additional-flags" "--user $(id -u):$(id -g)")
+    fi
+    if [ "$systemd" = "true" ]; then
+        dbx_flags+=("--init")
     fi
 
     gum style --foreground 39 "📦 Creating development Distrobox environment..."
@@ -517,7 +549,6 @@ show_system_status() {
     left_text=$(printf "🖥️  Host OS: %s\n\n%s\n%s\n%s" "$os_name" "$podman_status" "$docker_status" "$distrobox_status")
     local left_card
     left_card=$(gum style --border rounded --border-foreground 39 --padding "1 2" --margin "0 1" --width 28 "$left_text")
-
     # Right Card: Workspace Status
     local right_text
     right_text=$(printf "📦 Workspaces\n\n%s\n%s\n%s" "$official_status" "$dev_status" "$source_status")
@@ -613,6 +644,49 @@ cmd_doctor() {
         return 1
     fi
     return 0
+}
+
+cmd_ports() {
+    # Ensure dependencies and host capabilities are probed
+    check_deps "quiet"
+    
+    if [ -z "${DBX_CONTAINER_MANAGER:-}" ]; then
+        gum style --foreground 196 "❌ Error: Container manager not detected."
+        return 1
+    fi
+    
+    echo -e "${CYAN}==================================================${NC}"
+    echo -e "${CYAN}        Sandboxed Port Forwarding Dashboard       ${NC}"
+    echo -e "${CYAN}==================================================${NC}"
+    
+    for container in "$CONTAINER_NAME" "$DEV_CONTAINER_NAME"; do
+        echo -e "\n${BLUE}Container: $container${NC}"
+        if check_container_exists "$container"; then
+            local port_out
+            port_out=$("$DBX_CONTAINER_MANAGER" port "$container" 2>/dev/null || true)
+            if [ -n "$port_out" ]; then
+                echo -e "  ${GREEN}CONTAINER PORT${NC}   ➔   ${GREEN}HOST MAPPING${NC}"
+                echo -e "  --------------------------------------------------"
+                while read -r line; do
+                    if [ -n "$line" ]; then
+                        local c_port host_map
+                        c_port=$(echo "$line" | awk -F ' -> ' '{print $1}')
+                        host_map=$(echo "$line" | awk -F ' -> ' '{print $2}')
+                        if [ -z "$host_map" ]; then
+                            echo "  $line"
+                        else
+                            printf "  %-16s ➔   %s\n" "$c_port" "$host_map"
+                        fi
+                    fi
+                done <<< "$port_out"
+            else
+                echo -e "  ${YELLOW}No active port mappings (all ports are sandboxed inside container).${NC}"
+            fi
+        else
+            echo -e "  ${RED}Container does not exist (not installed).${NC}"
+        fi
+    done
+    echo ""
 }
 
 cmd_check_dependencies() {
@@ -839,6 +913,7 @@ cmd_interactive() {
 
                     local tools_options=()
                     tools_options+=("📊 Show Distrobox List")
+                    tools_options+=("🔌 Show Port Mappings")
                     tools_options+=("🩺 Run Doctor Diagnostics")
                     tools_options+=("📦 Check Package Dependencies")
 
@@ -856,6 +931,10 @@ cmd_interactive() {
                     case "$sub_choice" in
                         "📊 Show Distrobox List")
                             cmd_status
+                            read -n 1 -s -r -p "Press any key to continue..."
+                            ;;
+                        "🔌 Show Port Mappings")
+                            cmd_ports
                             read -n 1 -s -r -p "Press any key to continue..."
                             ;;
                         "🩺 Run Doctor Diagnostics")
@@ -897,12 +976,17 @@ show_help() {
     echo "Commands:"
     echo "  (none)              Launch the interactive UI"
     echo "  install             Pull the official image and create the environment"
+    echo "                      Options:"
+    echo "                        -s, --systemd     Enable user-mode systemd support"
     echo "  dev                 Build the image from local source and create dev environment"
+    echo "                      Options:"
+    echo "                        -s, --systemd     Enable user-mode systemd support"
     echo "  enter               Enter the official environment"
     echo "  enter dev           Enter the development environment"
     echo "  desktop             Launch VDI Web Desktop inside official environment"
     echo "  desktop dev         Launch VDI Web Desktop inside development environment"
     echo "  status              List AGY Box environments"
+    echo "  ports               Show sandboxed port mappings"
     echo "  doctor              Run system diagnostics health check"
     echo "  clean               Remove the official environment"
     echo "  clean dev           Remove the development environment"
@@ -917,12 +1001,13 @@ show_help() {
 setup_completions
 
 case "${1:-}" in
-    install)          check_deps "quiet"; cmd_install_official ;;
-    dev)              check_deps "quiet"; cmd_build_dev ;;
+    install)          check_deps "quiet"; cmd_install_official "${@:2}" ;;
+    dev)              check_deps "quiet"; cmd_build_dev "${@:2}" ;;
     enter)            check_deps "quiet"; if [ "${2:-}" = "dev" ]; then cmd_enter dev; else cmd_enter prod; fi ;;
     desktop)          check_deps "quiet"; if [ "${2:-}" = "dev" ]; then cmd_desktop dev; else cmd_desktop prod; fi ;;
     clean)            check_deps "quiet"; if [ "${2:-}" = "dev" ]; then cmd_clean "$DEV_CONTAINER_NAME"; else cmd_clean "$CONTAINER_NAME"; fi ;;
     status)           check_deps "quiet"; cmd_status ;;
+    ports)            check_deps "quiet"; cmd_ports ;;
     doctor)           check_deps "quiet"; cmd_doctor ;;
     install-global)   check_deps "quiet"; cmd_install_global ;;
     uninstall-global) check_deps "quiet"; cmd_uninstall_global ;;
