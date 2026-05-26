@@ -44,70 +44,61 @@ mask_key() {
     fi
 }
 
-main() {
-    # Check if the shell is interactive before displaying interactive setup options
-    local is_interactive=false
-    if [[ -t 0 && -t 1 ]]; then
-        is_interactive=true
-    fi
-
-    if [[ "$is_interactive" == "true" ]]; then
-        echo -e "${BLUE}==================================================${NC}"
-        echo -e "${BLUE}      agy-box Workspace First-Time Setup          ${NC}"
-        echo -e "${BLUE}==================================================${NC}"
-        printf "Would you like to run the first-time setup assistant now? [Y/n]: "
-        read -r run_setup
-        run_setup="${run_setup:-Y}"
-        if [[ ! "$run_setup" =~ ^[Yy]$ ]]; then
-            log_info "Skipping setup. A completion flag will be written to prevent future prompts."
-            mkdir -p "$HOME/.config/agy-box"
-            touch "$HOME/.config/agy-box/.setup_done"
-            exit 0
-        fi
-    fi
-
-    # 1. Keyring/D-Bus validation
-    log_info "Validating D-Bus and Keyring environment..."
+check_dbus() {
+    local status=0
     if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]]; then
-        log_warn "DBUS_SESSION_BUS_ADDRESS is not set. D-Bus keyring communication might be unavailable."
-    else
-        log_info "DBUS_SESSION_BUS_ADDRESS is active: $DBUS_SESSION_BUS_ADDRESS"
+        status=1
     fi
-
     if command -v dbus-send &>/dev/null; then
-        # Check if we can communicate with DBus
-        if dbus-send --session --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListNames >/dev/null 2>&1; then
-            log_success "D-Bus session communication is healthy."
-        else
-            log_warn "D-Bus communication test failed (session bus is unreachable)."
+        if ! dbus-send --session --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListNames >/dev/null 2>&1; then
+            status=2
         fi
     else
-        log_warn "dbus-send command not found. Cannot verify D-Bus communication."
+        status=3
     fi
+    return "$status"
+}
+export -f check_dbus
 
-    if command -v secret-tool &>/dev/null; then
-        log_info "Keyring CLI (secret-tool) is available."
-    else
-        log_info "Keyring CLI (secret-tool) is not installed."
+check_chrome() {
+    if ! command -v google-chrome-stable &>/dev/null; then
+        return 1
     fi
+    if ! google-chrome-stable --version &>/dev/null; then
+        return 2
+    fi
+    return 0
+}
+export -f check_chrome
 
-    # 2. API Key validation
-    log_info "Validating API Keys (GEMINI_API_KEY / ANTIGRAVITY_API_KEY)..."
+check_git() {
+    local name
+    local email
+    name=$(git config --global user.name 2>/dev/null || true)
+    email=$(git config --global user.email 2>/dev/null || true)
+    if [[ -z "$name" && -z "$email" ]]; then
+        return 3
+    elif [[ -z "$name" ]]; then
+        return 1
+    elif [[ -z "$email" ]]; then
+        return 2
+    fi
+    return 0
+}
+export -f check_git
+
+check_api_keys() {
     local gemini_key="${GEMINI_API_KEY:-}"
     local anti_key="${ANTIGRAVITY_API_KEY:-}"
     local config_file="$HOME/.config/environment.d/agy-box.conf"
 
-    # Read from config file if present and variables are not already in environment
     if [[ -f "$config_file" ]]; then
-        log_info "Found environment config file at $config_file"
         while IFS= read -r line || [[ -n "$line" ]]; do
-            # Strip leading/trailing whitespace, comments
             line=$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/#.*//')
             [[ -z "$line" ]] && continue
             if [[ "$line" =~ ^([^=]+)=(.*)$ ]]; then
                 local key="${BASH_REMATCH[1]}"
                 local val="${BASH_REMATCH[2]}"
-                # Strip quotes
                 val="${val%\"}"
                 val="${val#\"}"
                 val="${val%\'}"
@@ -121,235 +112,312 @@ main() {
         done < "$config_file"
     fi
 
-    log_info "Current API Key status:"
-    log_info "  GEMINI_API_KEY: $(mask_key "$gemini_key")"
-    log_info "  ANTIGRAVITY_API_KEY: $(mask_key "$anti_key")"
-
     if [[ -z "$gemini_key" && -z "$anti_key" ]]; then
-        if [[ "$is_interactive" == "true" ]]; then
-            log_warn "Both GEMINI_API_KEY and ANTIGRAVITY_API_KEY are missing."
-            printf "Would you like to configure API keys now? [Y/n]: "
-            read -r prompt_keys
-            prompt_keys="${prompt_keys:-Y}"
-            if [[ "$prompt_keys" =~ ^[Yy]$ ]]; then
-                printf "Enter GEMINI_API_KEY (leave blank to skip): "
-                read -r input_gemini
-                printf "Enter ANTIGRAVITY_API_KEY (leave blank to skip): "
-                read -r input_anti
+        return 1
+    elif [[ -z "$gemini_key" ]]; then
+        return 2
+    elif [[ -z "$anti_key" ]]; then
+        return 3
+    fi
+    return 0
+}
+export -f check_api_keys
 
-                if [[ -n "$input_gemini" || -n "$input_anti" ]]; then
-                    mkdir -p "$(dirname "$config_file")"
-                    {
-                        echo "# Environment variables for agy-box"
-                        echo "# Generated by agy-setup-helper on $(date)"
-                        if [[ -n "$input_gemini" ]]; then
-                            echo "GEMINI_API_KEY=\"$input_gemini\""
-                            gemini_key="$input_gemini"
-                            export GEMINI_API_KEY="$input_gemini"
-                        fi
-                        if [[ -n "$input_anti" ]]; then
-                            echo "ANTIGRAVITY_API_KEY=\"$input_anti\""
-                            anti_key="$input_anti"
-                            export ANTIGRAVITY_API_KEY="$input_anti"
-                        fi
-                    } > "$config_file"
-                    log_success "API Keys saved to $config_file"
+run_audit_checks() {
+    local log_file="$1"
+    local config_file="$HOME/.config/environment.d/agy-box.conf"
+    {
+        # A. Container Boundary & Access Auditing
+        echo "Boundary Check:"
+        if [[ "$EUID" -eq 0 ]]; then
+            echo "WARN:Running as root! It is highly recommended to run the container shell as a non-root user to avoid host escape vulnerabilities."
+        else
+            echo "OK:Running securely as non-root user (EUID: $EUID)."
+        fi
+
+        # D-Bus Socket Owner Check
+        if [[ -n "${DBUS_SESSION_BUS_ADDRESS:-}" && "$DBUS_SESSION_BUS_ADDRESS" =~ unix:path=([^,]+) ]]; then
+            local socket_path="${BASH_REMATCH[1]}"
+            if [[ -S "$socket_path" ]]; then
+                local socket_owner
+                socket_owner=$(stat -c "%U" "$socket_path" 2>/dev/null || stat -f "%Su" "$socket_path" 2>/dev/null)
+                if [[ "$socket_owner" != "$USER" && "$socket_owner" != "root" ]]; then
+                    echo "WARN:D-Bus session socket at $socket_path is owned by $socket_owner, not current user ($USER)."
                 else
-                    log_info "No API keys provided. Skipping."
+                    echo "OK:D-Bus socket owner matches session user securely ($socket_owner)."
+                fi
+            fi
+        fi
+
+        # B. Insecure Permissions Hardening
+        echo "Permissions Check:"
+        check_perm() {
+            local target="$1"
+            local expected_perm="$2"
+            local label="$3"
+            if [[ -e "$target" ]]; then
+                local current_perm
+                current_perm=$(stat -c "%a" "$target" 2>/dev/null || stat -f "%Lp" "$target" 2>/dev/null)
+                if [[ "$current_perm" -ne "$expected_perm" ]]; then
+                    echo "WARN:Insecure permissions on $label $target: $current_perm (expected $expected_perm)."
+                else
+                    echo "OK:Permissions on $target are secure ($current_perm)."
                 fi
             else
-                log_info "Skipping API key configuration."
+                echo "SKIP:Path $target ($label) does not exist."
+            fi
+        }
+        check_perm "$config_file" 600 "API config file"
+        check_perm "$HOME/.ssh" 700 "SSH directory"
+        check_perm "$HOME/.config/gcloud/application_default_credentials.json" 600 "GCP Credentials file"
+
+        # C. Sockets / Wildcard Ports Binding Scan
+        echo "Network Check:"
+        local insecure_listeners=0
+        if [[ -f /proc/net/tcp ]]; then
+            while read -r _ local_addr _ _ _ _ _ _ _ _ _ || [[ -n "$local_addr" ]]; do
+                if [[ "$local_addr" =~ ^00000000:([0-9A-F]+)$ ]]; then
+                    local port_hex="${BASH_REMATCH[1]}"
+                    local port_dec=$((16#$port_hex))
+                    echo "WARN:Exposed port listener: Port $port_dec is bound to 0.0.0.0 (exposed outside sandbox!)."
+                    insecure_listeners=$((insecure_listeners + 1))
+                fi
+            done < <(tail -n +2 /proc/net/tcp)
+        fi
+        if [[ "$insecure_listeners" -eq 0 ]]; then
+            echo "OK:No wildcard listeners detected. All port bindings are secure."
+        fi
+
+        # D. Developer Skills Pack Checks
+        echo "Skills Check:"
+        
+        # Android Pack
+        if command -v adb &>/dev/null; then
+            echo "OK:Android adb CLI tool is installed."
+        else
+            echo "WARN:Android adb CLI tool not found."
+        fi
+        if [[ -d /dev/bus/usb ]]; then
+            echo "OK:USB bus mounts are present (/dev/bus/usb)."
+        else
+            echo "WARN:USB bus (/dev/bus/usb) not found. Android hardware debugging is unavailable."
+        fi
+
+        # Cloud Pack
+        if command -v gcloud &>/dev/null; then
+            echo "OK:gcloud CLI tool is installed."
+        else
+            echo "WARN:gcloud CLI tool not found."
+        fi
+
+        # Web/noVNC VDI Pack
+        local missing_vdi=0
+        for cmd in Xvfb x11vnc openbox websockify; do
+            if command -v "$cmd" &>/dev/null; then
+                echo "OK:VDI component '$cmd' is available."
+            else
+                echo "WARN:VDI component '$cmd' is missing."
+                missing_vdi=$((missing_vdi + 1))
+            fi
+        done
+        if [[ "$missing_vdi" -eq 0 ]]; then
+            echo "OK:VDI virtual desktop capabilities are fully configured."
+        else
+            echo "WARN:Optional VDI desktop components are incomplete (missing $missing_vdi components)."
+        fi
+    } > "$log_file"
+}
+export -f run_audit_checks
+
+main() {
+    # Check if the shell is interactive before displaying interactive setup options
+    local is_interactive=false
+    if [[ -t 0 && -t 1 ]]; then
+        is_interactive=true
+    fi
+
+    if [[ "$is_interactive" != "true" ]]; then
+        log_info "Non-interactive session. Skipping setup assistant."
+        exit 0
+    fi
+
+    # Welcome Splash Screen
+    local welcome_text
+    welcome_text=$(printf "Welcome to the agy-box Workspace Setup Assistant!\n\nThis utility will validate your container environment and configure key components:\n  • D-Bus & Keyring validation\n  • API Key configurations\n  • Browser health checks\n  • Git configuration checks\n  • Developer toolchain audit & permissions hardening")
+    gum style --foreground 99 --border double --border-foreground 99 --padding "1 2" --margin "1 1" "$welcome_text"
+
+    if ! gum confirm "Would you like to run the first-time setup assistant now?"; then
+        gum style --foreground 214 "Skipping setup. A completion flag will be written to prevent future prompts."
+        mkdir -p "$HOME/.config/agy-box"
+        touch "$HOME/.config/agy-box/.setup_done"
+        exit 0
+    fi
+
+    # Setup Steps using gum spin
+    local dbus_code=0
+    gum spin --spinner dot --title "Checking D-Bus & Keyring environment..." -- bash -c check_dbus || dbus_code=$?
+
+    local chrome_code=0
+    gum spin --spinner dot --title "Verifying Google Chrome execution..." -- bash -c check_chrome || chrome_code=$?
+
+    local git_code=0
+    gum spin --spinner dot --title "Checking Git configuration..." -- bash -c check_git || git_code=$?
+
+    local api_code=0
+    gum spin --spinner dot --title "Checking API credentials..." -- bash -c check_api_keys || api_code=$?
+
+    # Show a styled check outcome card
+    local card=""
+    card+="System Status Check Results:\n\n"
+    
+    case "$dbus_code" in
+        0) card+="  [✓] D-Bus session communication is healthy.\n" ;;
+        1) card+="  [!] DBUS_SESSION_BUS_ADDRESS is not set (Keyring may fail).\n" ;;
+        2) card+="  [!] D-Bus session bus is unreachable (Keyring may fail).\n" ;;
+        *) card+="  [!] dbus-send tool not found; unable to verify D-Bus.\n" ;;
+    esac
+
+    case "$chrome_code" in
+        0) card+="  [✓] Google Chrome is healthy.\n" ;;
+        1) card+="  [!] google-chrome-stable command not found.\n" ;;
+        *) card+="  [!] Google Chrome exists but failed to execute.\n" ;;
+    esac
+
+    case "$git_code" in
+        0) card+="  [✓] Git user.name and user.email are configured.\n" ;;
+        1) card+="  [!] Git user.name is not set.\n" ;;
+        2) card+="  [!] Git user.email is not set.\n" ;;
+        *) card+="  [!] Git configuration is missing.\n" ;;
+    esac
+
+    case "$api_code" in
+        0) card+="  [✓] API Keys: GEMINI_API_KEY & ANTIGRAVITY_API_KEY are configured.\n" ;;
+        2) card+="  [✓] API Keys: ANTIGRAVITY_API_KEY is configured (GEMINI is missing).\n" ;;
+        3) card+="  [✓] API Keys: GEMINI_API_KEY is configured (ANTIGRAVITY is missing).\n" ;;
+        *) card+="  [!] API Keys: Both GEMINI and ANTIGRAVITY API keys are missing.\n" ;;
+    esac
+
+    gum style --border normal --padding "1 2" --border-foreground 120 --foreground 255 "$(printf "%b" "$card")"
+
+    # User input collection for API Keys
+    local config_file="$HOME/.config/environment.d/agy-box.conf"
+    if [[ "$api_code" -eq 1 ]]; then
+        if gum confirm "API keys are missing. Would you like to configure them now?"; then
+            local input_gemini
+            input_gemini=$(gum input --password --placeholder "Enter GEMINI_API_KEY (leave blank to skip)")
+            
+            local input_anti
+            input_anti=$(gum input --password --placeholder "Enter ANTIGRAVITY_API_KEY (leave blank to skip)")
+
+            if [[ -n "$input_gemini" || -n "$input_anti" ]]; then
+                mkdir -p "$(dirname "$config_file")"
+                {
+                    echo "# Environment variables for agy-box"
+                    echo "# Generated by agy-setup-helper on $(date)"
+                    if [[ -n "$input_gemini" ]]; then
+                        echo "GEMINI_API_KEY=\"$input_gemini\""
+                        export GEMINI_API_KEY="$input_gemini"
+                    fi
+                    if [[ -n "$input_anti" ]]; then
+                        echo "ANTIGRAVITY_API_KEY=\"$input_anti\""
+                        export ANTIGRAVITY_API_KEY="$input_anti"
+                    fi
+                } > "$config_file"
+                gum style --foreground 46 "✓ API Keys successfully saved to $config_file"
+            else
+                gum style --foreground 214 "No API keys entered. Skipping."
             fi
         else
-            log_warn "Non-interactive shell. GEMINI_API_KEY and ANTIGRAVITY_API_KEY are not configured."
-            log_warn "You can configure them manually in $config_file"
+            gum style --foreground 214 "Skipping API key configuration."
         fi
-    else
-        log_success "API Key validation passed (at least one key is configured)."
     fi
 
-    # 3. Chrome/Browser health
-    log_info "Checking Chrome browser health..."
-    if command -v google-chrome-stable &>/dev/null; then
-        local chrome_version
-        if chrome_version=$(google-chrome-stable --version 2>&1); then
-            log_success "Chrome is healthy: $chrome_version"
-        else
-            log_error "google-chrome-stable exists but failed to execute. Error: $chrome_version"
-        fi
-    else
-        log_warn "google-chrome-stable command not found."
-    fi
+    # User input collection for Git
+    if [[ "$git_code" -ne 0 ]]; then
+        if gum confirm "Git profile configuration is missing or incomplete. Configure now?"; then
+            local git_name
+            local git_email
+            git_name=$(git config --global user.name 2>/dev/null || true)
+            git_email=$(git config --global user.email 2>/dev/null || true)
 
-    # 4. Git verification
-    log_info "Verifying Git configuration..."
-    local git_name
-    local git_email
-    git_name=$(git config --global user.name 2>/dev/null || true)
-    git_email=$(git config --global user.email 2>/dev/null || true)
-
-    if [[ -z "$git_name" || -z "$git_email" ]]; then
-        if [[ "$is_interactive" == "true" ]]; then
-            log_warn "Git user.name or user.email is not set."
             if [[ -z "$git_name" ]]; then
-                printf "Enter Git user.name: "
-                read -r input_name
+                local input_name
+                input_name=$(gum input --placeholder "Enter Git user.name (e.g. John Doe)")
                 if [[ -n "$input_name" ]]; then
                     git config --global user.name "$input_name"
-                    git_name="$input_name"
-                    log_success "Git user.name configured."
+                    gum style --foreground 46 "✓ Git user.name set to: $input_name"
                 fi
             fi
+
             if [[ -z "$git_email" ]]; then
-                printf "Enter Git user.email: "
-                read -r input_email
+                local input_email
+                input_email=$(gum input --placeholder "Enter Git user.email (e.g. john@example.com)")
                 if [[ -n "$input_email" ]]; then
                     git config --global user.email "$input_email"
-                    git_email="$input_email"
-                    log_success "Git user.email configured."
+                    gum style --foreground 46 "✓ Git user.email set to: $input_email"
                 fi
             fi
-        else
-            log_warn "Non-interactive shell. Git user.name/user.email not configured."
-            log_warn "Please run 'git config --global user.name/user.email' to configure them."
-        fi
-    else
-        log_success "Git configured (Name: $git_name, Email: $git_email)."
-    fi
-
-    # 4.5. Optional Skills Pack & Security Auditing
-    if [[ "$is_interactive" == "true" ]]; then
-        echo -e "\n${BLUE}==================================================${NC}"
-        echo -e "${BLUE}    Optional Skills Pack & Security Auditing     ${NC}"
-        echo -e "${BLUE}==================================================${NC}"
-        printf "Would you like to run the optional Developer Skills Pack & Security Audit? [y/N]: "
-        read -r run_audit
-        run_audit="${run_audit:-N}"
-        if [[ "$run_audit" =~ ^[Yy]$ ]]; then
-            # A. Container Boundary & Access Auditing
-            log_info "Auditing container privilege boundaries..."
-            if [[ "$EUID" -eq 0 ]]; then
-                log_warn "Running as root! It is highly recommended to run the container shell as a non-root user to avoid host escape vulnerabilities."
-            else
-                log_success "Running securely as non-root user (EUID: $EUID)."
-            fi
-
-            # D-Bus Socket Owner Check
-            if [[ -n "${DBUS_SESSION_BUS_ADDRESS:-}" && "$DBUS_SESSION_BUS_ADDRESS" =~ unix:path=([^,]+) ]]; then
-                local socket_path="${BASH_REMATCH[1]}"
-                if [[ -S "$socket_path" ]]; then
-                    local socket_owner
-                    socket_owner=$(stat -c "%U" "$socket_path" 2>/dev/null || stat -f "%Su" "$socket_path" 2>/dev/null)
-                    if [[ "$socket_owner" != "$USER" && "$socket_owner" != "root" ]]; then
-                        log_warn "D-Bus session socket at $socket_path is owned by $socket_owner, not current user ($USER)."
-                    else
-                        log_success "D-Bus socket owner matches session user securely ($socket_owner)."
-                    fi
-                fi
-            fi
-
-            # B. Insecure Permissions Hardening
-            log_info "Auditing critical file permissions..."
-            audit_and_harden() {
-                local target="$1"
-                local expected_perm="$2"
-                local label="$3"
-                if [[ -e "$target" ]]; then
-                    local current_perm
-                    current_perm=$(stat -c "%a" "$target" 2>/dev/null || stat -f "%Lp" "$target" 2>/dev/null)
-                    if [[ "$current_perm" -ne "$expected_perm" ]]; then
-                        log_warn "Insecure permissions on $label $target: $current_perm (expected $expected_perm)."
-                        printf "Would you like to auto-harden permissions to %s? [Y/n]: " "$expected_perm"
-                        read -r harden_input
-                        harden_input="${harden_input:-Y}"
-                        if [[ "$harden_input" =~ ^[Yy]$ ]]; then
-                            chmod "$expected_perm" "$target"
-                            log_success "Hardened permissions of $target to $expected_perm."
-                        fi
-                    else
-                        log_success "Permissions on $target are secure ($current_perm)."
-                    fi
-                fi
-            }
-            audit_and_harden "$config_file" 600 "API config file"
-            audit_and_harden "$HOME/.ssh" 700 "SSH directory"
-            audit_and_harden "$HOME/.config/gcloud/application_default_credentials.json" 600 "GCP Credentials file"
-
-            # C. Sockets / Wildcard Ports Binding Scan
-            log_info "Auditing active wildcard network port listeners..."
-            local insecure_listeners=0
-            if [[ -f /proc/net/tcp ]]; then
-                while read -r line || [[ -n "$line" ]]; do
-                    # shellcheck disable=SC2206
-                    local fields=($line)
-                    local local_addr="${fields[1]:-}"
-                    # 00000000 translates to wildcard 0.0.0.0
-                    if [[ "$local_addr" =~ ^00000000:([0-9A-F]+)$ ]]; then
-                        local port_hex="${BASH_REMATCH[1]}"
-                        local port_dec=$((16#$port_hex))
-                        log_warn "Exposed port listener: Port $port_dec is bound to 0.0.0.0 (exposed outside sandbox!)."
-                        insecure_listeners=$((insecure_listeners + 1))
-                    fi
-                done < <(tail -n +2 /proc/net/tcp)
-            fi
-            if [[ "$insecure_listeners" -eq 0 ]]; then
-                log_success "No wildcard listeners detected. All port bindings are secure."
-            else
-                log_warn "Exposed listeners detected ($insecure_listeners). Please ensure container servers bind strictly to 127.0.0.1."
-            fi
-
-            # D. Developer Skills Pack Checks
-            log_info "Auditing Developer Skills Pack toolchains..."
-            
-            # Android Pack
-            log_info "--- Android Developer Skills Pack ---"
-            if command -v adb &>/dev/null; then
-                log_success "adb CLI tool is installed."
-            else
-                log_warn "adb CLI tool not found."
-            fi
-            if [[ -d /dev/bus/usb ]]; then
-                log_success "USB bus mounts are present (/dev/bus/usb)."
-            else
-                log_warn "USB bus (/dev/bus/usb) not found. Android hardware debugging is unavailable."
-            fi
-
-            # Cloud Pack
-            log_info "--- GCP / Cloud Developer Skills Pack ---"
-            if command -v gcloud &>/dev/null; then
-                log_success "gcloud CLI tool is installed."
-            else
-                log_warn "gcloud CLI tool not found."
-            fi
-
-            # Web/noVNC VDI Pack
-            log_info "--- VDI Virtual Desktop Skills Pack ---"
-            local missing_vdi=0
-            for cmd in Xvfb x11vnc openbox websockify; do
-                if command -v "$cmd" &>/dev/null; then
-                    log_success "VDI component '$cmd' is available."
-                else
-                    log_warn "VDI component '$cmd' is missing."
-                    missing_vdi=$((missing_vdi + 1))
-                fi
-            done
-            if [[ "$missing_vdi" -eq 0 ]]; then
-                log_success "VDI virtual desktop capabilities are fully configured."
-            else
-                log_info "Optional VDI desktop components are incomplete."
-            fi
-        else
-            log_info "Skipping optional Skills Pack & Security Audit."
         fi
     fi
 
-    # 5. Flag File writing
+    # Optional Skills Pack & Security Auditing
+    if gum confirm "Would you like to run the optional Developer Skills Pack & Security Audit?"; then
+        local audit_log
+        audit_log=$(mktemp)
+        
+        gum spin --spinner dot --title "Running Security Audit & Skills Pack checks..." -- bash -c "run_audit_checks '$audit_log'"
+
+        local formatted_results=""
+        formatted_results+="Security Audit & Skills Pack Results:\n\n"
+        
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            if [[ "$line" =~ ^(OK|WARN|SKIP):(.*)$ ]]; then
+                local type="${BASH_REMATCH[1]}"
+                local msg="${BASH_REMATCH[2]}"
+                case "$type" in
+                    OK) formatted_results+="  [✓] $msg\n" ;;
+                    WARN) formatted_results+="  [!] $msg\n" ;;
+                    SKIP) formatted_results+="  [-] $msg\n" ;;
+                esac
+            else
+                formatted_results+="\n$line\n"
+            fi
+        done < "$audit_log"
+        rm -f "$audit_log"
+
+        gum style --border double --padding "1 2" --border-foreground 212 --foreground 255 "$(printf "%b" "$formatted_results")"
+
+        # Permissions Hardening Checks
+        harden_if_needed() {
+            local target="$1"
+            local expected_perm="$2"
+            local label="$3"
+            if [[ -e "$target" ]]; then
+                local current_perm
+                current_perm=$(stat -c "%a" "$target" 2>/dev/null || stat -f "%Lp" "$target" 2>/dev/null)
+                if [[ "$current_perm" -ne "$expected_perm" ]]; then
+                    if gum confirm "Insecure permissions on $label ($target): $current_perm. Auto-harden to $expected_perm?"; then
+                        chmod "$expected_perm" "$target"
+                        gum style --foreground 46 "✓ Hardened permissions of $target to $expected_perm."
+                    fi
+                fi
+            fi
+        }
+        harden_if_needed "$config_file" 600 "API config file"
+        harden_if_needed "$HOME/.ssh" 700 "SSH directory"
+        harden_if_needed "$HOME/.config/gcloud/application_default_credentials.json" 600 "GCP Credentials file"
+    fi
+
+    # End Screen Success Card
+    local success_msg
+    success_msg=$(printf "Setup Assistant Complete!\n\nAll baseline services and keys are verified.\nYour environment is ready for Cloud-Native Laboratory development.\n\nEnjoy using agy-box!")
+    gum style --border double --padding "1 2" --border-foreground 46 --foreground 46 "$success_msg"
+
+    # Flag File writing
     local flag_dir="$HOME/.config/agy-box"
     local flag_file="$flag_dir/.setup_done"
-    log_info "Writing setup completion flag to $flag_file..."
     mkdir -p "$flag_dir"
     touch "$flag_file"
-    log_success "Setup check and configuration complete!"
 }
 
 main "$@"

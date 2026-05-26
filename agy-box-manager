@@ -189,7 +189,8 @@ cmd_install_official() {
         fi
     fi
 
-    gum spin --spinner dot --title "Pulling image and creating Distrobox..." -- distrobox create -i "$IMAGE_NAME" -n "$CONTAINER_NAME"
+    gum style --foreground 39 "🚀 Pulling official image and creating Distrobox environment..."
+    distrobox create -i "$IMAGE_NAME" -n "$CONTAINER_NAME"
     gum style --foreground 46 --margin "1 0" "✓ Created successfully! Run 'agy-box-manager enter' to start."
 }
 
@@ -211,8 +212,11 @@ cmd_build_dev() {
     local runtime
     runtime=$(get_runtime)
 
-    gum spin --spinner dot --title "Building image with $runtime (this may take a while)..." -- "$runtime" build -t "$DEV_IMAGE_NAME" -f Containerfile .
-    gum spin --spinner dot --title "Creating Distrobox environment..." -- distrobox create -i "$DEV_IMAGE_NAME" -n "$DEV_CONTAINER_NAME"
+    gum style --foreground 39 "🛠️  Building development image with $runtime (this may take a while)..."
+    "$runtime" build -t "$DEV_IMAGE_NAME" -f Containerfile .
+
+    gum style --foreground 39 "📦 Creating development Distrobox environment..."
+    distrobox create -i "$DEV_IMAGE_NAME" -n "$DEV_CONTAINER_NAME"
 
     gum style --foreground 46 --margin "1 0" "✓ Dev environment ready! Run 'agy-box-manager enter dev' to start."
 }
@@ -403,17 +407,48 @@ cmd_check_dependencies() {
     read -n 1 -s -r -p "Press any key to continue..."
 }
 
+show_compact_status() {
+    local official_status="❌ Not Installed"
+    local dev_status="❌ Not Installed"
+
+    if check_container_exists "$CONTAINER_NAME"; then
+        if distrobox list --no-color | grep -w "$CONTAINER_NAME" | grep -qi "running"; then
+            official_status="🟢 Running"
+        else
+            official_status="💤 Installed"
+        fi
+    fi
+
+    if check_container_exists "$DEV_CONTAINER_NAME"; then
+        if distrobox list --no-color | grep -w "$DEV_CONTAINER_NAME" | grep -qi "running"; then
+            dev_status="🟢 Running"
+        else
+            dev_status="💤 Installed"
+        fi
+    fi
+
+    gum style --border rounded --border-foreground 39 --padding "0 2" --margin "0 2" --align center --width 50 \
+        "Official: $official_status  |  Dev: $dev_status"
+}
+
+choose_option() {
+    gum choose --cursor="➜ " --cursor.foreground="212" --selected.foreground="212" --item.foreground="250" "$@"
+}
+
 cmd_interactive() {
-    # 1. Splash Screen
+    # 1. Splash Screen Flow
     clear
     show_banner
     check_deps "menu"
     show_system_status
-    sleep 1.5
+    echo ""
+    choose_option "🚀 Continue to Main Menu" >/dev/null
 
     while true; do
         clear
         show_banner
+        show_compact_status
+        echo ""
 
         local main_options=(
             "🚪 Workspaces (Enter/VDI Desktop) >"
@@ -423,13 +458,15 @@ cmd_interactive() {
         )
 
         local choice
-        choice=$(gum choose --cursor="➜ " --cursor.foreground="212" --selected.foreground="212" "${main_options[@]}")
+        choice=$(choose_option "${main_options[@]}")
 
         case "$choice" in
             "🚪 Workspaces (Enter/VDI Desktop) >")
                 while true; do
                     clear
                     show_banner
+                    show_compact_status
+                    echo ""
 
                     local workspace_options=()
                     if check_container_exists "$CONTAINER_NAME"; then
@@ -444,20 +481,28 @@ cmd_interactive() {
                     workspace_options+=("🔙 Back to Main Menu")
 
                     local sub_choice
-                    sub_choice=$(gum choose --cursor="➜ " --cursor.foreground="212" --selected.foreground="212" "${workspace_options[@]}")
+                    sub_choice=$(choose_option "${workspace_options[@]}")
 
                     case "$sub_choice" in
                         "🚪 Enter Official Workspace")
                             cmd_enter prod
+                            echo ""
+                            read -n 1 -s -r -p "Press any key to continue..."
                             ;;
                         "🖥️  Start VDI Web Desktop (Official)")
                             cmd_desktop prod
+                            echo ""
+                            read -n 1 -s -r -p "Press any key to continue..."
                             ;;
                         "💻 Enter Dev Workspace")
                             cmd_enter dev
+                            echo ""
+                            read -n 1 -s -r -p "Press any key to continue..."
                             ;;
                         "🖥️  Start VDI Web Desktop (Dev)")
                             cmd_desktop dev
+                            echo ""
+                            read -n 1 -s -r -p "Press any key to continue..."
                             ;;
                         "🔙 Back to Main Menu")
                             break
@@ -470,6 +515,8 @@ cmd_interactive() {
                 while true; do
                     clear
                     show_banner
+                    show_compact_status
+                    echo ""
 
                     local manage_options=()
                     if check_container_exists "$CONTAINER_NAME"; then
@@ -491,7 +538,7 @@ cmd_interactive() {
                     manage_options+=("🔙 Back to Main Menu")
 
                     local sub_choice
-                    sub_choice=$(gum choose --cursor="➜ " --cursor.foreground="212" --selected.foreground="212" "${manage_options[@]}")
+                    sub_choice=$(choose_option "${manage_options[@]}")
 
                     case "$sub_choice" in
                         "🚀 Install Official Workspace (Pull from GHCR)"|"♻️  Update/Recreate Official Workspace")
@@ -525,6 +572,8 @@ cmd_interactive() {
                 while true; do
                     clear
                     show_banner
+                    show_compact_status
+                    echo ""
 
                     local tools_options=()
                     tools_options+=("📊 Show Distrobox List")
@@ -539,7 +588,7 @@ cmd_interactive() {
                     tools_options+=("🔙 Back to Main Menu")
 
                     local sub_choice
-                    sub_choice=$(gum choose --cursor="➜ " --cursor.foreground="212" --selected.foreground="212" "${tools_options[@]}")
+                    sub_choice=$(choose_option "${tools_options[@]}")
 
                     case "$sub_choice" in
                         "📊 Show Distrobox List")
