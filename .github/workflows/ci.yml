@@ -34,15 +34,16 @@ jobs:
         run: |
           find . -type f \( -name "*.sh" -o -name "agy-box-manager" \) -print0 | xargs -0 shellcheck
 
-  build-and-test:
-    name: Build & Validate
+  build-image:
+    name: Build Image
     needs: lint
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
       packages: write
-      id-token: write
-      attestations: write
+    outputs:
+      primary-tag: ${{ steps.primary-tag.outputs.tag }}
+      digest: ${{ steps.build-push.outputs.digest }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -83,11 +84,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Install Distrobox
-        run: |
-          curl -s https://raw.githubusercontent.com/89luca89/distrobox/main/install | sudo sh
-
-      - name: Get primary tag and pull if push
+      - name: Get primary tag
         id: primary-tag
         run: |
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
@@ -95,45 +92,114 @@ jobs:
           else
             TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n 1)
             echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-            # Pull the image we just pushed to test it directly
-            docker pull "$TAG"
           fi
+
+      - name: Save OCI Image as tarball (PR only)
+        if: github.event_name == 'pull_request'
+        run: |
+          docker save -o /tmp/agy-box-dev.tar localhost/agy-box:dev
+
+      - name: Upload Image Artifact (PR only)
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: agy-box-dev-image
+          path: /tmp/agy-box-dev.tar
+          retention-days: 1
+
+  run-tests:
+    name: Run Tests
+    needs: build-image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download Image Artifact (PR only)
+        if: github.event_name == 'pull_request'
+        uses: actions/download-artifact@v4
+        with:
+          name: agy-box-dev-image
+          path: /tmp
+
+      - name: Load OCI Image (PR only)
+        if: github.event_name == 'pull_request'
+        run: |
+          docker load -i /tmp/agy-box-dev.tar
+
+      - name: Install Distrobox
+        run: |
+          curl -s https://raw.githubusercontent.com/89luca89/distrobox/main/install | sudo sh
+
+      - name: Pull Image if Push
+        if: github.event_name != 'pull_request'
+        run: |
+          docker pull "${{ needs.build-image.outputs.primary-tag }}"
 
       - name: Run Validation Checks
         env:
           SKIP_BUILD: "true"
           RUNTIME: "docker"
-          IMAGE_NAME: ${{ steps.primary-tag.outputs.tag }}
+          IMAGE_NAME: ${{ github.event_name == 'pull_request' && 'localhost/agy-box:dev' || needs.build-image.outputs.primary-tag }}
         run: |
           ./scripts/test-box.sh
 
-      # --- Continuous Delivery steps (only on pushes to main or tags) ---
-      - name: Attest Build Provenance
-        if: github.event_name != 'pull_request'
-        uses: actions/attest-build-provenance@v2.2.0
-        with:
-          subject-name: ghcr.io/${{ github.repository }}
-          subject-digest: ${{ steps.build-push.outputs.digest }}
-          push-to-registry: true
+  generate-sbom:
+    name: Generate SBOM
+    needs: [build-image, run-tests]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Generate SBOM
-        if: github.event_name != 'pull_request'
         uses: anchore/sbom-action@v0
         with:
-          image: ${{ steps.primary-tag.outputs.tag }}
+          image: ${{ needs.build-image.outputs.primary-tag }}
           format: spdx-json
           output-file: sbom.spdx.json
 
       - name: Upload SBOM Artifact
-        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: sbom
           path: sbom.spdx.json
           retention-days: 5
 
+  attest-provenance:
+    name: Attest Provenance
+    needs: [build-image, run-tests]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      attestations: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Attest Build Provenance
+        uses: actions/attest-build-provenance@v2.2.0
+        with:
+          subject-name: ghcr.io/${{ github.repository }}
+          subject-digest: ${{ needs.build-image.outputs.digest }}
+          push-to-registry: true
+
+  publish-release:
+    name: Publish Release
+    needs: generate-sbom
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download SBOM Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: sbom
+
       - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
