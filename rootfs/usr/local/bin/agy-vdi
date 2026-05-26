@@ -23,6 +23,46 @@ BLUE='\033[0;34m'
 RED='\033[0;31m'
 NC='\033[0m'
 
+RESOLUTION="1280x800"
+
+usage() {
+    echo -e "Usage: $0 [options]"
+    echo -e "Options:"
+    echo -e "  -r, --resolution WxH    Set VDI resolution (default: 1280x800)"
+    echo -e "  -h, --help              Show this help message"
+    exit 0
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -r|--resolution)
+            if [[ $# -lt 2 ]]; then
+                echo -e "${RED}[ERROR] --resolution requires an argument.${NC}" >&2
+                exit 1
+            fi
+            RESOLUTION="$2"
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            ;;
+        *)
+            echo -e "${RED}[ERROR] Unknown option: $1${NC}" >&2
+            usage
+            ;;
+    esac
+done
+
+# Validate and extract width and height
+if [[ "$RESOLUTION" =~ ^([0-9]+)x([0-9]+)$ ]]; then
+    WIDTH="${BASH_REMATCH[1]}"
+    HEIGHT="${BASH_REMATCH[2]}"
+else
+    echo -e "${YELLOW}[WARN] Invalid resolution '$RESOLUTION'. Defaulting to 1280x800.${NC}" >&2
+    WIDTH=1280
+    HEIGHT=800
+fi
+
 cleanup() {
     echo -e "\n${YELLOW}[INFO] Cleaning up VDI session services...${NC}"
     
@@ -68,8 +108,8 @@ if [[ -f "/tmp/.X${DISPLAY_PORT}-lock" ]] || [[ -S "/tmp/.X11-unix/X${DISPLAY_PO
 fi
 
 # 1. Start Xvfb (Virtual Framebuffer)
-echo -e "${BLUE}[INFO] Starting Xvfb virtual display :${DISPLAY_PORT}...${NC}"
-Xvfb :${DISPLAY_PORT} -screen 0 1280x800x24 &
+echo -e "${BLUE}[INFO] Starting Xvfb virtual display :${DISPLAY_PORT} with resolution ${WIDTH}x${HEIGHT}...${NC}"
+Xvfb :${DISPLAY_PORT} -screen 0 "${WIDTH}x${HEIGHT}x24" &
 sleep 1.5
 
 # Export display for subsequent tools
