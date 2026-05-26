@@ -16,7 +16,20 @@ mkdir -p /usr/share/antigravity
 tar -xzf /tmp/Antigravity.tar.gz -C /usr/share/antigravity --strip-components=1
 rm /tmp/Antigravity.tar.gz
 
-printf '#!/bin/bash\nexec /usr/share/antigravity/antigravity --disable-dev-shm-usage "$@"' > /usr/bin/antigravity
+cat << 'EOF' > /usr/bin/antigravity
+#!/bin/bash
+if [ -e /run/.containerenv ] || [ -e /run/.toolboxenv ]; then
+    mkdir -p "$HOME/.config/Antigravity-box/User"
+    if [ ! -f "$HOME/.config/Antigravity-box/User/settings.json" ]; then
+        echo '{"antigravity.account.enableTelemetry": false, "antigravity.browser.chromeBinaryPath": "/usr/bin/google-chrome-stable"}' > "$HOME/.config/Antigravity-box/User/settings.json"
+    elif command -v jq &>/dev/null; then
+        jq '.["antigravity.browser.chromeBinaryPath"] = "/usr/bin/google-chrome-stable"' "$HOME/.config/Antigravity-box/User/settings.json" > "$HOME/.config/Antigravity-box/User/settings.json.tmp" && mv "$HOME/.config/Antigravity-box/User/settings.json.tmp" "$HOME/.config/Antigravity-box/User/settings.json"
+    fi
+    exec /usr/share/antigravity/antigravity --user-data-dir "$HOME/.config/Antigravity-box" --disable-dev-shm-usage "$@"
+else
+    exec /usr/share/antigravity/antigravity --disable-dev-shm-usage "$@"
+fi
+EOF
 chmod +x /usr/bin/antigravity
 
 # Disable Antigravity telemetry

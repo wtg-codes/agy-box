@@ -670,7 +670,13 @@ cmd_build_dev() {
 }
 
 cmd_desktop() {
-    local env_type=${1:-prod}
+    local env_type="prod"
+    if [[ $# -gt 0 ]]; then
+        if [[ "$1" == "dev" || "$1" == "prod" ]]; then
+            env_type="$1"
+            shift
+        fi
+    fi
     local target_name=$CONTAINER_NAME
     [ "$env_type" = "dev" ] && target_name=$DEV_CONTAINER_NAME
 
@@ -680,7 +686,7 @@ cmd_desktop() {
     fi
 
     echo -e "Starting VDI Virtual Desktop inside ${CYAN}$target_name${NC}..."
-    distrobox enter "$target_name" -- /usr/local/bin/agy-vdi
+    distrobox enter "$target_name" -- /usr/local/bin/agy-vdi "$@"
 }
 
 cmd_enter() {
