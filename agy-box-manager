@@ -4,6 +4,7 @@
 set -euo pipefail
 
 # --- Configuration ---
+VERSION="2.1.0"
 IMAGE_NAME="ghcr.io/wtg-codes/agy-box:latest"
 DEV_IMAGE_NAME="agy-box:dev"
 CONTAINER_NAME="agy-box"
@@ -11,11 +12,11 @@ DEV_CONTAINER_NAME="agy-box-dev"
 REMOTE_SCRIPT_URL="https://raw.githubusercontent.com/wtg-codes/agy-box/main/agy-box-manager"
 
 # --- Colors for ASCII Art ---
-RED='\033[0;31m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-WHITE='\033[1;37m'
-NC='\033[0m' # No Color
+RED=$'\e[0;31m'
+BLUE=$'\e[0;34m'
+CYAN=$'\e[0;36m'
+WHITE=$'\e[1;37m'
+NC=$'\e[0m' # No Color
 
 # --- Helper Functions ---
 get_os_name() {
@@ -309,29 +310,29 @@ cmd_uninstall_global() {
     fi
 }
 
+# shellcheck disable=SC2059
 show_banner() {
     clear
-    echo -e "${CYAN}       .  * .  . * * .        .${NC}"
-    echo -e "${CYAN}    * .       * .         * .${NC}"
-    echo -e "${WHITE}       /\\ ${CYAN}  .       .            .${NC}"
-    echo -e "${WHITE}      |==|${CYAN}      * *${NC}"
-    echo -e "${WHITE}      |  |${CYAN}   * .       .    .      *${NC}"
-    echo -e "${WHITE}     /____\\${CYAN}                 .          .${NC}"
-    echo -e "${WHITE}     |    |${BLUE}   ___   ________    \ \  / /  __ )/ __ \| |/ /${NC}"
-    echo -e "${WHITE}     |____|${BLUE}  /   | / ____/ |     \ \/ /  / __  / / / /   / ${NC}"
-    echo -e "${WHITE}    /| |  |\\${BLUE} / /| |/ / __ | |     \  /  / /_/ / /_/ /   |  ${NC}"
-    echo -e "${WHITE}   / | |  | \\${BLUE}/ ___ / /_/ / | |     /_/  /_____/\____/_/|_| ${NC}"
-    echo -e "${WHITE}  /__|_|__|__\\${BLUE}_/  |_\\____/  |___/     /                     ${NC}"
-    echo -e "${RED}     /_\\/_\\ ${NC}"
-    echo -e "${WHITE}                __    ${CYAN}*${NC}"
-    echo -e "${WHITE}              /[__]\\   ${NC}"
-    echo -e "${WHITE}             --|  |--  ${NC}"
-    echo -e "${WHITE}              /    \\  ${CYAN}.${NC}"
+    printf "${CYAN}         .  * .  . * * .        .${NC}\n"
+    printf "${CYAN}      * .       * .         * .${NC}\n"
+    printf "${WHITE}         /\\ ${CYAN}   .       .            .${NC}\n"
+    printf "${WHITE}        /==\\${CYAN}       * *${NC}\n"
+    printf "${WHITE}       /    \\${CYAN}    * .       .    .      *${NC}\n"
+    printf "${WHITE}      /      \\${CYAN}                  .          .${NC}\n"
+    printf "${WHITE}     |   /\\   |${BLUE}%s${NC}\n"  '    ___   ______  __  __      ____   ____  _  __'
+    printf "${WHITE}     |  |==|  |${BLUE}%s${NC}\n"  '   /   | / ____/ / / / /     / __ ) / __ \| |/ /'
+    printf "${WHITE}     |  |  |  |${BLUE}%s${NC}\n"  '  / /| |/ / __  / /_/ /     / __  |/ / / /|   / '
+    printf "${WHITE}    /| /____\\ |\\${BLUE}%s${NC}\n" ' / ___ / /_/ /  \__, /     / /_/ // /_/ //   |  '
+    printf "${WHITE}   / | |    | | \\${BLUE}%s${NC}\n" '/_/  |_\____/  /____/     /_____/ \____//_/|_|  '
+    printf "${WHITE}  /__|_|____|_|__\\${NC}\n"
+    printf "${RED}      /\\/\\/\\/\\ ${NC}\n"
+    printf "${RED}      ####  #### ${NC}\n"
+    printf "${CYAN}    *          *    .          *${NC}\n"
 
     gum style \
         --foreground 212 --border-foreground 212 --border double \
         --align center --width 50 --margin "1 2" --padding "0 2" \
-        "🚀 AGY Box Manager 🧑‍🚀" \
+        "🚀 AGY Box Manager v${VERSION} 🧑‍🚀" \
         "Antigravity 2.0 Developer Sandbox"
 }
 
@@ -657,6 +658,7 @@ case "${1:-}" in
     install-global)   check_deps "quiet"; cmd_install_global ;;
     uninstall-global) check_deps "quiet"; cmd_uninstall_global ;;
     test)             check_deps "quiet"; if [ -f "scripts/test-box.sh" ]; then ./scripts/test-box.sh; else gum style --foreground 196 "Test script not found. Please run this command inside the repository."; exit 1; fi ;;
+    version|--version|-v) echo "agy-box-manager version $VERSION"; exit 0 ;;
     help|--help|-h)   show_help ;;
     "")               cmd_interactive ;;
     *)                gum style --foreground 196 "Unknown command: $1"; echo ""; show_help; exit 1 ;;

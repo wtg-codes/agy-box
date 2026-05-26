@@ -9,6 +9,8 @@
 
 set -Eeuo pipefail
 
+VERSION="2.1.0"
+
 # Colors for log prefixes
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -243,7 +245,7 @@ main() {
 
     # Welcome Splash Screen
     local welcome_text
-    welcome_text=$(printf "Welcome to the agy-box Workspace Setup Assistant!\n\nThis utility will validate your container environment and configure key components:\n  • D-Bus & Keyring validation\n  • API Key configurations\n  • Browser health checks\n  • Git configuration checks\n  • Developer toolchain audit & permissions hardening")
+    welcome_text=$(printf "Welcome to the agy-box Workspace Setup Assistant v%s!\n\nThis utility will validate your container environment and configure key components:\n  • D-Bus & Keyring validation\n  • API Key configurations\n  • Browser health checks\n  • Git configuration checks\n  • Developer toolchain audit & permissions hardening" "$VERSION")
     gum style --foreground 99 --border double --border-foreground 99 --padding "1 2" --margin "1 1" "$welcome_text"
 
     if ! gum confirm "Would you like to run the first-time setup assistant now?"; then
