@@ -13,6 +13,8 @@ REMOTE_SCRIPT_URL="https://raw.githubusercontent.com/wtg-codes/agy-box/main/agy-
 
 # --- Colors for ASCII Art ---
 RED=$'\e[0;31m'
+GREEN=$'\e[0;32m'
+YELLOW=$'\e[1;33m'
 BLUE=$'\e[0;34m'
 CYAN=$'\e[0;36m'
 WHITE=$'\e[1;37m'
@@ -558,6 +560,49 @@ show_system_status() {
     gum join --horizontal "$left_card" "$right_card"
 }
 
+cmd_ports() {
+    # Ensure dependencies and host capabilities are probed
+    check_deps "quiet"
+    
+    if [ -z "${DBX_CONTAINER_MANAGER:-}" ]; then
+        gum style --foreground 196 "❌ Error: Container manager not detected."
+        return 1
+    fi
+    
+    echo -e "${CYAN}==================================================${NC}"
+    echo -e "${CYAN}        Sandboxed Port Forwarding Dashboard       ${NC}"
+    echo -e "${CYAN}==================================================${NC}"
+    
+    for container in "$CONTAINER_NAME" "$DEV_CONTAINER_NAME"; do
+        echo -e "\n${BLUE}Container: $container${NC}"
+        if check_container_exists "$container"; then
+            local port_out
+            port_out=$("$DBX_CONTAINER_MANAGER" port "$container" 2>/dev/null || true)
+            if [ -n "$port_out" ]; then
+                echo -e "  ${GREEN}CONTAINER PORT${NC}   ➔   ${GREEN}HOST MAPPING${NC}"
+                echo -e "  --------------------------------------------------"
+                while read -r line; do
+                    if [ -n "$line" ]; then
+                        local c_port host_map
+                        c_port=$(echo "$line" | awk -F ' -> ' '{print $1}')
+                        host_map=$(echo "$line" | awk -F ' -> ' '{print $2}')
+                        if [ -z "$host_map" ]; then
+                            echo "  $line"
+                        else
+                            printf "  %-16s ➔   %s\n" "$c_port" "$host_map"
+                        fi
+                    fi
+                done <<< "$port_out"
+            else
+                echo -e "  ${YELLOW}No active port mappings (all ports are sandboxed inside container).${NC}"
+            fi
+        else
+            echo -e "  ${RED}Container does not exist (not installed).${NC}"
+        fi
+    done
+    echo ""
+}
+
 cmd_check_dependencies() {
     local missing=0
     if ! command -v distrobox &> /dev/null; then
@@ -782,6 +827,7 @@ cmd_interactive() {
 
                     local tools_options=()
                     tools_options+=("📊 Show Distrobox List")
+                    tools_options+=("🔌 Show Port Mappings")
                     tools_options+=("📦 Check Package Dependencies")
 
                     if [ -f "$HOME/.local/bin/agy-box-manager" ]; then
@@ -798,6 +844,10 @@ cmd_interactive() {
                     case "$sub_choice" in
                         "📊 Show Distrobox List")
                             cmd_status
+                            read -n 1 -s -r -p "Press any key to continue..."
+                            ;;
+                        "🔌 Show Port Mappings")
+                            cmd_ports
                             read -n 1 -s -r -p "Press any key to continue..."
                             ;;
                         "📦 Check Package Dependencies")
@@ -845,6 +895,7 @@ show_help() {
     echo "  desktop             Launch VDI Web Desktop inside official environment"
     echo "  desktop dev         Launch VDI Web Desktop inside development environment"
     echo "  status              List AGY Box environments"
+    echo "  ports               Show sandboxed port mappings"
     echo "  clean               Remove the official environment"
     echo "  clean dev           Remove the development environment"
     echo "  install-global      Copy the CLI to ~/.local/bin for system-wide access"
@@ -864,6 +915,7 @@ case "${1:-}" in
     desktop)          check_deps "quiet"; if [ "${2:-}" = "dev" ]; then cmd_desktop dev; else cmd_desktop prod; fi ;;
     clean)            check_deps "quiet"; if [ "${2:-}" = "dev" ]; then cmd_clean "$DEV_CONTAINER_NAME"; else cmd_clean "$CONTAINER_NAME"; fi ;;
     status)           check_deps "quiet"; cmd_status ;;
+    ports)            check_deps "quiet"; cmd_ports ;;
     install-global)   check_deps "quiet"; cmd_install_global ;;
     uninstall-global) check_deps "quiet"; cmd_uninstall_global ;;
     autocomplete)     cmd_autocomplete "${2:-bash}" ;;
