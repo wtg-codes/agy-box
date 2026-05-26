@@ -16,6 +16,7 @@ apt-get update && apt-get install -y --no-install-recommends \
     nodejs \
     npm \
     apt-transport-https \
+    libsecret-1-0 \
     tini \
     gosu \
     && apt-get clean \
