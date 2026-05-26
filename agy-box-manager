@@ -1,0 +1,481 @@
+#!/bin/bash
+# agy-box-manager - A modern CLI for managing the agy-box Distrobox environment
+
+set -euo pipefail
+
+# --- Configuration ---
+IMAGE_NAME="ghcr.io/wtg-codes/agy-box:latest"
+DEV_IMAGE_NAME="agy-box:dev"
+CONTAINER_NAME="agy-box"
+DEV_CONTAINER_NAME="agy-box-dev"
+REMOTE_SCRIPT_URL="https://raw.githubusercontent.com/wtg-codes/agy-box/main/agy-box-manager"
+
+# --- Colors for ASCII Art ---
+RED='\033[0;31m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+WHITE='\033[1;37m'
+NC='\033[0m' # No Color
+
+# --- Helper Functions ---
+get_os_name() {
+    if [ -f /etc/os-release ]; then
+        # shellcheck disable=SC1091
+        . /etc/os-release
+        echo "${PRETTY_NAME:-Linux}"
+    else
+        echo "Linux"
+    fi
+}
+
+# --- Dependency Management ---
+install_gum() {
+    echo -e "${CYAN}Gum is required for the UI but is not installed.${NC}"
+    # When piped via curl, read needs to be forced to /dev/tty
+    exec < /dev/tty
+    read -r -p "Would you like to attempt to install it now? (y/N): " choice
+    if [[ "$choice" =~ ^[Yy]$ ]]; then
+        if command -v brew &> /dev/null; then
+            echo "Installing via Homebrew (Recommended for immutable systems)..."
+            brew install gum
+        elif command -v apt-get &> /dev/null; then
+            echo "Installing via APT (Debian/Ubuntu)..."
+            sudo mkdir -p /etc/apt/keyrings
+            curl -fsSL https://repo.charm.sh/apt/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/charm.gpg
+            echo "deb [signed-by=/etc/apt/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *" | sudo tee /etc/apt/sources.list.d/charm.list
+            sudo apt update && sudo apt install -y gum
+        elif command -v dnf &> /dev/null; then
+            echo "Installing via DNF (Fedora/RHEL)..."
+            echo '[charm]
+name=Charm
+baseurl=https://repo.charm.sh/yum/
+enabled=1
+gpgcheck=1
+gpgkey=https://repo.charm.sh/yum/gpg.key' | sudo tee /etc/yum.repos.d/charm.repo
+            sudo dnf install -y gum
+        elif command -v pacman &> /dev/null; then
+            echo "Installing via Pacman (Arch/Manjaro)..."
+            sudo pacman -S --noconfirm gum
+        elif command -v zypper &> /dev/null; then
+            echo "Installing via Zypper (openSUSE)..."
+            echo '[charm]
+name=Charm
+baseurl=https://repo.charm.sh/yum/
+enabled=1
+gpgcheck=1
+gpgkey=https://repo.charm.sh/yum/gpg.key' | sudo tee /etc/zypp/repos.d/charm.repo
+            sudo zypper install -y gum
+        else
+            echo -e "${RED}Could not detect supported package manager (brew, apt, dnf, pacman, zypper).${NC}"
+            echo "Please install manually: https://github.com/charmbracelet/gum#installation"
+            exit 1
+        fi
+    else
+        echo "Gum is required to run this script interactively. Exiting."
+        exit 1
+    fi
+}
+
+check_deps() {
+    local mode=${1:-}
+    if ! command -v gum &> /dev/null; then
+        install_gum
+    fi
+
+    if [ "$mode" = "menu" ]; then
+        return 0
+    fi
+
+    local missing=0
+    if ! command -v distrobox &> /dev/null; then
+        echo -e "${RED}✗ Error: distrobox is not installed on the host system.${NC}" >&2
+        missing=1
+    fi
+    if ! command -v podman &> /dev/null && ! command -v docker &> /dev/null; then
+        echo -e "${RED}✗ Error: Neither podman nor docker is installed on the host system.${NC}" >&2
+        missing=1
+    fi
+    if [ $missing -eq 1 ]; then
+        echo -e "\n${CYAN}Would you like to try installing the missing container dependencies now?${NC}"
+        exec < /dev/tty
+        if gum confirm "Install missing dependencies?"; then
+            if command -v apt-get &> /dev/null; then
+                sudo apt update && sudo apt install -y podman distrobox
+            elif command -v dnf &> /dev/null; then
+                sudo dnf install -y podman distrobox
+            elif command -v pacman &> /dev/null; then
+                sudo pacman -S --noconfirm podman distrobox
+            elif command -v zypper &> /dev/null; then
+                sudo zypper install -y podman distrobox
+            elif command -v brew &> /dev/null; then
+                brew install podman distrobox
+            else
+                echo -e "${RED}Could not detect a supported package manager. Please install manually.${NC}"
+                exit 1
+            fi
+
+            # Re-check dependencies
+            if ! command -v distrobox &> /dev/null || (! command -v podman &> /dev/null && ! command -v docker &> /dev/null); then
+                echo -e "${RED}Dependencies still missing after installation attempt. Please install manually.${NC}"
+                exit 1
+            else
+                echo -e "${CYAN}Dependencies installed successfully!${NC}"
+            fi
+        else
+            echo -e "\nPlease install the missing container dependencies and try again."
+            exit 1
+        fi
+    fi
+
+}
+
+get_runtime() {
+    if command -v podman &> /dev/null; then echo "podman"; else echo "docker"; fi
+}
+
+check_container_exists() {
+    local name=$1
+    if distrobox list --no-color | grep -qw "$name"; then return 0; else return 1; fi
+}
+
+setup_completions() {
+    # Bash Auto-Completions
+    local bash_comp_dir="$HOME/.local/share/bash-completion/completions"
+    mkdir -p "$bash_comp_dir"
+    cat << 'EOF_COMP' > "$bash_comp_dir/agy-box-manager"
+_agy_box_manager() {
+    local cur opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    opts="install dev enter clean status install-global uninstall-global test"
+    COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+    return 0
+}
+complete -F _agy_box_manager agy-box-manager
+EOF_COMP
+
+    # Zsh Auto-Completions
+    local zsh_comp_dir="$HOME/.zfunc"
+    mkdir -p "$zsh_comp_dir"
+    cat << 'EOF_COMP' > "$zsh_comp_dir/_agy-box-manager"
+#compdef agy-box-manager
+local -a commands
+commands=(
+    'install:Pull official image'
+    'dev:Build dev image'
+    'enter:Enter workspace'
+    'clean:Remove workspace'
+    'status:Show status'
+    'install-global:Install globally'
+    'uninstall-global:Remove global install'
+    'test:Run local integration tests'
+)
+_describe 'command' commands
+EOF_COMP
+    if [ -f "$HOME/.zshrc" ] && ! grep -q "fpath=(~/.zfunc \$fpath)" "$HOME/.zshrc"; then
+        # shellcheck disable=SC2016
+        echo -e '\n# Added by agy-box-manager\nfpath=(~/.zfunc \$fpath)' >> "$HOME/.zshrc"
+    fi
+}
+
+# --- Core Commands ---
+cmd_install_official() {
+    if check_container_exists "$CONTAINER_NAME"; then
+        if gum confirm "Container '$CONTAINER_NAME' already exists. Recreate it?"; then
+            cmd_clean "$CONTAINER_NAME"
+        else
+            gum style --foreground 212 "Skipping creation."
+            return
+        fi
+    fi
+
+    gum spin --spinner dot --title "Pulling image and creating Distrobox..." -- distrobox create -i "$IMAGE_NAME" -n "$CONTAINER_NAME"
+    gum style --foreground 46 --margin "1 0" "✓ Created successfully! Run 'agy-box-manager enter' to start."
+}
+
+cmd_build_dev() {
+    if [ ! -f "Containerfile" ]; then
+        gum style --foreground 196 "✗ Error: Containerfile not found in current directory. Please clone the repository first to build from source."
+        exit 1
+    fi
+
+    if check_container_exists "$DEV_CONTAINER_NAME"; then
+        if gum confirm "Container '$DEV_CONTAINER_NAME' already exists. Recreate it?"; then
+            cmd_clean "$DEV_CONTAINER_NAME"
+        else
+            gum style --foreground 212 "Skipping build."
+            return
+        fi
+    fi
+
+    local runtime
+    runtime=$(get_runtime)
+
+    gum spin --spinner dot --title "Building image with $runtime (this may take a while)..." -- "$runtime" build -t "$DEV_IMAGE_NAME" -f Containerfile .
+    gum spin --spinner dot --title "Creating Distrobox environment..." -- distrobox create -i "$DEV_IMAGE_NAME" -n "$DEV_CONTAINER_NAME"
+
+    gum style --foreground 46 --margin "1 0" "✓ Dev environment ready! Run 'agy-box-manager enter dev' to start."
+}
+
+cmd_enter() {
+    local env_type=${1:-prod}
+    local target_name=$CONTAINER_NAME
+    [ "$env_type" = "dev" ] && target_name=$DEV_CONTAINER_NAME
+
+    if ! check_container_exists "$target_name"; then
+        gum style --foreground 196 "Environment '$target_name' does not exist. Please install or build it first."
+        exit 1
+    fi
+
+    echo -e "Entering ${CYAN}$target_name${NC}..."
+    distrobox enter "$target_name"
+}
+
+cmd_clean() {
+    local target_name=${1:-$CONTAINER_NAME}
+    if check_container_exists "$target_name"; then
+        gum spin --spinner dot --title "Removing environment: $target_name..." -- distrobox rm --yes "$target_name"
+        gum style --foreground 46 "✓ Removed $target_name"
+    else
+        gum style --foreground 214 "! Warning: $target_name does not exist."
+    fi
+}
+
+cmd_status() {
+    echo ""
+    gum style --foreground 212 --border normal --padding "0 1" "Distrobox Status"
+    distrobox list | grep -E "NAME|$CONTAINER_NAME|$DEV_CONTAINER_NAME" || gum style --foreground 214 "No AGY Boxes found."
+    echo ""
+}
+
+cmd_install_global() {
+    local target_dir="$HOME/.local/bin"
+    local target_file="$target_dir/agy-box-manager"
+
+    gum spin --spinner dot --title "Installing globally to $target_dir..." -- sleep 1
+    mkdir -p "$target_dir"
+
+    # Check if executed locally or via curl pipe
+    if [ -f "$0" ] && [[ "$0" != *"bash"* ]] && [[ "$0" != *"sh"* ]]; then
+        cp "$0" "$target_file"
+    else
+        # If curled directly to bash, download from remote URL
+        curl -fsSL "$REMOTE_SCRIPT_URL" -o "$target_file"
+    fi
+
+    chmod +x "$target_file"
+
+    gum style --foreground 46 --margin "1 0" "✓ Installed globally! You can now run 'agy-box-manager' from anywhere."
+
+    if command -v ujust &> /dev/null; then
+        gum style --foreground 39 "🟦 Universal Blue detected: $target_dir is in your PATH by default."
+    else
+        gum style --foreground 214 "Make sure $target_dir is added to your \$PATH variable."
+    fi
+}
+
+cmd_uninstall_global() {
+    local target_file="$HOME/.local/bin/agy-box-manager"
+
+    if gum confirm "Are you sure you want to remove the global CLI installation?"; then
+        gum spin --spinner dot --title "Removing globally installed CLI..." -- rm -f "$target_file"
+
+        # Clean up auto-completions
+        rm -f "$HOME/.local/share/bash-completion/completions/agy-box-manager"
+        rm -f "$HOME/.zfunc/_agy-box-manager"
+        rm -f "$HOME/.config/agy-box-manager/.completions_installed"
+
+        gum style --foreground 46 --margin "1 0" "✓ Removed globally installed CLI and auto-completions."
+    else
+        gum style --foreground 212 "Skipping uninstall."
+    fi
+}
+
+show_banner() {
+    clear
+    echo -e "${CYAN}       .  * .  . * * .        .${NC}"
+    echo -e "${CYAN}    * .       * .         * .${NC}"
+    echo -e "${WHITE}       /\\ ${CYAN}  .       .            .${NC}"
+    echo -e "${WHITE}      |==|${CYAN}      * *${NC}"
+    echo -e "${WHITE}      |  |${CYAN}   * .       .    .      *${NC}"
+    echo -e "${WHITE}     /____\\${CYAN}                 .          .${NC}"
+    echo -e "${WHITE}     |    |${BLUE}   ___   ________    \ \  / /  __ )/ __ \| |/ /${NC}"
+    echo -e "${WHITE}     |____|${BLUE}  /   | / ____/ |     \ \/ /  / __  / / / /   / ${NC}"
+    echo -e "${WHITE}    /| |  |\\${BLUE} / /| |/ / __ | |     \  /  / /_/ / /_/ /   |  ${NC}"
+    echo -e "${WHITE}   / | |  | \\${BLUE}/ ___ / /_/ / | |     /_/  /_____/\____/_/|_| ${NC}"
+    echo -e "${WHITE}  /__|_|__|__\\${BLUE}_/  |_\\____/  |___/     /                     ${NC}"
+    echo -e "${RED}     /_\\/_\\ ${NC}"
+    echo -e "${WHITE}                __    ${CYAN}*${NC}"
+    echo -e "${WHITE}              /[__]\\   ${NC}"
+    echo -e "${WHITE}             --|  |--  ${NC}"
+    echo -e "${WHITE}              /    \\  ${CYAN}.${NC}"
+
+    gum style \
+        --foreground 212 --border-foreground 212 --border double \
+        --align center --width 50 --margin "1 2" --padding "0 2" \
+        "🚀 AGY Box Manager 🧑‍🚀" \
+        "Antigravity 2.0 Developer Sandbox"
+}
+
+show_system_status() {
+    local os_name
+    os_name=$(get_os_name)
+    local status_text=""
+
+    status_text+="🖥️  Host OS: ${os_name}\n\n"
+
+    # Check tool availability
+    if command -v podman &> /dev/null; then status_text+="✅ Podman: Installed\n"; else status_text+="❌ Podman: Not Found\n"; fi
+    if command -v docker &> /dev/null; then status_text+="✅ Docker: Installed\n"; else status_text+="❌ Docker: Not Found\n"; fi
+    if command -v distrobox &> /dev/null; then status_text+="✅ Distrobox: Installed\n"; else status_text+="❌ Distrobox: Not Found\n"; fi
+
+    status_text+="\n"
+
+    # Check Environment States
+    if check_container_exists "$CONTAINER_NAME"; then
+        status_text+="🚀 Official Env: Ready\n"
+    else
+        status_text+="🚀 Official Env: Not Installed\n"
+    fi
+
+    if check_container_exists "$DEV_CONTAINER_NAME"; then
+        status_text+="🛠️  Dev Env: Ready\n"
+    else
+        status_text+="🛠️  Dev Env: Not Installed\n"
+    fi
+
+    if [ -f "Containerfile" ]; then
+        status_text+="📁 Local Repository: Found (Ready for Dev Build)\n"
+    else
+        status_text+="📁 Local Repository: No Containerfile Found\n"
+    fi
+
+    gum style --border rounded --border-foreground 39 --padding "0 2" --margin "0 2" "$status_text"
+}
+
+cmd_interactive() {
+    show_banner
+    check_deps "menu"
+    show_system_status
+
+    local options=()
+
+    if ! command -v distrobox &> /dev/null; then
+        options+=("📦 Install Distrobox")
+    fi
+
+    if ! command -v podman &> /dev/null && ! command -v docker &> /dev/null; then
+        if command -v apt-get &> /dev/null || command -v zypper &> /dev/null; then
+            options+=("📦 Install Docker (Recommended)")
+            options+=("📦 Install Podman")
+        else
+            options+=("📦 Install Podman (Recommended)")
+            options+=("📦 Install Docker")
+        fi
+    fi
+
+    # Check Official State
+    if check_container_exists "$CONTAINER_NAME"; then
+        options+=("🚪 Enter Official Workspace")
+        options+=("♻️  Update/Recreate Official Workspace")
+        options+=("🗑️  Remove Official Workspace")
+    else
+        options+=("🚀 Install Official Workspace (Pull from GHCR)")
+    fi
+
+    # Check Dev State
+    if check_container_exists "$DEV_CONTAINER_NAME"; then
+        options+=("💻 Enter Dev Workspace")
+        options+=("♻️  Rebuild Dev Workspace")
+        options+=("🗑️  Remove Dev Workspace")
+    elif [ -f "Containerfile" ]; then
+        options+=("🛠️  Build Dev Workspace (From local source)")
+    fi
+
+    # Always available
+    options+=("📊 Show Distrobox List")
+
+    # Global Path State Toggle
+    if [ -f "$HOME/.local/bin/agy-box-manager" ]; then
+        options+=("🔥 Uninstall CLI Globally")
+    else
+        options+=("🌍 Install CLI Globally (~/.local/bin)")
+    fi
+
+    options+=("❌ Exit")
+
+    CHOICE=$(gum choose "${options[@]}")
+
+    case $CHOICE in
+        "📦 Install Distrobox")
+            if command -v apt-get &> /dev/null; then sudo apt update && sudo apt install -y distrobox;
+            elif command -v dnf &> /dev/null; then sudo dnf install -y distrobox;
+            elif command -v pacman &> /dev/null; then sudo pacman -S --noconfirm distrobox;
+            elif command -v zypper &> /dev/null; then sudo zypper install -y distrobox;
+            elif command -v brew &> /dev/null; then brew install distrobox;
+            else gum style --foreground 196 "Unsupported package manager for automatic install."; fi
+            ;;
+        "📦 Install Docker"|"📦 Install Docker (Recommended)")
+            if command -v apt-get &> /dev/null; then sudo apt update && sudo apt install -y docker.io;
+            elif command -v zypper &> /dev/null; then sudo zypper install -y docker;
+            elif command -v pacman &> /dev/null; then sudo pacman -S --noconfirm docker;
+            elif command -v dnf &> /dev/null; then sudo dnf install -y docker;
+            elif command -v brew &> /dev/null; then brew install docker;
+            else gum style --foreground 196 "Unsupported package manager for automatic install."; fi
+            ;;
+        "📦 Install Podman"|"📦 Install Podman (Recommended)")
+            if command -v apt-get &> /dev/null; then sudo apt update && sudo apt install -y podman;
+            elif command -v dnf &> /dev/null; then sudo dnf install -y podman;
+            elif command -v pacman &> /dev/null; then sudo pacman -S --noconfirm podman;
+            elif command -v zypper &> /dev/null; then sudo zypper install -y podman;
+            elif command -v brew &> /dev/null; then brew install podman;
+            else gum style --foreground 196 "Unsupported package manager for automatic install."; fi
+            ;;
+        "🚀 Install Official Workspace (Pull from GHCR)"|"♻️  Update/Recreate Official Workspace") cmd_install_official ;;
+        "🛠️  Build Dev Workspace (From local source)"|"♻️  Rebuild Dev Workspace") cmd_build_dev ;;
+        "🚪 Enter Official Workspace") cmd_enter prod ;;
+        "💻 Enter Dev Workspace") cmd_enter dev ;;
+        "🗑️  Remove Official Workspace") cmd_clean "$CONTAINER_NAME" ;;
+        "🗑️  Remove Dev Workspace") cmd_clean "$DEV_CONTAINER_NAME" ;;
+        "📊 Show Distrobox List") cmd_status ;;
+        "🌍 Install CLI Globally (~/.local/bin)") cmd_install_global ;;
+        "🔥 Uninstall CLI Globally") cmd_uninstall_global ;;
+        "❌ Exit") gum style --foreground 212 "Goodbye!"; exit 0 ;;
+    esac
+}
+
+show_help() {
+    show_banner
+    echo -e "Usage: $0 [command]"
+    echo ""
+    echo "Commands:"
+    echo "  (none)              Launch the interactive UI"
+    echo "  install             Pull the official image and create the environment"
+    echo "  dev                 Build the image from local source and create dev environment"
+    echo "  enter               Enter the official environment"
+    echo "  enter dev           Enter the development environment"
+    echo "  status              List AGY Box environments"
+    echo "  clean               Remove the official environment"
+    echo "  clean dev           Remove the development environment"
+    echo "  install-global      Copy the CLI to ~/.local/bin for system-wide access"
+    echo "  uninstall-global    Remove the globally installed CLI and auto-completions"
+    echo "  test                Run the local integration test suite"
+    echo ""
+}
+
+# --- Main Logic ---
+setup_completions
+
+case "${1:-}" in
+    install)          check_deps "quiet"; cmd_install_official ;;
+    dev)              check_deps "quiet"; cmd_build_dev ;;
+    enter)            check_deps "quiet"; if [ "${2:-}" = "dev" ]; then cmd_enter dev; else cmd_enter prod; fi ;;
+    clean)            check_deps "quiet"; if [ "${2:-}" = "dev" ]; then cmd_clean "$DEV_CONTAINER_NAME"; else cmd_clean "$CONTAINER_NAME"; fi ;;
+    status)           check_deps "quiet"; cmd_status ;;
+    install-global)   check_deps "quiet"; cmd_install_global ;;
+    uninstall-global) check_deps "quiet"; cmd_uninstall_global ;;
+    test)             check_deps "quiet"; if [ -f "scripts/test-box.sh" ]; then ./scripts/test-box.sh; else gum style --foreground 196 "Test script not found. Please run this command inside the repository."; exit 1; fi ;;
+    help|--help|-h)   show_help ;;
+    "")               cmd_interactive ;;
+    *)                gum style --foreground 196 "Unknown command: $1"; echo ""; show_help; exit 1 ;;
+esac
