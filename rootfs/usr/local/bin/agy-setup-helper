@@ -273,6 +273,11 @@ run_audit_checks() {
 export -f run_audit_checks
 
 main() {
+    # Fix ownership of files copied from /etc/skel during container initialization
+    if [ -d "$HOME/.config" ]; then
+        sudo chown -R "$(id -u):$(id -g)" "$HOME/.config" 2>/dev/null || true
+    fi
+
     # Check if the shell is interactive before displaying interactive setup options
     local is_interactive=false
     if [[ -t 0 && -t 1 ]]; then
