@@ -101,7 +101,8 @@ graph TD
         end
 
         subgraph Suite ["Antigravity Developer Suite"]
-            IDE["Google Antigravity (Agent UI) <br> (canvas workspace, terminal, course labs)"]
+            AgentUI["Google Antigravity (Agent UI) <br> (canvas workspace, terminal, course labs)"]
+            IDE["Antigravity IDE <br> (VS Code-based developer environment)"]
             CLI["Antigravity CLI (agy) <br> (WebSocket loops, lab submission)"]
             SDK["Antigravity Python SDK (google-antigravity) <br> (GCS auth, local Port 8080 API)"]
             ChromeWrapper["Google Chrome <br> (google-chrome-stable wrapper)"]
@@ -114,14 +115,18 @@ graph TD
     DBus -->|"Forward D-Bus Socket"| ForwardSockets
     ForwardSockets --> KeyringClient
     KeyringClient -->|"Decrypt tokens"| ChromeWrapper
+    KeyringClient -->|"Decrypt tokens"| AgentUI
     KeyringClient -->|"Decrypt tokens"| IDE
     
     Display -->|"X11 / Wayland Socket Forwarding"| ForwardSockets
+    ForwardSockets --> AgentUI
     ForwardSockets --> IDE
     ForwardSockets --> ChromeWrapper
     
+    AgentUI <-->|"WebSocket Loop"| CLI
     IDE <-->|"WebSocket Loop"| CLI
-    SDK -->|"Local API calls (Port 8080)"| IDE
+    SDK -->|"Local API calls (Port 8080)"| AgentUI
+    AgentUI -->|"Chrome DevTools Protocol (CDP)"| ChromeWrapper
     IDE -->|"Chrome DevTools Protocol (CDP)"| ChromeWrapper
     ChromeWrapper -->|"Launch un-sandboxed"| FlatpakChrome
     
@@ -144,18 +149,20 @@ graph TD
 
 ### Product Deep Dive: The Antigravity Suite
 
-The developer environment packages three distinct products of the Google Antigravity ecosystem, each serving a specific role in agentic development:
+The developer environment packages four distinct products of the Google Antigravity ecosystem, each serving a specific role in agentic development:
 
 ```mermaid
 flowchart LR
     subgraph Sandbox ["agy-box Distrobox Container"]
         SDK["Antigravity Python SDK<br>('google-antigravity')"]
         CLI["Antigravity CLI<br>('agy')"]
-        IDE["Google Antigravity (Agent UI)<br>('/usr/bin/antigravity')"]
+        IDE["Antigravity IDE<br>('/usr/bin/antigravity-ide')"]
+        AgentUI["Google Antigravity (Agent UI)<br>('/usr/bin/antigravity')"]
         Chrome["Google Chrome<br>('google-chrome-stable')"]
         
-        SDK -->|"Local Host API Calls (Port 8080)"| IDE
-        CLI -->|"WebSocket Communication"| IDE
+        SDK -->|"Local Host API Calls (Port 8080)"| AgentUI
+        CLI -->|"WebSocket Communication"| AgentUI
+        AgentUI -->|"Chrome DevTools Protocol (CDP)"| Chrome
         IDE -->|"Chrome DevTools Protocol (CDP)"| Chrome
     end
     
@@ -164,6 +171,7 @@ flowchart LR
         GH["GitHub API (Lab Submission)"]
     end
 
+    AgentUI --> GCS
     IDE --> GCS
     SDK --> GCS
     CLI --> GH
@@ -172,26 +180,40 @@ flowchart LR
     classDef container fill:#f0fdf4,stroke:#16a34a,stroke-width:2px,color:#15803d;
     classDef external fill:#f3f4f6,stroke:#4b5563,stroke-width:2px,color:#374151;
 
-    class SDK,CLI,IDE,Chrome container;
+    class SDK,CLI,IDE,AgentUI,Chrome container;
     class GCS,GH external;
 ```
 
-#### 1. Google Antigravity (Agent UI)
-*   **Role & Description:** The central desktop agent-first UI providing a canvas-based workspace, integrated terminal shells, agent canvas debugging tools, and lab course modules. It hosts the Gemini-powered software engineering assistant.
+#### 1. Google Antigravity (Agent UI) / Antigravity "2.0"
+*   **Role & Description:** The agent-first UI (canvas, terminal, course labs) featuring the Gemini-powered software engineering assistant.
 *   **Install & Build Mechanics:**
     *   **Source Script:** Built using `scripts/install-antigravity.sh` during the container image build.
     *   **Package Origin:** Linux x64 tarball fetched from the Google Cloud Storage bucket:
         `https://storage.googleapis.com/antigravity-public/antigravity-hub/2.0.1-6566078776737792/linux-x64/Antigravity.tar.gz`
     *   **Integrity Check:** Validated via SHA-256 hash `0727e1f56961b6d2347941f278da69cc6c17de3befe988524848cd167380e9ab`.
     *   **Installation Directory:** Extracted directly to `/usr/share/antigravity`.
-    *   **Execution Wrapper:** Accessible globally via `/usr/bin/antigravity`. The wrapper script launches the IDE with `--disable-dev-shm-usage` to prevent crashes when running under standard container runtimes where the shared memory `/dev/shm` size is constrained.
+    *   **Execution Wrapper:** Accessible globally via `/usr/bin/antigravity`. The wrapper script launches the Agent UI with `--disable-dev-shm-usage` to prevent crashes when running under standard container runtimes.
     *   **Default Configuration:** Pre-configured telemetry settings mapped into `/etc/skel/.config/Antigravity/User/settings.json` which disables telemetry (`"antigravity.account.enableTelemetry": false`) by default for all new shell users.
 *   **Usage Workflows:**
     *   **Launch:** Run `antigravity` inside the container terminal.
-    *   **Browser Control:** Uses Chrome Developer Protocol (CDP) to drive the container-installed `google-chrome-stable` (wrapped with shared memory safety flags) to execute agentic browser interactions.
-    *   **Settings Path:** Workspace configuration and accounts are persisted in `~/.config/Antigravity`.
+    *   **Browser Control:** Uses Chrome Developer Protocol (CDP) to drive the container-installed `google-chrome-stable` to execute agentic browser interactions.
+    *   **Settings Path:** Workspace configuration and accounts are persisted in `~/.config/Antigravity-box`.
 
-#### 2. Antigravity CLI (`agy`)
+#### 2. Antigravity IDE (VS Code-based Classic IDE)
+*   **Role & Description:** The classic VS Code-based developer IDE.
+*   **Install & Build Mechanics:**
+    *   **Source Script:** Built using `scripts/install-antigravity-ide.sh` during the container image build.
+    *   **Package Origin:** Linux x64 tarball fetched from Google Cloud Storage:
+        `https://edgedl.me.gvt1.com/edgedl/release2/j0qc3/antigravity/stable/1.23.2-4781536860569600/linux-x64/Antigravity.tar.gz`
+    *   **Integrity Check:** Validated via SHA-256 hash `5232a4048ff4fa15685d9a981ba4fba573e297f3efc9b76f638e794baf775725`.
+    *   **Installation Directory:** Extracted directly to `/usr/share/antigravity-ide`.
+    *   **Execution Wrapper:** Accessible globally via `/usr/bin/antigravity-ide`. The wrapper script launches the classic IDE with `--disable-dev-shm-usage` to prevent shared memory crashes.
+    *   **Default Configuration:** Pre-configured telemetry settings mapped into `/etc/skel/.config/Antigravity-ide/User/settings.json` which disables telemetry by default.
+*   **Usage Workflows:**
+    *   **Launch:** Run `antigravity-ide` inside the container terminal.
+    *   **Settings Path:** Workspace configuration and accounts are persisted in `~/.config/Antigravity-ide-box`.
+
+#### 3. Antigravity CLI (`agy`)
 *   **Role & Description:** A native command-line utility used to interface with the Antigravity developer environment, run course labs, submit tasks, and verify local agent status.
 *   **Install & Build Mechanics:**
     *   **Source Script:** Configured via `scripts/install-antigravity-cli.sh`.
@@ -202,9 +224,9 @@ flowchart LR
 *   **Usage Workflows:**
     *   **Launch:** Executed via `agy` (e.g. `agy --version` or `agy --help`).
     *   **Lab Submission:** Interacts with GitHub APIs using Git config files and GitHub Personal Access Tokens stored in `~/.config/environment.d/antigravity-mcp.conf`.
-    *   **IDE Communication:** Uses local WebSocket loops to negotiate commands and check states with a running Antigravity IDE instance on the host/container bridge.
+    *   **IDE Communication:** Uses local WebSocket loops to negotiate commands and check states with a running Antigravity Agent UI instance on the host/container bridge.
 
-#### 3. Antigravity SDK (`google-antigravity`)
+#### 4. Antigravity SDK (`google-antigravity`)
 *   **Role & Description:** Programmatic Python SDK allowing developers to control Antigravity agents, run custom code analysis modules, and write custom extension scripts.
 *   **Install & Build Mechanics:**
     *   **Source Script:** Configured via `scripts/install-antigravity-sdk.sh`.
@@ -213,7 +235,7 @@ flowchart LR
     *   **Target Path:** Installed container-wide in python's system site-packages (e.g. `/usr/local/lib/python3.*/dist-packages/google_antigravity`).
 *   **Usage Workflows:**
     *   **Import:** Used in Python files by running `import google.antigravity`.
-    *   **API Control:** Commands are sent programmatically from the script to the local IDE backend server running on port `8080` (or dynamically mapped ports).
+    *   **API Control:** Commands are sent programmatically from the script to the local Agent UI backend server running on port `8080` (or dynamically mapped ports).
     *   **Cloud Authentication:** Can interface with Google Cloud Platform services (such as Gemini/Vertex AI) using Application Default Credentials (ADC) configured in the active environment.
 
 ---
@@ -309,7 +331,7 @@ just agy-test
 This will automatically:
 1. Build the local dev image `localhost/agy-box:dev`.
 2. Spin up a temporary distrobox container named `agy-box-test`.
-3. Assert that all dependencies (`kubectl`, `helm`, `k9s`, `gemini-cli`, `google-adk`, `google-chrome-stable`, `Google Antigravity (Agent UI)`, `antigravity-cli`, and `antigravity-sdk`) exist in the container and can be executed.
+3. Assert that all dependencies (`kubectl`, `helm`, `k9s`, `Gemini CLI`, `Google ADK`, `google-chrome-stable`, `Google Antigravity (Agent UI)`, `Antigravity IDE`, `Antigravity CLI (agy)`, and `Antigravity SDK`) exist in the container and can be executed.
 4. Clean up and remove the temporary distrobox container `agy-box-test` regardless of success or failure.
 
 ## Troubleshooting
