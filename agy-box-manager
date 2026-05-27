@@ -817,8 +817,6 @@ clean_file(os.path.expanduser("~/.zshrc"))
 # shellcheck disable=SC2059
 show_banner() {
     clear
-    printf "${CYAN}         .  * .  . * * .        .${NC}\n"
-    printf "${CYAN}      * .       * .         * .${NC}\n"
     printf "${WHITE}         /\\ ${CYAN}   .       .            .${NC}\n"
     printf "${WHITE}        /==\\${CYAN}       * *${NC}\n"
     printf "${WHITE}       /    \\${CYAN}    * .       .    .      *${NC}\n"
@@ -830,14 +828,19 @@ show_banner() {
     printf "${WHITE}   / | |    | | \\${BLUE}%s${NC}\n" '/_/  |_\____/  /____/     /_____/ \____//_/|_|  '
     printf "${WHITE}  /__|_|____|_|__\\${NC}\n"
     printf "${RED}      /\\/\\/\\/\\ ${NC}\n"
-    printf "${RED}      ####  #### ${NC}\n"
-    printf "${CYAN}    *          *    .          *${NC}\n"
 
     gum style \
         --foreground 212 --border-foreground 212 --border rounded \
-        --align center --width 50 --margin "1 2" --padding "0 2" \
-        "🚀 AGY Box Manager v${VERSION} 🧑‍🚀" \
-        "Antigravity Developer Sandbox"
+        --align center --width 50 --margin "0 2" --padding "0 1" \
+        "🚀 AGY Box Manager v${VERSION}"
+}
+
+show_compact_banner() {
+    clear
+    gum style \
+        --foreground 212 --border-foreground 212 --border rounded \
+        --align center --width 50 --margin "0 2" --padding "0 1" \
+        "🚀 AGY Box Manager v${VERSION}"
 }
 
 show_system_status() {
@@ -1074,7 +1077,6 @@ cmd_interactive() {
     clear
     show_banner
     check_deps "menu"
-    echo ""
 
     local splash_choice
     splash_choice=$(choose_option "🚀 Enter Main Menu" "📊 View Host System Info & Dependencies" "❌ Exit")
@@ -1082,7 +1084,7 @@ cmd_interactive() {
     case "$splash_choice" in
         "📊 View Host System Info & Dependencies")
             clear
-            show_banner
+            show_compact_banner
             # Show a brief spinner to indicate loading
             gum spin --spinner dot --title "Analyzing system dependencies and status..." -- sleep 0.5
             check_deps "quiet"
@@ -1096,200 +1098,206 @@ cmd_interactive() {
             ;;
     esac
 
+    local menu_state="main"
     while true; do
-        clear
-        show_banner
-        show_compact_status
-        echo ""
+        case "$menu_state" in
+            "main")
+                clear
+                show_compact_banner
+                show_compact_status
 
-        local main_options=(
-            "🚪 Workspaces (Enter/VDI Desktop) >"
-            "🛠️  Manage Environments >"
-            "⚙️  System Tools >"
-            "❌ Exit"
-        )
+                local main_options=(
+                    "🚪 Workspaces (Enter/VDI Desktop) >"
+                    "🛠️  Manage Environments >"
+                    "⚙️  System Tools >"
+                    "❌ Exit"
+                )
 
-        local choice
-        choice=$(choose_option "${main_options[@]}")
+                local choice
+                choice=$(choose_option "${main_options[@]}")
 
-        case "$choice" in
-            "🚪 Workspaces (Enter/VDI Desktop) >")
-                while true; do
-                    clear
-                    show_banner
-                    show_compact_status
-                    echo ""
-
-                    local workspace_options=()
-                    if check_container_exists "$CONTAINER_NAME"; then
-                        workspace_options+=("🚪 Enter Official Workspace")
-                        workspace_options+=("🖥️  Start VDI Web Desktop (Official)")
-                    fi
-                    if check_container_exists "$DEV_CONTAINER_NAME"; then
-                        workspace_options+=("💻 Enter Dev Workspace")
-                        workspace_options+=("🖥️  Start VDI Web Desktop (Dev)")
-                    fi
-
-                    workspace_options+=("🔙 Back to Main Menu")
-
-                    local sub_choice
-                    sub_choice=$(choose_option "${workspace_options[@]}")
-
-                    case "$sub_choice" in
-                        "🚪 Enter Official Workspace")
-                            cmd_enter prod
-                            echo ""
-                            read -n 1 -s -r -p "Press any key to continue..."
-                            ;;
-                        "🖥️  Start VDI Web Desktop (Official)")
-                            cmd_desktop prod
-                            echo ""
-                            read -n 1 -s -r -p "Press any key to continue..."
-                            ;;
-                        "💻 Enter Dev Workspace")
-                            cmd_enter dev
-                            echo ""
-                            read -n 1 -s -r -p "Press any key to continue..."
-                            ;;
-                        "🖥️  Start VDI Web Desktop (Dev)")
-                            cmd_desktop dev
-                            echo ""
-                            read -n 1 -s -r -p "Press any key to continue..."
-                            ;;
-                        "🔙 Back to Main Menu")
-                            break
-                            ;;
-                    esac
-                done
+                case "$choice" in
+                    "🚪 Workspaces (Enter/VDI Desktop) >")
+                        menu_state="workspaces"
+                        ;;
+                    "🛠️  Manage Environments >")
+                        menu_state="manage"
+                        ;;
+                    "⚙️  System Tools >")
+                        menu_state="tools"
+                        ;;
+                    "❌ Exit")
+                        gum style --foreground 212 "Goodbye!"
+                        exit 0
+                        ;;
+                esac
                 ;;
 
-            "🛠️  Manage Environments >")
-                while true; do
-                    clear
-                    show_banner
-                    show_compact_status
-                    echo ""
+            "workspaces")
+                clear
+                show_compact_banner
+                show_compact_status
 
-                    local manage_options=()
+                local workspace_options=()
+                if check_container_exists "$CONTAINER_NAME"; then
+                    workspace_options+=("🚪 Enter Official Workspace")
+                    workspace_options+=("🖥️  Start VDI Web Desktop (Official)")
+                fi
+                if check_container_exists "$DEV_CONTAINER_NAME"; then
+                    workspace_options+=("💻 Enter Dev Workspace")
+                    workspace_options+=("🖥️  Start VDI Web Desktop (Dev)")
+                fi
 
-                    # Official workspace options — always visible
-                    if check_container_exists "$CONTAINER_NAME"; then
-                        manage_options+=("♻️  Update/Recreate Official Workspace")
-                        manage_options+=("🗑️  Remove Official Workspace")
-                    else
-                        manage_options+=("🚀 Install Official Workspace (Pull from GHCR)")
-                    fi
+                workspace_options+=("🔙 Back to Main Menu")
 
-                    # Dev workspace options — always visible (not mutually exclusive with official)
-                    if check_container_exists "$DEV_CONTAINER_NAME"; then
-                        manage_options+=("♻️  Rebuild Dev Workspace")
-                        manage_options+=("🗑️  Remove Dev Workspace")
-                    elif [ -f "Containerfile" ]; then
-                        manage_options+=("🛠️  Build Dev Workspace (From local source)")
-                    else
-                        manage_options+=("🛠️  Build Dev Workspace (Requires Containerfile in CWD)")
-                    fi
+                local sub_choice
+                sub_choice=$(choose_option "${workspace_options[@]}")
 
-                    manage_options+=("🔙 Back to Main Menu")
-
-                    local sub_choice
-                    sub_choice=$(choose_option "${manage_options[@]}")
-
-                    case "$sub_choice" in
-                        "🚀 Install Official Workspace (Pull from GHCR)"|"♻️  Update/Recreate Official Workspace")
-                            cmd_install_official
-                            echo ""
-                            read -n 1 -s -r -p "Press any key to continue..."
-                            ;;
-                        "🛠️  Build Dev Workspace (From local source)"|"♻️  Rebuild Dev Workspace")
-                            cmd_build_dev
-                            echo ""
-                            read -n 1 -s -r -p "Press any key to continue..."
-                            ;;
-                        "🗑️  Remove Official Workspace")
-                            cmd_clean "$CONTAINER_NAME"
-                            echo ""
-                            read -n 1 -s -r -p "Press any key to continue..."
-                            ;;
-                        "🗑️  Remove Dev Workspace")
-                            cmd_clean "$DEV_CONTAINER_NAME"
-                            echo ""
-                            read -n 1 -s -r -p "Press any key to continue..."
-                            ;;
-                        "🛠️  Build Dev Workspace (Requires Containerfile in CWD)")
-                            gum style --foreground 214 "⚠️  No Containerfile found in the current directory."
-                            echo -e "To build a dev workspace, run this command from the agy-box repo root:"
-                            echo -e "  cd /path/to/agy-box && agy-box-manager"
-                            echo ""
-                            read -n 1 -s -r -p "Press any key to continue..."
-                            ;;
-                        "🔙 Back to Main Menu")
-                            break
-                            ;;
-                    esac
-                done
+                case "$sub_choice" in
+                    "🚪 Enter Official Workspace")
+                        cmd_enter prod
+                        echo ""
+                        read -n 1 -s -r -p "Press any key to continue..."
+                        ;;
+                    "🖥️  Start VDI Web Desktop (Official)")
+                        cmd_desktop prod
+                        echo ""
+                        read -n 1 -s -r -p "Press any key to continue..."
+                        ;;
+                    "💻 Enter Dev Workspace")
+                        cmd_enter dev
+                        echo ""
+                        read -n 1 -s -r -p "Press any key to continue..."
+                        ;;
+                    "🖥️  Start VDI Web Desktop (Dev)")
+                        cmd_desktop dev
+                        echo ""
+                        read -n 1 -s -r -p "Press any key to continue..."
+                        ;;
+                    "🔙 Back to Main Menu")
+                        menu_state="main"
+                        ;;
+                esac
                 ;;
 
-            "⚙️  System Tools >")
-                while true; do
-                    clear
-                    show_banner
-                    show_compact_status
-                    echo ""
+            "manage")
+                clear
+                show_compact_banner
+                show_compact_status
 
-                    local tools_options=()
-                    tools_options+=("📊 Show Distrobox List")
-                    tools_options+=("🔌 Show Port Mappings")
-                    tools_options+=("🩺 Run Doctor Diagnostics")
-                    tools_options+=("📦 Check Package Dependencies")
+                local manage_options=()
 
-                    if [ -f "$HOME/.local/bin/agy-box-manager" ]; then
-                        tools_options+=("🔥 Uninstall CLI Globally")
-                    else
-                        tools_options+=("🌍 Install CLI Globally (~/.local/bin)")
-                    fi
+                # Official workspace options — always visible
+                if check_container_exists "$CONTAINER_NAME"; then
+                    manage_options+=("♻️  Update/Recreate Official Workspace")
+                    manage_options+=("🗑️  Remove Official Workspace")
+                else
+                    manage_options+=("🚀 Install Official Workspace (Pull from GHCR)")
+                fi
 
-                    tools_options+=("🔙 Back to Main Menu")
+                # Dev workspace options — always visible
+                if check_container_exists "$DEV_CONTAINER_NAME"; then
+                    manage_options+=("♻️  Rebuild Dev Workspace")
+                    manage_options+=("🗑️  Remove Dev Workspace")
+                elif [ -f "Containerfile" ]; then
+                    manage_options+=("🛠️  Build Dev Workspace (From local source)")
+                else
+                    manage_options+=("🛠️  Build Dev Workspace (Requires Containerfile in CWD)")
+                fi
 
-                    local sub_choice
-                    sub_choice=$(choose_option "${tools_options[@]}")
+                manage_options+=("🔙 Back to Main Menu")
 
-                    case "$sub_choice" in
-                        "📊 Show Distrobox List")
-                            cmd_status
-                            read -n 1 -s -r -p "Press any key to continue..."
-                            ;;
-                        "🔌 Show Port Mappings")
-                            cmd_ports
-                            read -n 1 -s -r -p "Press any key to continue..."
-                            ;;
-                        "🩺 Run Doctor Diagnostics")
-                            cmd_doctor
-                            read -n 1 -s -r -p "Press any key to continue..."
-                            ;;
-                        "📦 Check Package Dependencies")
-                            cmd_check_dependencies
-                            ;;
-                        "🌍 Install CLI Globally (~/.local/bin)")
-                            cmd_install_global
-                            echo ""
-                            read -n 1 -s -r -p "Press any key to continue..."
-                            ;;
-                        "🔥 Uninstall CLI Globally")
-                            cmd_uninstall_global
-                            echo ""
-                            read -n 1 -s -r -p "Press any key to continue..."
-                            ;;
-                        "🔙 Back to Main Menu")
-                            break
-                            ;;
-                    esac
-                done
+                local sub_choice
+                sub_choice=$(choose_option "${manage_options[@]}")
+
+                case "$sub_choice" in
+                    "🚀 Install Official Workspace (Pull from GHCR)"|"♻️  Update/Recreate Official Workspace")
+                        cmd_install_official
+                        echo ""
+                        read -n 1 -s -r -p "Press any key to continue..."
+                        menu_state="workspaces"
+                        ;;
+                    "🛠️  Build Dev Workspace (From local source)"|"♻️  Rebuild Dev Workspace")
+                        cmd_build_dev
+                        echo ""
+                        read -n 1 -s -r -p "Press any key to continue..."
+                        menu_state="workspaces"
+                        ;;
+                    "🗑️  Remove Official Workspace")
+                        cmd_clean "$CONTAINER_NAME"
+                        echo ""
+                        read -n 1 -s -r -p "Press any key to continue..."
+                        ;;
+                    "🗑️  Remove Dev Workspace")
+                        cmd_clean "$DEV_CONTAINER_NAME"
+                        echo ""
+                        read -n 1 -s -r -p "Press any key to continue..."
+                        ;;
+                    "🛠️  Build Dev Workspace (Requires Containerfile in CWD)")
+                        gum style --foreground 214 "⚠️  No Containerfile found in the current directory."
+                        echo -e "To build a dev workspace, run this command from the agy-box repo root:"
+                        echo -e "  cd /path/to/agy-box && agy-box-manager"
+                        echo ""
+                        read -n 1 -s -r -p "Press any key to continue..."
+                        ;;
+                    "🔙 Back to Main Menu")
+                        menu_state="main"
+                        ;;
+                esac
                 ;;
 
-            "❌ Exit")
-                gum style --foreground 212 "Goodbye!"
-                exit 0
+            "tools")
+                clear
+                show_compact_banner
+                show_compact_status
+
+                local tools_options=()
+                tools_options+=("📊 Show Distrobox List")
+                tools_options+=("🔌 Show Port Mappings")
+                tools_options+=("🩺 Run Doctor Diagnostics")
+                tools_options+=("📦 Check Package Dependencies")
+
+                if [ -f "$HOME/.local/bin/agy-box-manager" ]; then
+                    tools_options+=("🔥 Uninstall CLI Globally")
+                else
+                    tools_options+=("🌍 Install CLI Globally (~/.local/bin)")
+                fi
+
+                tools_options+=("🔙 Back to Main Menu")
+
+                local sub_choice
+                sub_choice=$(choose_option "${tools_options[@]}")
+
+                case "$sub_choice" in
+                    "📊 Show Distrobox List")
+                        cmd_status
+                        read -n 1 -s -r -p "Press any key to continue..."
+                        ;;
+                    "🔌 Show Port Mappings")
+                        cmd_ports
+                        read -n 1 -s -r -p "Press any key to continue..."
+                        ;;
+                    "🩺 Run Doctor Diagnostics")
+                        cmd_doctor
+                        read -n 1 -s -r -p "Press any key to continue..."
+                        ;;
+                    "📦 Check Package Dependencies")
+                        cmd_check_dependencies
+                        ;;
+                    "🌍 Install CLI Globally (~/.local/bin)")
+                        cmd_install_global
+                        echo ""
+                        read -n 1 -s -r -p "Press any key to continue..."
+                        ;;
+                    "🔥 Uninstall CLI Globally")
+                        cmd_uninstall_global
+                        echo ""
+                        read -n 1 -s -r -p "Press any key to continue..."
+                        ;;
+                    "🔙 Back to Main Menu")
+                        menu_state="main"
+                        ;;
+                esac
                 ;;
         esac
     done
