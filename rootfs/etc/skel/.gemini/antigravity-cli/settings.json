@@ -1,0 +1,8 @@
+{
+  "trustedWorkspaces": [
+    "/var/home/wtg",
+    "/home/wtg",
+    "/run/host/var/home/wtg",
+    "/workspace"
+  ]
+}

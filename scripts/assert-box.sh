@@ -44,6 +44,8 @@ assert_cmd "Antigravity SDK" "python3" "python3 -c \"import google.antigravity\"
 assert_cmd "Google Chrome" "google-chrome-stable" "google-chrome-stable --version" || errors=$((errors+1))
 assert_cmd "Google Antigravity (Agent UI)" "antigravity" "test -x /usr/bin/antigravity" || errors=$((errors+1))
 assert_cmd "Antigravity IDE" "antigravity-ide" "test -x /usr/bin/antigravity-ide" || errors=$((errors+1))
+assert_cmd "IceWM Startup Script" "icewm-session" "test -x /etc/X11/icewm/startup" || errors=$((errors+1))
+assert_cmd "IceWM Preferences" "icewm-session" "test -f /etc/X11/icewm/preferences" || errors=$((errors+1))
 
 if [ "$errors" -gt 0 ]; then
     echo -e "${RED}✗ $errors test assertions failed inside the container.${NC}"

@@ -18,20 +18,29 @@ unset WAYLAND_DISPLAY
 unset XDG_SESSION_TYPE
 
 # Load and export environment variables defined in environment.d
-if [ -d "${HOME}/.config/environment.d" ]; then
-    for conf in "${HOME}/.config/environment.d"/*.conf; do
-        if [ -f "$conf" ]; then
-            while IFS= read -r line || [ -n "$line" ]; do
-                # Ignore comments, empty lines, and lines without =
-                if [[ ! "$line" =~ ^[[:space:]]*# ]] && [[ "$line" =~ = ]]; then
-                    key=$(echo "$line" | cut -d= -f1 | xargs)
-                    val=$(echo "$line" | cut -d= -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//')
-                    export "$key"="$val"
-                fi
-            done < "$conf"
-        fi
-    done
-fi
+# Helper to source all .conf files from a directory
+_load_env_dir() {
+    local dir="$1"
+    if [ -d "$dir" ]; then
+        for conf in "$dir"/*.conf; do
+            if [ -f "$conf" ]; then
+                while IFS= read -r line || [ -n "$line" ]; do
+                    # Ignore comments, empty lines, and lines without =
+                    if [[ ! "$line" =~ ^[[:space:]]*# ]] && [[ "$line" =~ = ]]; then
+                        key=$(echo "$line" | cut -d= -f1 | xargs)
+                        val=$(echo "$line" | cut -d= -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//')
+                        export "$key"="$val"
+                    fi
+                done < "$conf"
+            fi
+        done
+    fi
+}
+
+# Source the host home's environment.d first (Distrobox bind-mounts the host home)
+_load_env_dir "${DISTROBOX_HOST_HOME:+${DISTROBOX_HOST_HOME}/.config/environment.d}"
+# Then source the container's isolated home environment.d (overrides host values)
+_load_env_dir "${HOME}/.config/environment.d"
 
 DISPLAY_PORT=99
 VNC_PORT=5900
@@ -138,12 +147,42 @@ for cmd in Xvfb x11vnc icewm-session websockify; do
     fi
 done
 
+# Clean up stale Chrome/Electron singleton lock files from previous sessions.
+# When a container is destroyed or renamed, Chrome's profile lock (a symlink
+# pointing to "hostname-pid") becomes stale. Chrome sees the hostname mismatch
+# and refuses to start, believing "another computer" holds the lock.
+_cleanup_stale_chrome_locks() {
+    local profile_dir="$1"
+    local lock_file="${profile_dir}/SingletonLock"
+    if [[ -L "$lock_file" ]]; then
+        local lock_target
+        lock_target=$(readlink "$lock_file" 2>/dev/null || true)
+        local lock_host="${lock_target%%-*}"
+        local current_host
+        current_host=$(hostname)
+        if [[ "$lock_host" != "$current_host" ]]; then
+            echo -e "${YELLOW}[WARN] Removing stale Chrome lock from previous session (${lock_host}).${NC}"
+            rm -f "${profile_dir}/SingletonLock" "${profile_dir}/SingletonCookie" "${profile_dir}/SingletonSocket" 2>/dev/null || true
+        fi
+    fi
+}
+
+# Clean locks for Chrome and Electron-based apps (Antigravity, Antigravity IDE)
+for chrome_profile in \
+    "${HOME}/.config/google-chrome" \
+    "${HOME}/.config/Antigravity-box" \
+    "${HOME}/.config/Antigravity-ide-box" \
+    "${HOME}/.config/Antigravity"; do
+    _cleanup_stale_chrome_locks "$chrome_profile"
+done
+
 # Check if Xvfb is already running on :99
 if [[ -f "/tmp/.X${DISPLAY_PORT}-lock" ]] || [[ -S "/tmp/.X11-unix/X${DISPLAY_PORT}" ]]; then
     echo -e "${YELLOW}[WARN] Port :${DISPLAY_PORT} lock file or socket exists. Cleaning up...${NC}"
     rm -f "/tmp/.X${DISPLAY_PORT}-lock" || true
     rm -f "/tmp/.X11-unix/X${DISPLAY_PORT}" || true
 fi
+
 
 # 1. Start Xvfb (Virtual Framebuffer)
 echo -e "${BLUE}[INFO] Starting Xvfb virtual display :${DISPLAY_PORT} with resolution ${WIDTH}x${HEIGHT}...${NC}"
