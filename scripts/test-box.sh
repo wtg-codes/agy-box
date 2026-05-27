@@ -28,6 +28,10 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1" >&2
 }
 
+# Find directory paths
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+REPO_DIR=$(dirname "$SCRIPT_DIR")
+
 # --- Cleanup function ---
 cleanup() {
     log_info "Cleaning up..."
@@ -71,13 +75,44 @@ fi
 export DBX_CONTAINER_MANAGER="${RUNTIME}"
 log_success "Host checks passed. Runtime: $RUNTIME, Distrobox: $(distrobox --version | head -n 1)"
 
+# --- Change Detection Hashing ---
+calculate_build_hash() {
+    local files_hash=""
+    if command -v md5sum &>/dev/null; then
+        files_hash=$(find "$REPO_DIR/Containerfile" "$REPO_DIR/scripts" "$REPO_DIR/rootfs" -type f -print0 2>/dev/null | sort -z | xargs -0 md5sum 2>/dev/null | md5sum | awk '{print $1}')
+    elif command -v md5 &>/dev/null; then
+        files_hash=$(find "$REPO_DIR/Containerfile" "$REPO_DIR/scripts" "$REPO_DIR/rootfs" -type f -print0 2>/dev/null | sort -z | xargs -0 md5 2>/dev/null | md5 | awk '{print $1}')
+    else
+        files_hash=$(find "$REPO_DIR/Containerfile" "$REPO_DIR/scripts" "$REPO_DIR/rootfs" -type f 2>/dev/null | sort | xargs stat -c "%Y" 2>/dev/null | shasum 2>/dev/null | awk '{print $1}')
+    fi
+    echo "${files_hash:-empty}"
+}
+
 # --- Build Container ---
-if [[ "${SKIP_BUILD:-false}" = "true" ]]; then
-    log_info "Skipping build since SKIP_BUILD=true. Using existing image $IMAGE_NAME..."
+STATE_FILE="$HOME/.config/agy-box/.last_build_hash"
+CURRENT_HASH=$(calculate_build_hash)
+
+IMAGE_EXISTS=false
+if "${RUNTIME}" image inspect "$IMAGE_NAME" &>/dev/null; then
+    IMAGE_EXISTS=true
+fi
+
+SKIP_BUILD_DETECTED=false
+if [[ "${FORCE_BUILD:-false}" != "true" ]] && [[ "$IMAGE_EXISTS" = "true" ]]; then
+    if [[ -f "$STATE_FILE" ]] && [[ "$(cat "$STATE_FILE")" = "$CURRENT_HASH" ]]; then
+        SKIP_BUILD_DETECTED=true
+    fi
+fi
+
+if [[ "$SKIP_BUILD_DETECTED" = "true" ]]; then
+    log_success "No container files modified since last build. Skipping image rebuild."
+    log_info "(Set FORCE_BUILD=true to override)"
 else
     log_info "Building image $IMAGE_NAME..."
-    "$RUNTIME" build -t "$IMAGE_NAME" -f Containerfile .
+    "$RUNTIME" build -t "$IMAGE_NAME" -f "$REPO_DIR/Containerfile" "$REPO_DIR"
     log_success "Built image successfully."
+    mkdir -p "$(dirname "$STATE_FILE")"
+    echo "$CURRENT_HASH" > "$STATE_FILE"
 fi
 
 # --- Create Distrobox ---
@@ -89,7 +124,7 @@ if "${RUNTIME}" ps -a --format '{{.Names}}' 2>/dev/null | grep -qw "$CONTAINER_N
         distrobox rm --yes "$CONTAINER_NAME" >/dev/null || true
     fi
     if "${RUNTIME}" ps -a --format '{{.Names}}' 2>/dev/null | grep -qw "$CONTAINER_NAME"; then
-        "${RUNTIME}" rm -f "$CONTAINER_NAME" >/dev/null || true
+        "$rt" rm -f "$CONTAINER_NAME" >/dev/null || true
     fi
 fi
 
@@ -102,59 +137,7 @@ sleep 2
 # --- Run Assertions Inside Distrobox ---
 log_info "Running test assertions inside the container..."
 
-# We execute distrobox enter to run our test suite
-# shellcheck disable=SC2016
-distrobox enter "$CONTAINER_NAME" -- bash -euo pipefail -c '
-    RED="\033[0;31m"
-    GREEN="\033[0;32m"
-    NC="\033[0m"
-
-    assert_cmd() {
-        local name=$1
-        local cmd=$2
-        local ver_cmd=$3
-        
-        echo -n "Checking $name... "
-        if ! command -v "$cmd" &>/dev/null; then
-            echo -e "${RED}FAILED (not found in PATH)${NC}"
-            return 1
-        fi
-        
-        # Verify it runs and outputs successfully
-        if ! eval "$ver_cmd" &>/dev/null; then
-            echo -e "${RED}FAILED (command failed to execute)${NC}"
-            return 1
-        fi
-        
-        echo -e "${GREEN}PASSED${NC}"
-        return 0
-    }
-
-    errors=0
-
-    # Assert CNCF Tools
-    assert_cmd "kubectl" "kubectl" "kubectl version --client" || errors=$((errors+1))
-    assert_cmd "helm" "helm" "helm version" || errors=$((errors+1))
-    assert_cmd "k9s" "k9s" "k9s version" || errors=$((errors+1))
-
-    # Assert AI Agent Tools
-    assert_cmd "Gemini CLI" "gemini" "gemini --help" || errors=$((errors+1))
-    assert_cmd "Google ADK" "adk" "adk --help" || errors=$((errors+1))
-    assert_cmd "Antigravity CLI (agy)" "agy" "agy --version" || errors=$((errors+1))
-    assert_cmd "Antigravity SDK" "python3" "python3 -c \"import google.antigravity\"" || errors=$((errors+1))
-
-    # Assert Desktop Apps (Checking path & permissions)
-    assert_cmd "Google Chrome" "google-chrome-stable" "google-chrome-stable --version" || errors=$((errors+1))
-    assert_cmd "Google Antigravity (Agent UI)" "antigravity" "test -x /usr/bin/antigravity" || errors=$((errors+1))
-    assert_cmd "Antigravity IDE" "antigravity-ide" "test -x /usr/bin/antigravity-ide" || errors=$((errors+1))
-
-    if [ "$errors" -gt 0 ]; then
-        echo -e "${RED}✗ $errors test assertions failed inside the container.${NC}"
-        exit 1
-    else
-        echo -e "${GREEN}✓ All test assertions passed inside the container!${NC}"
-        exit 0
-    fi
-'
+# We execute distrobox enter to run our test suite script
+distrobox enter "$CONTAINER_NAME" -- "$REPO_DIR/scripts/assert-box.sh"
 
 log_success "Integration tests finished successfully!"
