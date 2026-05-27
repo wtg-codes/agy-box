@@ -13,6 +13,8 @@ apt-get update && apt-get install -y --no-install-recommends \
     gnupg \
     python3-pip \
     pipx \
+    python3-keyring \
+    python3-keyrings.alt \
     nodejs \
     npm \
     apt-transport-https \

@@ -17,6 +17,22 @@ export GALLIUM_DRIVER=llvmpipe
 unset WAYLAND_DISPLAY
 unset XDG_SESSION_TYPE
 
+# Load and export environment variables defined in environment.d
+if [ -d "${HOME}/.config/environment.d" ]; then
+    for conf in "${HOME}/.config/environment.d"/*.conf; do
+        if [ -f "$conf" ]; then
+            while IFS= read -r line || [ -n "$line" ]; do
+                # Ignore comments, empty lines, and lines without =
+                if [[ ! "$line" =~ ^[[:space:]]*# ]] && [[ "$line" =~ = ]]; then
+                    key=$(echo "$line" | cut -d= -f1 | xargs)
+                    val=$(echo "$line" | cut -d= -f2- | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/^"//' -e 's/"$//')
+                    export "$key"="$val"
+                fi
+            done < "$conf"
+        fi
+    done
+fi
+
 DISPLAY_PORT=99
 VNC_PORT=5900
 WEB_PORT=6080
