@@ -25,9 +25,9 @@ if [ -e /run/.containerenv ] || [ -e /run/.toolboxenv ]; then
     elif command -v jq &>/dev/null; then
         jq '.["antigravity.browser.chromeBinaryPath"] = "/usr/bin/google-chrome-stable"' "$HOME/.config/Antigravity-box/User/settings.json" > "$HOME/.config/Antigravity-box/User/settings.json.tmp" && mv "$HOME/.config/Antigravity-box/User/settings.json.tmp" "$HOME/.config/Antigravity-box/User/settings.json"
     fi
-    exec /usr/share/antigravity/antigravity --user-data-dir "$HOME/.config/Antigravity-box" --disable-dev-shm-usage "$@"
+    exec /usr/share/antigravity/antigravity --user-data-dir "$HOME/.config/Antigravity-box" --disable-dev-shm-usage --disable-gpu --disable-crash-reporter --no-sandbox "$@"
 else
-    exec /usr/share/antigravity/antigravity --disable-dev-shm-usage "$@"
+    exec /usr/share/antigravity/antigravity --disable-dev-shm-usage --disable-gpu --disable-crash-reporter --no-sandbox "$@"
 fi
 EOF
 chmod +x /usr/bin/antigravity

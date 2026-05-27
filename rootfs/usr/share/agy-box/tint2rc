@@ -50,7 +50,6 @@ task_font_color = #e0e0e0 100
 task_active_font_color = #ffffff 100
 task_background_id = 0
 task_active_background_id = 2
-task_icon_size = 22
 
 # Launcher
 launcher_padding = 4 4 4

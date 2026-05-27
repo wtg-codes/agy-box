@@ -45,7 +45,7 @@ apt-get update && apt-get install -y --no-install-recommends google-chrome-stabl
 
 # Apply wrappers for Electron/Chrome stability in containers
 mv /usr/bin/google-chrome-stable /usr/bin/google-chrome-stable.orig
-printf '#!/bin/bash\nexec /usr/bin/google-chrome-stable.orig --disable-dev-shm-usage "$@"' > /usr/bin/google-chrome-stable
+printf '#!/bin/bash\nexec /usr/bin/google-chrome-stable.orig --disable-dev-shm-usage --disable-gpu --disable-crash-reporter --no-sandbox "$@"' > /usr/bin/google-chrome-stable
 chmod +x /usr/bin/google-chrome-stable
 
 
