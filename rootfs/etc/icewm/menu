@@ -1,9 +1,12 @@
 # IceWM Start Menu for agy-box VDI desktop
 
-prog "Terminal" - xterm -fa 'Monospace' -fs 12 -bg '#1a1b2e' -fg '#e0e0e0' -geometry 100x35
-prog "Google Chrome" - google-chrome-stable
-prog "Antigravity IDE" - antigravity-ide
-prog "Google Antigravity" - antigravity
+prog "Terminal" "utilities-terminal" xterm -fa 'Monospace' -fs 12 -bg '#1a1b2e' -fg '#e0e0e0' -geometry 100x35
+prog "Google Chrome" "google-chrome" google-chrome-stable
+prog "Antigravity 2.0 (Agent First Experience)" "system-run" antigravity
+prog "Antigravity IDE (Classic VSCode UI)" "accessories-text-editor" antigravity-ide
+prog "Antigravity CLI (agy)" "utilities-terminal" xterm -fa 'Monospace' -fs 12 -bg '#1a1b2e' -fg '#e0e0e0' -geometry 100x35 -e agy
+prog "Google Antigravity (SDK)" "python" xterm -fa 'Monospace' -fs 12 -bg '#1a1b2e' -fg '#e0e0e0' -geometry 100x35 -hold -e python3 -c "import google.antigravity; print('Google Antigravity SDK v0.1.0\nImported successfully!'); exec(compile('import code; code.interact(local=globals())', '<string>', 'exec'))"
+prog "Workspace Setup Assistant" "preferences-system" xterm -fa 'Monospace' -fs 12 -bg '#1a1b2e' -fg '#e0e0e0' -geometry 100x35 -e agy-setup-helper
 
 separator
 

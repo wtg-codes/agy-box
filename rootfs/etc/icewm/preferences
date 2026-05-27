@@ -18,3 +18,9 @@ TaskBarShowCollapseButton=0
 
 # Default visual theme
 Theme="icedesert/default.theme"
+
+# Icon and taskbar sizing to look like a modern dock
+SmallIconSize=48
+LargeIconSize=64
+MenuIconSize=32
+

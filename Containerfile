@@ -46,7 +46,23 @@ COPY rootfs/ /
 RUN chmod +x /usr/local/bin/entrypoint.sh \
              /usr/local/bin/agy-setup-helper \
              /usr/local/bin/agy-vdi \
-             /etc/profile.d/agy-setup-check.sh
+             /etc/profile.d/agy-setup-check.sh \
+             /etc/icewm/startup
+
+# Dynamically link the correct version-specific wallpaper
+RUN VERSION=$(grep -oP '^VERSION="\K[^"]+' /usr/local/bin/agy-setup-helper) && \
+    major=$(echo "$VERSION" | cut -d. -f1) && \
+    minor=$(echo "$VERSION" | cut -d. -f2) && \
+    WALLPAPER_NAME="wallpaper-v${major}.${minor}.0.png" && \
+    if [ -f "/usr/share/agy-box/${WALLPAPER_NAME}" ]; then \
+        ln -sf "${WALLPAPER_NAME}" /usr/share/agy-box/wallpaper.png; \
+    else \
+        # Fallback to the latest available wallpaper if version-specific one doesn't exist
+        LATEST_WALLPAPER=$(ls -v /usr/share/agy-box/wallpaper-v*.png 2>/dev/null | tail -n 1) && \
+        if [ -n "$LATEST_WALLPAPER" ]; then \
+            ln -sf "$(basename "$LATEST_WALLPAPER")" /usr/share/agy-box/wallpaper.png; \
+        fi \
+    fi
 
 VOLUME ["/workspace", "/config"]
 

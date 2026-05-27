@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Google Chrome
+Exec=google-chrome-stable
+Icon=google-chrome
+Terminal=false
+Categories=Network;

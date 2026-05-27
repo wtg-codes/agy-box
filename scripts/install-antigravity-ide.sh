@@ -7,7 +7,7 @@ IDE_URL="https://edgedl.me.gvt1.com/edgedl/release2/j0qc3/antigravity/stable/${I
 IDE_SHA256="5232a4048ff4fa15685d9a981ba4fba573e297f3efc9b76f638e794baf775725"
 
 echo "Downloading Antigravity IDE..."
-curl -fsSL --connect-timeout 5 --retry 5 --retry-delay 2 "$IDE_URL" -o /tmp/Antigravity-ide.tar.gz
+curl -fsSL --http1.1 --connect-timeout 5 --retry 5 --retry-delay 2 "$IDE_URL" -o /tmp/Antigravity-ide.tar.gz
 echo "$IDE_SHA256  /tmp/Antigravity-ide.tar.gz" | sha256sum -c -
 
 echo "Extracting Antigravity IDE..."

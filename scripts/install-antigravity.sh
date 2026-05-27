@@ -8,7 +8,7 @@ IDE_URL="https://storage.googleapis.com/antigravity-public/antigravity-hub/${IDE
 IDE_SHA256="0727e1f56961b6d2347941f278da69cc6c17de3befe988524848cd167380e9ab"
 
 echo "Downloading Google Antigravity (Agent UI)..."
-curl -fsSL --connect-timeout 5 --retry 5 --retry-delay 2 "$IDE_URL" -o /tmp/Antigravity.tar.gz
+curl -fsSL --http1.1 --connect-timeout 5 --retry 5 --retry-delay 2 "$IDE_URL" -o /tmp/Antigravity.tar.gz
 echo "$IDE_SHA256  /tmp/Antigravity.tar.gz" | sha256sum -c -
 
 echo "Extracting Google Antigravity (Agent UI)..."

@@ -95,7 +95,7 @@ sync-workspace:
     fi
     @if [ -d ~/.config/agy-box ]; then \
         mkdir -p ~/.config/agy-box/backup/agy-box; \
-        rsync -a --delete --exclude=backup ~/.config/agy-box/ ~/.config/agy-box/backup/agy-box/; \
+        rsync -a --delete --exclude=backup --exclude=home ~/.config/agy-box/ ~/.config/agy-box/backup/agy-box/; \
     fi
     @if [ -d ~/.config/python_keyring ]; then \
         mkdir -p ~/.config/agy-box/backup/python_keyring; \

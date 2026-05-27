@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Antigravity CLI (agy)
+Exec=xterm -fa 'Monospace' -fs 12 -bg '#1a1b2e' -fg '#e0e0e0' -geometry 100x35 -e agy
+Icon=utilities-terminal
+Terminal=false
+Categories=Development;

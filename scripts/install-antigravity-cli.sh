@@ -8,7 +8,7 @@ CLI_URL="https://storage.googleapis.com/antigravity-public/antigravity-cli/${CLI
 CLI_SHA512="5ccdcc01fb863c7e8e56473c6c95dba75fed4fd2a242200d80cfc4c7fab811b733f5a7fab25332130aad298e72627e1018e6911a5658f4f059ef6e019f211972"
 
 echo "Downloading Antigravity CLI..."
-curl -fsSL --connect-timeout 5 --retry 5 --retry-delay 2 "$CLI_URL" -o /tmp/cli_linux_x64.tar.gz
+curl -fsSL --http1.1 --connect-timeout 5 --retry 5 --retry-delay 2 "$CLI_URL" -o /tmp/cli_linux_x64.tar.gz
 echo "$CLI_SHA512  /tmp/cli_linux_x64.tar.gz" | sha512sum -c -
 
 echo "Extracting Antigravity CLI..."

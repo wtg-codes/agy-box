@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Antigravity 2.0 (Agent First Experience)
+Exec=antigravity
+Icon=system-run
+Terminal=false
+Categories=Development;

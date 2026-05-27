@@ -1,0 +1,5 @@
+#!/bin/bash
+# System-wide startup script for IceWM VDI session
+
+# Start PCManFM desktop manager to draw wallpaper and handle desktop icons
+pcmanfm --desktop &
