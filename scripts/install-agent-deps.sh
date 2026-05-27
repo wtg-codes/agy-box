@@ -21,12 +21,10 @@ apt-get update && apt-get install -y --no-install-recommends \
     gosu \
     xvfb \
     x11vnc \
-    openbox \
+    icewm \
     novnc \
     websockify \
     xterm \
-    tint2 \
-    feh \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
