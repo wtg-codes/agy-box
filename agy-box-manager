@@ -490,6 +490,9 @@ cmd_install_official() {
         esac
     done
 
+    local runtime
+    runtime=$(get_runtime)
+
     if check_container_exists "$CONTAINER_NAME"; then
         if gum confirm "Container '$CONTAINER_NAME' already exists. Recreate it?"; then
             cmd_clean "$CONTAINER_NAME"
@@ -514,7 +517,7 @@ cmd_install_official() {
         dbx_flags+=("--volume" "$HOME/.gitconfig:$isolated_home/.gitconfig:ro")
     fi
 
-    if [ "$(get_runtime)" = "docker" ]; then
+    if [ "$runtime" = "docker" ]; then
         dbx_flags+=("--additional-flags" "--user $(id -u):$(id -g)")
     fi
     if [[ -n "${SSH_AUTH_SOCK:-}" && -S "$SSH_AUTH_SOCK" ]]; then
