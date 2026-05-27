@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Antigravity IDE (Classic VSCode UI)
+Exec=antigravity-ide
+Icon=accessories-text-editor
+Terminal=false
+Categories=Development;

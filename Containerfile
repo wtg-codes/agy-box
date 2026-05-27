@@ -46,7 +46,8 @@ COPY rootfs/ /
 RUN chmod +x /usr/local/bin/entrypoint.sh \
              /usr/local/bin/agy-setup-helper \
              /usr/local/bin/agy-vdi \
-             /etc/profile.d/agy-setup-check.sh
+             /etc/profile.d/agy-setup-check.sh \
+             /etc/icewm/startup
 
 VOLUME ["/workspace", "/config"]
 
