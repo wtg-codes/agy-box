@@ -31,9 +31,18 @@ log_error() {
 # --- Cleanup function ---
 cleanup() {
     log_info "Cleaning up..."
-    if distrobox list --no-color | grep -qw "$CONTAINER_NAME"; then
-        log_info "Removing distrobox container '$CONTAINER_NAME'..."
-        distrobox rm --yes "$CONTAINER_NAME" >/dev/null || log_warn "Failed to remove container '$CONTAINER_NAME'"
+    local rt="${RUNTIME:-}"
+    if [[ -z "$rt" ]]; then
+        if command -v podman &>/dev/null; then rt="podman"; else rt="docker"; fi
+    fi
+    if "$rt" ps -a --format '{{.Names}}' 2>/dev/null | grep -qw "$CONTAINER_NAME"; then
+        log_info "Removing container '$CONTAINER_NAME'..."
+        if distrobox list --no-color 2>/dev/null | grep -qw "$CONTAINER_NAME"; then
+            distrobox rm --yes "$CONTAINER_NAME" >/dev/null || true
+        fi
+        if "$rt" ps -a --format '{{.Names}}' 2>/dev/null | grep -qw "$CONTAINER_NAME"; then
+            "$rt" rm -f "$CONTAINER_NAME" >/dev/null || true
+        fi
     else
         log_info "No test container '$CONTAINER_NAME' to clean up."
     fi
@@ -74,13 +83,21 @@ fi
 # --- Create Distrobox ---
 log_info "Creating distrobox container '$CONTAINER_NAME'..."
 # If it already exists for some reason, remove it
-if distrobox list --no-color | grep -qw "$CONTAINER_NAME"; then
-    log_warn "Container '$CONTAINER_NAME' already exists. Removing first..."
-    distrobox rm --yes "$CONTAINER_NAME" >/dev/null
+if "${RUNTIME}" ps -a --format '{{.Names}}' 2>/dev/null | grep -qw "$CONTAINER_NAME"; then
+    log_warn "Container '$CONTAINER_NAME' already exists in ${RUNTIME}. Removing first..."
+    if distrobox list --no-color 2>/dev/null | grep -qw "$CONTAINER_NAME"; then
+        distrobox rm --yes "$CONTAINER_NAME" >/dev/null || true
+    fi
+    if "${RUNTIME}" ps -a --format '{{.Names}}' 2>/dev/null | grep -qw "$CONTAINER_NAME"; then
+        "${RUNTIME}" rm -f "$CONTAINER_NAME" >/dev/null || true
+    fi
 fi
 
 distrobox create -i "$IMAGE_NAME" -n "$CONTAINER_NAME" --hostname "$CONTAINER_NAME" --yes
 log_success "Created distrobox container '$CONTAINER_NAME'."
+
+# Sleep briefly to ensure Podman container registration is fully synced to disk
+sleep 2
 
 # --- Run Assertions Inside Distrobox ---
 log_info "Running test assertions inside the container..."

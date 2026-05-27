@@ -173,7 +173,9 @@ get_runtime() {
 
 check_container_exists() {
     local name=$1
-    if distrobox list --no-color | grep -qw "$name"; then return 0; else return 1; fi
+    local runtime
+    runtime=$(get_runtime)
+    if "$runtime" ps -a --format '{{.Names}}' 2>/dev/null | grep -qw "$name"; then return 0; else return 1; fi
 }
 
 cmd_autocomplete() {
