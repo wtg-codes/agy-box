@@ -1,0 +1,11 @@
+# IceWM Start Menu for agy-box VDI desktop
+
+prog "Terminal" - xterm -fa 'Monospace' -fs 12 -bg '#1a1b2e' -fg '#e0e0e0' -geometry 100x35
+prog "Google Chrome" - google-chrome-stable
+prog "Antigravity IDE" - antigravity-ide
+prog "Google Antigravity" - antigravity
+
+separator
+
+restart "Restart IceWM"
+quit "Exit VDI Desktop"

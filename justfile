@@ -52,9 +52,28 @@ agy-install-global:
 agy-uninstall-global:
     @{{manager}} uninstall-global
 
+# Prune exited containers, dangling images, and unused volumes to free up space
+agy-prune:
+    @runtime=$(command -v podman &>/dev/null && echo "podman" || echo "docker"); \
+    echo "Cleaning up local container environment via $runtime..."; \
+    $runtime container prune -f || true; \
+    $runtime image prune -f || true; \
+    $runtime volume prune -f || true
+
 # Test the dev image inside a temporary container
 agy-test:
     @./scripts/test-box.sh
+
+# Run health checks directly inside the active running container
+agy-assert *args="":
+    @target_name="agy-box"; \
+    if [ "{{args}}" = "dev" ]; then target_name="agy-box-dev"; fi; \
+    if ! distrobox list --no-color 2>/dev/null | grep -qw "$target_name"; then \
+        echo "Error: Container '$target_name' is not running or registered." >&2; \
+        exit 1; \
+    fi; \
+    echo "Running active assertions inside '$target_name'..."; \
+    distrobox enter "$target_name" -- ./scripts/assert-box.sh
 
 # Setup local development workspace and export tools
 setup-box:

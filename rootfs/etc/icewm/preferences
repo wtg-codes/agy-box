@@ -1,0 +1,20 @@
+# IceWM preferences for agy-box VDI desktop
+
+# Desktop background wallpaper
+DesktopBackgroundImage="/usr/share/agy-box/wallpaper.png"
+DesktopBackgroundScaled=1
+
+# Focus model
+ClickToFocus=1
+
+# Taskbar layout & visibility
+TaskBarShowClock=1
+TaskBarShowWorkspaceButtons=1
+TaskBarShowCPUStatus=0
+TaskBarShowNetStatus=0
+TaskBarShowMailboxStatus=0
+TaskBarShowAPMStatus=0
+TaskBarShowCollapseButton=0
+
+# Default visual theme
+Theme="icedesert/default.theme"

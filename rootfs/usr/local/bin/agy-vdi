@@ -114,7 +114,7 @@ echo -e "${BLUE}        agy-box VDI Virtual Desktop Session       ${NC}"
 echo -e "${BLUE}==================================================${NC}"
 
 # Check dependencies
-for cmd in Xvfb x11vnc openbox websockify; do
+for cmd in Xvfb x11vnc icewm-session websockify; do
     if ! command -v "$cmd" &>/dev/null; then
         echo -e "${RED}[ERROR] Dependency '$cmd' is not installed in the container.${NC}"
         echo -e "${YELLOW}[TIP] Make sure the container was rebuilt with the latest VDI packages.${NC}"
@@ -137,9 +137,9 @@ sleep 1.5
 # Export display for subsequent tools
 export DISPLAY=:${DISPLAY_PORT}
 
-# 2. Start Openbox Window Manager
-echo -e "${BLUE}[INFO] Starting Openbox Window Manager...${NC}"
-openbox &
+# 2. Start IceWM Session Manager
+echo -e "${BLUE}[INFO] Starting IceWM Session Manager...${NC}"
+icewm-session &
 sleep 1
 
 # 3. Start x11vnc server
@@ -190,29 +190,13 @@ echo ""
 echo -e "${YELLOW}Press [Ctrl+C] to stop the virtual desktop session.${NC}"
 
 # 5. Set up the desktop environment
-# 5a. Set wallpaper
-if command -v feh &>/dev/null && [[ -f /usr/share/agy-box/wallpaper.png ]]; then
-    echo -e "${BLUE}[INFO] Setting desktop wallpaper...${NC}"
-    feh --bg-fill /usr/share/agy-box/wallpaper.png &
-fi
-
-# 5b. Launch tint2 taskbar panel
-if command -v tint2 &>/dev/null; then
-    echo -e "${BLUE}[INFO] Starting taskbar panel...${NC}"
-    if [[ -f /usr/share/agy-box/tint2rc ]]; then
-        tint2 -c /usr/share/agy-box/tint2rc &
-    else
-        tint2 &
-    fi
-fi
-
-# 5c. Launch a terminal on the desktop
+# 5a. Launch a terminal on the desktop
 if command -v xterm &>/dev/null; then
     echo -e "${BLUE}[INFO] Launching terminal...${NC}"
     xterm -fa 'Monospace' -fs 12 -bg '#1a1b2e' -fg '#e0e0e0' -geometry 100x35+50+50 -T 'agy-box Terminal' &
 fi
 
-# 5d. Launch default desktop applications inside the VDI display
+# 5b. Launch default desktop applications inside the VDI display
 if command -v antigravity-ide &>/dev/null; then
     echo -e "${BLUE}[INFO] Automatically starting Antigravity IDE...${NC}"
     antigravity-ide &
@@ -225,6 +209,10 @@ fi
 while true; do
     if ! kill -0 %1 2>/dev/null; then
         echo -e "${RED}[ERROR] Xvfb crashed unexpectedly.${NC}"
+        exit 1
+    fi
+    if ! kill -0 %2 2>/dev/null; then
+        echo -e "${RED}[ERROR] icewm-session crashed or exited unexpectedly.${NC}"
         exit 1
     fi
     if ! kill -0 %3 2>/dev/null; then

@@ -4,7 +4,7 @@
 set -euo pipefail
 
 # --- Configuration ---
-VERSION="0.4.2"
+VERSION="0.5.0"
 IMAGE_NAME="ghcr.io/wtg-codes/agy-box:latest"
 DEV_IMAGE_NAME="agy-box:dev"
 CONTAINER_NAME="agy-box"
@@ -173,7 +173,9 @@ get_runtime() {
 
 check_container_exists() {
     local name=$1
-    if distrobox list --no-color | grep -qw "$name"; then return 0; else return 1; fi
+    local runtime
+    runtime=$(get_runtime)
+    if "$runtime" ps -a --format '{{.Names}}' 2>/dev/null | grep -qw "$name"; then return 0; else return 1; fi
 }
 
 cmd_autocomplete() {
@@ -575,6 +577,13 @@ cmd_install_official() {
     fi
     rm -f "$log_file"
 
+    local isolated_home="$HOME/.config/agy-box/home"
+    local runtime
+    runtime=$(get_runtime)
+    if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
+        podman unshare chown -R 0:0 "$isolated_home" 2>/dev/null || true
+    fi
+
     # Export CLI tools to host ~/.local/bin
     if distrobox enter "$CONTAINER_NAME" -- command -v distrobox-export &>/dev/null; then
         local log_file_export
@@ -705,6 +714,13 @@ cmd_build_dev() {
     fi
     rm -f "$log_file"
 
+    local isolated_home="$HOME/.config/agy-box/home"
+    local runtime
+    runtime=$(get_runtime)
+    if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
+        podman unshare chown -R 0:0 "$isolated_home" 2>/dev/null || true
+    fi
+
     # Export CLI tools to host ~/.local/bin
     if distrobox enter "$DEV_CONTAINER_NAME" -- command -v distrobox-export &>/dev/null; then
         local log_file_export
@@ -743,6 +759,13 @@ cmd_desktop() {
         exit 1
     fi
 
+    local isolated_home="$HOME/.config/agy-box/home"
+    local runtime
+    runtime=$(get_runtime)
+    if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
+        podman unshare chown -R 0:0 "$isolated_home" 2>/dev/null || true
+    fi
+
     echo -e "Starting VDI Virtual Desktop inside ${CYAN}$target_name${NC}..."
     distrobox enter "$target_name" -- /usr/local/bin/agy-vdi "$@"
 }
@@ -755,6 +778,13 @@ cmd_enter() {
     if ! check_container_exists "$target_name"; then
         gum style --foreground 196 "Environment '$target_name' does not exist. Please install or build it first."
         exit 1
+    fi
+
+    local isolated_home="$HOME/.config/agy-box/home"
+    local runtime
+    runtime=$(get_runtime)
+    if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
+        podman unshare chown -R 0:0 "$isolated_home" 2>/dev/null || true
     fi
 
     echo -e "Entering ${CYAN}$target_name${NC}..."

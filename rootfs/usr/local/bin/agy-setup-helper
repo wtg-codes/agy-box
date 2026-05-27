@@ -9,7 +9,7 @@
 
 set -Eeuo pipefail
 
-VERSION="0.4.2"
+VERSION="0.5.0"
 
 # Colors for log prefixes
 RED='\033[0;31m'
@@ -255,7 +255,7 @@ run_audit_checks() {
 
         # Web/noVNC VDI Pack
         local missing_vdi=0
-        for cmd in Xvfb x11vnc openbox websockify; do
+        for cmd in Xvfb x11vnc icewm websockify; do
             if command -v "$cmd" &>/dev/null; then
                 echo "OK:VDI component '$cmd' is available."
             else
