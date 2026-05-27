@@ -554,13 +554,35 @@ cmd_install_official() {
         dbx_flags+=("--additional-flags" "-m $memory_limit")
     fi
 
-    gum style --foreground 39 "🚀 Pulling official image and creating Distrobox environment..."
-    distrobox create -i "$IMAGE_NAME" -n "$CONTAINER_NAME" --hostname "$CONTAINER_NAME" "${dbx_flags[@]}"
+    local log_file
+    log_file=$(mktemp)
+
+    if ! gum spin --spinner dot --title "Pulling official container image from GHCR..." -- "$runtime" pull "$IMAGE_NAME" >"$log_file" 2>&1; then
+        cat "$log_file"
+        rm -f "$log_file"
+        gum style --foreground 196 "❌ Error: Failed to pull official container image."
+        exit 1
+    fi
+
+    if ! gum spin --spinner dot --title "Creating Distrobox environment '$CONTAINER_NAME'..." -- distrobox create -i "$IMAGE_NAME" -n "$CONTAINER_NAME" --hostname "$CONTAINER_NAME" "${dbx_flags[@]}" --yes >"$log_file" 2>&1; then
+        cat "$log_file"
+        rm -f "$log_file"
+        gum style --foreground 196 "❌ Error: Failed to create Distrobox environment."
+        exit 1
+    fi
+    rm -f "$log_file"
 
     # Export CLI tools to host ~/.local/bin
     if distrobox enter "$CONTAINER_NAME" -- command -v distrobox-export &>/dev/null; then
-        gum style --foreground 39 "🔗 Exporting toolchain CLI 'agy' to host (~/.local/bin)..."
-        distrobox enter "$CONTAINER_NAME" -- distrobox-export --bin /usr/bin/agy --export-path "$HOME/.local/bin"
+        local log_file_export
+        log_file_export=$(mktemp)
+        if ! gum spin --spinner dot --title "Exporting toolchain CLI 'agy' to host (~/.local/bin)..." -- distrobox enter "$CONTAINER_NAME" -- distrobox-export --bin /usr/bin/agy --export-path "$HOME/.local/bin" >"$log_file_export" 2>&1; then
+            cat "$log_file_export"
+            rm -f "$log_file_export"
+            gum style --foreground 196 "❌ Error: Failed to export toolchain CLI."
+            exit 1
+        fi
+        rm -f "$log_file_export"
     fi
 
     # Clear setup_done flag so the setup helper runs on first interactive entry
@@ -603,8 +625,16 @@ cmd_build_dev() {
     local runtime
     runtime=$(get_runtime)
 
-    gum style --foreground 39 "🛠️  Building development image with $runtime (this may take a while)..."
-    "$runtime" build -t "$DEV_IMAGE_NAME" -f Containerfile .
+    local log_file
+    log_file=$(mktemp)
+
+    if ! gum spin --spinner dot --title "Building development image with $runtime (this may take a while)..." -- "$runtime" build -t "$DEV_IMAGE_NAME" -f Containerfile . >"$log_file" 2>&1; then
+        cat "$log_file"
+        rm -f "$log_file"
+        gum style --foreground 196 "❌ Error: Failed to build development image."
+        exit 1
+    fi
+    rm -f "$log_file"
 
     local dbx_flags=()
     local isolated_home="$HOME/.config/agy-box/home"
@@ -661,13 +691,28 @@ cmd_build_dev() {
         dbx_flags+=("--additional-flags" "-m $memory_limit")
     fi
 
-    gum style --foreground 39 "📦 Creating development Distrobox environment..."
-    distrobox create -i "$DEV_IMAGE_NAME" -n "$DEV_CONTAINER_NAME" --hostname "$DEV_CONTAINER_NAME" "${dbx_flags[@]}"
+    local log_file
+    log_file=$(mktemp)
+
+    if ! gum spin --spinner dot --title "Creating development Distrobox environment '$DEV_CONTAINER_NAME'..." -- distrobox create -i "$DEV_IMAGE_NAME" -n "$DEV_CONTAINER_NAME" --hostname "$DEV_CONTAINER_NAME" "${dbx_flags[@]}" --yes >"$log_file" 2>&1; then
+        cat "$log_file"
+        rm -f "$log_file"
+        gum style --foreground 196 "❌ Error: Failed to create development Distrobox environment."
+        exit 1
+    fi
+    rm -f "$log_file"
 
     # Export CLI tools to host ~/.local/bin
     if distrobox enter "$DEV_CONTAINER_NAME" -- command -v distrobox-export &>/dev/null; then
-        gum style --foreground 39 "🔗 Exporting toolchain CLI 'agy' to host (~/.local/bin)..."
-        distrobox enter "$DEV_CONTAINER_NAME" -- distrobox-export --bin /usr/bin/agy --export-path "$HOME/.local/bin"
+        local log_file_export
+        log_file_export=$(mktemp)
+        if ! gum spin --spinner dot --title "Exporting toolchain CLI 'agy' to host (~/.local/bin)..." -- distrobox enter "$DEV_CONTAINER_NAME" -- distrobox-export --bin /usr/bin/agy --export-path "$HOME/.local/bin" >"$log_file_export" 2>&1; then
+            cat "$log_file_export"
+            rm -f "$log_file_export"
+            gum style --foreground 196 "❌ Error: Failed to export toolchain CLI."
+            exit 1
+        fi
+        rm -f "$log_file_export"
     fi
 
     # Clear setup_done flag so the setup helper runs on first interactive entry
