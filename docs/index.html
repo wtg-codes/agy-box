@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>agy-box — Antigravity Dev Box</title>
+    <meta name="description" content="agy-box is the declarative Distrobox workspace container for AI agent development. Four Antigravity products, one container, zero setup friction.">
+    <meta name="theme-color" content="#0f172a">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📦</text></svg>">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@0.292.0/dist/umd/lucide.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+
+    <style>
+        body {
+            background: #0f172a;
+            background-image: radial-gradient(circle at top right, #1e293b, #0f172a);
+            background-attachment: fixed;
+        }
+        @keyframes pop {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.15); }
+            100% { transform: scale(1); }
+        }
+        .animate-pop { animation: pop 0.3s ease-in-out; }
+        @keyframes fade-in-up {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in { animation: fade-in-up 0.5s ease-out both; }
+        details summary::-webkit-details-marker { display: none; }
+        details summary { list-style: none; }
+        .mermaid svg { max-width: 100%; height: auto; }
+
+        @media print {
+            body { background: #0f172a !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .no-print { display: none !important; }
+            main { max-width: 100% !important; margin: 0 !important; }
+            .card-main { border: none !important; box-shadow: none !important; }
+            section { break-inside: avoid; }
+        }
+    </style>
+</head>
+<body class="min-h-screen font-sans text-slate-300 antialiased">
+    <main class="max-w-4xl mx-auto px-4 py-8 sm:py-12">
+        <div class="card-main bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-3xl shadow-2xl px-6 sm:px-10 py-10 space-y-12 animate-fade-in">
+
+            <!-- ═══════════════════════════════════════════════ -->
+            <!-- 1. HERO HEADER                                  -->
+            <!-- ═══════════════════════════════════════════════ -->
+            <header class="text-center relative">
+                <button onclick="window.print()" class="no-print absolute top-0 right-0 text-xs text-slate-500 hover:text-slate-300 border border-slate-700 rounded-lg px-3 py-1.5 transition-colors" title="Export as PDF">
+                    <i data-lucide="printer" class="w-3.5 h-3.5 inline-block mr-1 align-text-bottom"></i>PDF
+                </button>
+                <div class="flex justify-center mb-4">
+                    <div class="w-16 h-16 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center">
+                        <i data-lucide="package" class="w-8 h-8 text-indigo-400"></i>
+                    </div>
+                </div>
+                <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
+                    Antigravity Dev Box
+                </h1>
+                <p class="text-slate-400 mt-2 text-lg">agy and friends in a box of your choice!</p>
+                <p class="text-slate-500 text-sm mt-2">
+                    v0.5.0 · by <a href="https://github.com/wtg-codes" class="text-indigo-400 hover:text-indigo-300 transition-colors">wtg-codes</a>
+                </p>
+                <div class="flex flex-wrap justify-center gap-2 mt-4 no-print">
+                    <img src="https://img.shields.io/github/actions/workflow/status/wtg-codes/agy-box/ci.yml?branch=main&label=CI&logo=github&style=flat-square" alt="CI Status" class="h-5">
+                    <img src="https://img.shields.io/github/v/release/wtg-codes/agy-box?style=flat-square&color=6366f1&label=Release" alt="Release" class="h-5">
+                    <img src="https://img.shields.io/badge/Base-Ubuntu%2022.04%20LTS-E95420?style=flat-square&logo=ubuntu" alt="Container Base" class="h-5">
+                    <img src="https://img.shields.io/github/license/wtg-codes/agy-box?style=flat-square&color=22c55e" alt="License" class="h-5">
+                </div>
+                <div class="mt-8">
+                    <img src="2.png" alt="agy-box VDI Desktop" class="rounded-xl shadow-lg border border-slate-700 mx-auto max-w-full">
+                </div>
+            </header>
+
+            <!-- ═══════════════════════════════════════════════ -->
+            <!-- 2. QUICK START                                  -->
+            <!-- ═══════════════════════════════════════════════ -->
+            <section>
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
+                        <i data-lucide="zap" class="w-5 h-5 text-indigo-400"></i>
+                    </div>
+                    <h2 class="text-xl font-bold text-white">Quick Start</h2>
+                </div>
+                <p class="text-slate-400 mb-4">No clone required. Run this single command to get started:</p>
+                <div class="relative group">
+                    <pre class="bg-slate-900 rounded-lg p-4 pr-16 overflow-x-auto border border-slate-700"><code class="text-emerald-400 font-mono text-sm" id="install-cmd">bash -c "$(curl -fsSL https://raw.githubusercontent.com/wtg-codes/agy-box/main/agy-box-manager)"</code></pre>
+                    <button id="copy-btn" onclick="copyCommand()" class="absolute top-3 right-3 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-200 flex items-center gap-1.5 no-print">
+                        <i data-lucide="clipboard" class="w-3.5 h-3.5" id="copy-icon"></i>
+                        <span id="copy-text">Copy</span>
+                    </button>
+                </div>
+                <p class="text-slate-500 text-sm mt-3">Then select <span class="text-slate-300 font-medium">"Install CLI Globally"</span> from the interactive menu for permanent access via <code class="text-emerald-400 font-mono text-xs bg-slate-900 px-1.5 py-0.5 rounded">agy-box-manager</code>.</p>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════ -->
+            <!-- 3. PREREQUISITES                                -->
+            <!-- ═══════════════════════════════════════════════ -->
+            <section>
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
+                        <i data-lucide="clipboard-check" class="w-5 h-5 text-indigo-400"></i>
+                    </div>
+                    <h2 class="text-xl font-bold text-white">Before You Start</h2>
+                </div>
+                <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 space-y-3">
+                    <div class="flex items-start gap-3">
+                        <i data-lucide="box" class="w-5 h-5 text-indigo-400 mt-0.5 flex-shrink-0"></i>
+                        <div><span class="text-white font-medium">Container Runtime:</span> <span class="text-slate-400">Podman (recommended) or Docker</span></div>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <i data-lucide="layers" class="w-5 h-5 text-indigo-400 mt-0.5 flex-shrink-0"></i>
+                        <div><span class="text-white font-medium">Distrobox:</span> <span class="text-slate-400">Host-integrated container management</span></div>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <i data-lucide="palette" class="w-5 h-5 text-indigo-400 mt-0.5 flex-shrink-0"></i>
+                        <div><span class="text-white font-medium">Gum:</span> <span class="text-slate-400">Interactive TUI toolkit (auto-installed if missing)</span></div>
+                    </div>
+                </div>
+                <details class="mt-4 group">
+                    <summary class="cursor-pointer text-sm text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-2">
+                        <i data-lucide="chevron-right" class="w-4 h-4 transition-transform group-open:rotate-90"></i>
+                        Universal Blue / Bluefin Users
+                    </summary>
+                    <div class="mt-3 bg-slate-800/60 rounded-lg p-4 border border-slate-700 text-sm text-slate-400">
+                        Podman, Distrobox, and Homebrew come pre-configured on Universal Blue images. Just install <code class="text-emerald-400 font-mono bg-slate-900 px-1 py-0.5 rounded">gum</code>:
+                        <pre class="bg-slate-900 rounded-lg p-3 mt-2 border border-slate-700"><code class="text-emerald-400 font-mono text-sm">brew install gum</code></pre>
+                    </div>
+                </details>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════ -->
+            <!-- 4. WHAT'S IN THE BOX (Feature Cards)            -->
+            <!-- ═══════════════════════════════════════════════ -->
+            <section>
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="w-10 h-10 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
+                        <i data-lucide="gem" class="w-5 h-5 text-indigo-400"></i>
+                    </div>
+                    <h2 class="text-xl font-bold text-white">What's In The Box?</h2>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 hover:border-indigo-500/40 transition-colors">
+                        <div class="flex items-center gap-2.5 mb-2">
+                            <i data-lucide="home" class="w-5 h-5 text-indigo-400"></i>
+                            <h3 class="text-white font-semibold">Home Isolation</h3>
+                        </div>
+                        <p class="text-slate-400 text-sm">Isolated <code class="text-emerald-400 font-mono text-xs bg-slate-900 px-1 py-0.5 rounded">$HOME</code> directory — your host profile stays untouched. Changes in the box stay in the box.</p>
+                    </div>
+                    <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 hover:border-indigo-500/40 transition-colors">
+                        <div class="flex items-center gap-2.5 mb-2">
+                            <i data-lucide="monitor" class="w-5 h-5 text-indigo-400"></i>
+                            <h3 class="text-white font-semibold">GUI Forwarding</h3>
+                        </div>
+                        <p class="text-slate-400 text-sm">X11/Wayland socket forwarding with GPU passthrough. Graphical apps render natively on your host desktop.</p>
+                    </div>
+                    <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 hover:border-indigo-500/40 transition-colors">
+                        <div class="flex items-center gap-2.5 mb-2">
+                            <i data-lucide="key-round" class="w-5 h-5 text-indigo-400"></i>
+                            <h3 class="text-white font-semibold">Keyring Forwarding</h3>
+                        </div>
+                        <p class="text-slate-400 text-sm">D-Bus session bus forwarded from host. GNOME Keyring credentials accessible inside the container.</p>
+                    </div>
+                    <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 hover:border-indigo-500/40 transition-colors">
+                        <div class="flex items-center gap-2.5 mb-2">
+                            <i data-lucide="globe" class="w-5 h-5 text-indigo-400"></i>
+                            <h3 class="text-white font-semibold">VDI Web Desktop</h3>
+                        </div>
+                        <p class="text-slate-400 text-sm">noVNC HTML5 virtual desktop for headless servers. Full IceWM desktop accessible from any browser.</p>
+                    </div>
+                    <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 hover:border-indigo-500/40 transition-colors">
+                        <div class="flex items-center gap-2.5 mb-2">
+                            <i data-lucide="shield-check" class="w-5 h-5 text-indigo-400"></i>
+                            <h3 class="text-white font-semibold">Security Audits</h3>
+                        </div>
+                        <p class="text-slate-400 text-sm">Automated privilege boundary checks, port binding scans, and file permission hardening on first launch.</p>
+                    </div>
+                    <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 hover:border-indigo-500/40 transition-colors">
+                        <div class="flex items-center gap-2.5 mb-2">
+                            <i data-lucide="copy" class="w-5 h-5 text-indigo-400"></i>
+                            <h3 class="text-white font-semibold">Profile Seeding</h3>
+                        </div>
+                        <p class="text-slate-400 text-sm">One-time copy of Chrome, Antigravity, and IDE settings from your host. Seed once, diverge forever.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════ -->
+            <!-- 5. THE ANTIGRAVITY SUITE                        -->
+            <!-- ═══════════════════════════════════════════════ -->
+            <section>
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="w-10 h-10 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
+                        <i data-lucide="rocket" class="w-5 h-5 text-indigo-400"></i>
+                    </div>
+                    <h2 class="text-xl font-bold text-white">The Antigravity Suite</h2>
+                </div>
+                <p class="text-slate-400 mb-5 text-sm">Four integrated products, one container — the complete AI agent development environment:</p>
+                <div class="space-y-4">
+                    <!-- Agent UI -->
+                    <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 border-l-4 border-l-indigo-500">
+                        <div class="flex items-center gap-2.5 mb-2">
+                            <i data-lucide="sparkles" class="w-5 h-5 text-indigo-400"></i>
+                            <h3 class="text-white font-semibold">Google Antigravity (Agent UI)</h3>
+                        </div>
+                        <p class="text-slate-400 text-sm mb-3">Agent-first experience with canvas workspace, integrated terminal, course labs, and Gemini-powered AI assistant. The flagship product for agentic development.</p>
+                        <div class="flex flex-wrap gap-3 text-xs">
+                            <span class="bg-slate-900 text-slate-400 px-2 py-1 rounded font-mono">/usr/bin/antigravity</span>
+                            <span class="bg-slate-900 text-slate-400 px-2 py-1 rounded font-mono">Port 8080</span>
+                            <span class="bg-slate-900 text-slate-400 px-2 py-1 rounded font-mono">CDP → Chrome</span>
+                        </div>
+                    </div>
+                    <!-- IDE -->
+                    <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 border-l-4 border-l-violet-500">
+                        <div class="flex items-center gap-2.5 mb-2">
+                            <i data-lucide="code-2" class="w-5 h-5 text-violet-400"></i>
+                            <h3 class="text-white font-semibold">Antigravity IDE</h3>
+                        </div>
+                        <p class="text-slate-400 text-sm mb-3">VS Code-based classic developer environment with Antigravity extensions pre-loaded. For those who prefer a traditional IDE workflow.</p>
+                        <div class="flex flex-wrap gap-3 text-xs">
+                            <span class="bg-slate-900 text-slate-400 px-2 py-1 rounded font-mono">/usr/bin/antigravity-ide</span>
+                            <span class="bg-slate-900 text-slate-400 px-2 py-1 rounded font-mono">Stable 1.23.2</span>
+                        </div>
+                    </div>
+                    <!-- CLI -->
+                    <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 border-l-4 border-l-emerald-500">
+                        <div class="flex items-center gap-2.5 mb-2">
+                            <i data-lucide="terminal" class="w-5 h-5 text-emerald-400"></i>
+                            <h3 class="text-white font-semibold">Antigravity CLI (agy)</h3>
+                        </div>
+                        <p class="text-slate-400 text-sm mb-3">Command-line utility for lab management, submission, and agent status monitoring. Communicates with Agent UI via WebSocket.</p>
+                        <div class="flex flex-wrap gap-3 text-xs">
+                            <span class="bg-slate-900 text-slate-400 px-2 py-1 rounded font-mono">/usr/bin/agy</span>
+                            <span class="bg-slate-900 text-slate-400 px-2 py-1 rounded font-mono">WebSocket ↔ Agent UI</span>
+                        </div>
+                    </div>
+                    <!-- SDK -->
+                    <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 border-l-4 border-l-amber-500">
+                        <div class="flex items-center gap-2.5 mb-2">
+                            <i data-lucide="braces" class="w-5 h-5 text-amber-400"></i>
+                            <h3 class="text-white font-semibold">Antigravity SDK (Python)</h3>
+                        </div>
+                        <p class="text-slate-400 text-sm mb-3">Python package for programmatic agent orchestration. API calls to local Agent UI on Port 8080 with Google Cloud auth via ADC.</p>
+                        <div class="flex flex-wrap gap-3 text-xs">
+                            <span class="bg-slate-900 text-slate-400 px-2 py-1 rounded font-mono">pip3 install google-antigravity</span>
+                            <span class="bg-slate-900 text-slate-400 px-2 py-1 rounded font-mono">PyPI · v0.1.0</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════ -->
+            <!-- 6. ARCHITECTURE DIAGRAMS                        -->
+            <!-- ═══════════════════════════════════════════════ -->
+            <section>
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="w-10 h-10 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
+                        <i data-lucide="network" class="w-5 h-5 text-indigo-400"></i>
+                    </div>
+                    <h2 class="text-xl font-bold text-white">Architecture</h2>
+                </div>
+
+                <!-- Layered Architecture -->
+                <details class="group mb-4" open>
+                    <summary class="cursor-pointer text-sm font-medium text-white hover:text-indigo-300 transition-colors flex items-center gap-2 bg-slate-800/80 rounded-lg px-4 py-3 border border-slate-700">
+                        <i data-lucide="chevron-right" class="w-4 h-4 transition-transform group-open:rotate-90 text-indigo-400"></i>
+                        Layered Architecture — Host Integration Bridge
+                    </summary>
+                    <div class="mt-3 bg-slate-900 rounded-xl p-4 border border-slate-700 overflow-x-auto">
+                        <pre class="mermaid">
+graph TD
+    subgraph Host["Host OS (Immutable/Atomic)"]
+        UserHome["User Home (~/)"]
+        Display["Display Server (Wayland / X11)"]
+        DBus["D-Bus Session Bus (Keyring)"]
+        FlatpakChrome["Chrome Binary (Flatpak)"]
+    end
+
+    subgraph Bridge["Distrobox Bridge"]
+        MountHome["Home Volume Mount"]
+        ForwardSockets["Socket Forwarding"]
+    end
+
+    subgraph Sandbox["agy-box Container (Ubuntu)"]
+        BaseOS["Base OS Layer"]
+        KeyringClient["Keyring (libsecret)"]
+
+        subgraph Setup["Setup Assistant"]
+            SetupHelper["agy-setup-helper"]
+            ProfileHook["profile.d hook"]
+        end
+
+        subgraph Suite["Antigravity Suite"]
+            AgentUI["Agent UI"]
+            IDE["IDE"]
+            CLI["CLI (agy)"]
+            SDK["SDK (Python)"]
+            ChromeWrapper["Chrome Wrapper"]
+        end
+    end
+
+    UserHome <-->|"Mount"| MountHome
+    MountHome <--> BaseOS
+    DBus -->|"D-Bus Socket"| ForwardSockets
+    ForwardSockets --> KeyringClient
+    KeyringClient -->|"Decrypt"| ChromeWrapper
+    KeyringClient -->|"Decrypt"| AgentUI
+    KeyringClient -->|"Decrypt"| IDE
+    Display -->|"X11/Wayland"| ForwardSockets
+    ForwardSockets --> AgentUI
+    ForwardSockets --> IDE
+    ForwardSockets --> ChromeWrapper
+    AgentUI <-->|"WebSocket"| CLI
+    IDE <-->|"WebSocket"| CLI
+    SDK -->|"Port 8080"| AgentUI
+    AgentUI -->|"CDP"| ChromeWrapper
+    IDE -->|"CDP"| ChromeWrapper
+    ChromeWrapper -->|"Launch"| FlatpakChrome
+    ProfileHook -->|"First login"| SetupHelper
+    SetupHelper -->|"Write keys"| UserHome
+                        </pre>
+                    </div>
+                </details>
+
+                <!-- Product Deep Dive -->
+                <details class="group">
+                    <summary class="cursor-pointer text-sm font-medium text-white hover:text-indigo-300 transition-colors flex items-center gap-2 bg-slate-800/80 rounded-lg px-4 py-3 border border-slate-700">
+                        <i data-lucide="chevron-right" class="w-4 h-4 transition-transform group-open:rotate-90 text-indigo-400"></i>
+                        Product Communication — The Antigravity Suite
+                    </summary>
+                    <div class="mt-3 bg-slate-900 rounded-xl p-4 border border-slate-700 overflow-x-auto">
+                        <pre class="mermaid">
+flowchart LR
+    subgraph Sandbox["agy-box Container"]
+        SDK["Antigravity SDK (Python)"]
+        CLI["CLI (agy)"]
+        IDE["Antigravity IDE"]
+        AgentUI["Agent UI"]
+        Chrome["Google Chrome"]
+
+        SDK -->|"Port 8080 API"| AgentUI
+        CLI -->|"WebSocket"| AgentUI
+        AgentUI -->|"CDP"| Chrome
+        IDE -->|"CDP"| Chrome
+    end
+
+    subgraph External["External Services"]
+        GCS["Google Cloud / Gemini API"]
+        GH["GitHub API"]
+    end
+
+    AgentUI --> GCS
+    IDE --> GCS
+    SDK --> GCS
+    CLI --> GH
+                        </pre>
+                    </div>
+                </details>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════ -->
+            <!-- 7. VDI WEB DESKTOP                              -->
+            <!-- ═══════════════════════════════════════════════ -->
+            <section>
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
+                        <i data-lucide="layout-dashboard" class="w-5 h-5 text-indigo-400"></i>
+                    </div>
+                    <h2 class="text-xl font-bold text-white">VDI Web Desktop</h2>
+                </div>
+                <p class="text-slate-400 text-sm mb-4">For remote VMs, headless environments, or those who prefer a standalone GUI window. Full IceWM desktop with PCManFM, served over noVNC in your browser.</p>
+                <div class="mb-5">
+                    <img src="3.png" alt="agy-box VDI Desktop Applications" class="rounded-xl shadow-lg border border-slate-700 mx-auto max-w-full">
+                </div>
+                <div class="relative group mb-4">
+                    <pre class="bg-slate-900 rounded-lg p-4 pr-16 overflow-x-auto border border-slate-700"><code class="text-emerald-400 font-mono text-sm" id="vdi-cmd">agy-box-manager desktop</code></pre>
+                    <button onclick="copyText('vdi-cmd')" class="absolute top-3 right-3 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-200 no-print">
+                        <i data-lucide="clipboard" class="w-3.5 h-3.5 inline-block"></i>
+                    </button>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
+                    <div class="bg-slate-800/60 rounded-lg p-3 border border-slate-700">
+                        <p class="text-white font-medium text-sm">1920×1080</p>
+                        <p class="text-slate-500 text-xs">Default resolution</p>
+                    </div>
+                    <div class="bg-slate-800/60 rounded-lg p-3 border border-slate-700">
+                        <p class="text-white font-medium text-sm">LAN Access</p>
+                        <p class="text-slate-500 text-xs">Auto-detected IP</p>
+                    </div>
+                    <div class="bg-slate-800/60 rounded-lg p-3 border border-slate-700">
+                        <p class="text-white font-medium text-sm">Auto-Scaling</p>
+                        <p class="text-slate-500 text-xs">Fits your browser</p>
+                    </div>
+                </div>
+                <p class="text-slate-500 text-xs mt-3 text-center">
+                    Access at <code class="text-emerald-400 font-mono bg-slate-900 px-1 py-0.5 rounded">http://localhost:6080/vnc.html?autoconnect=true&amp;resize=scale</code>
+                </p>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════ -->
+            <!-- 8. SETUP ASSISTANT                              -->
+            <!-- ═══════════════════════════════════════════════ -->
+            <section>
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
+                        <i data-lucide="settings" class="w-5 h-5 text-indigo-400"></i>
+                    </div>
+                    <h2 class="text-xl font-bold text-white">First-Time Setup Assistant</h2>
+                </div>
+                <p class="text-slate-400 text-sm mb-4">On first launch, <code class="text-emerald-400 font-mono text-xs bg-slate-900 px-1 py-0.5 rounded">agy-setup-helper</code> walks you through automated environment checks:</p>
+                <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 space-y-3">
+                    <div class="flex items-center gap-3">
+                        <span class="w-6 h-6 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-xs font-bold flex-shrink-0">1</span>
+                        <span class="text-slate-300 text-sm">D-Bus &amp; Keyring Verification</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="w-6 h-6 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-xs font-bold flex-shrink-0">2</span>
+                        <span class="text-slate-300 text-sm">API Key Configuration (Gemini &amp; Antigravity)</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="w-6 h-6 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-xs font-bold flex-shrink-0">3</span>
+                        <span class="text-slate-300 text-sm">Browser Execution Health (Chrome wrapper)</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="w-6 h-6 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-xs font-bold flex-shrink-0">4</span>
+                        <span class="text-slate-300 text-sm">Git Identity Validation</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="w-6 h-6 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-xs font-bold flex-shrink-0">5</span>
+                        <span class="text-slate-300 text-sm">Security &amp; Developer Skills Pack Audits</span>
+                    </div>
+                </div>
+                <div class="mt-4 bg-indigo-500/10 border border-indigo-500/30 rounded-xl p-4">
+                    <div class="flex items-center gap-2 mb-1.5">
+                        <i data-lucide="sparkles" class="w-4 h-4 text-indigo-400"></i>
+                        <span class="text-indigo-300 font-semibold text-sm">New: Host Profile Seeding</span>
+                    </div>
+                    <p class="text-slate-400 text-sm">Optionally seed your container with Chrome bookmarks, cookies, and Antigravity settings from your host. One-time copy — changes in the box never affect the host.</p>
+                </div>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════ -->
+            <!-- 9. COMMAND REFERENCE                            -->
+            <!-- ═══════════════════════════════════════════════ -->
+            <section>
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
+                        <i data-lucide="book-open" class="w-5 h-5 text-indigo-400"></i>
+                    </div>
+                    <h2 class="text-xl font-bold text-white">Command Reference</h2>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm border-collapse">
+                        <thead>
+                            <tr class="bg-slate-800/80 text-left">
+                                <th class="px-4 py-3 text-slate-400 font-semibold rounded-tl-lg">Action</th>
+                                <th class="px-4 py-3 text-slate-400 font-semibold">Bash</th>
+                                <th class="px-4 py-3 text-slate-400 font-semibold rounded-tr-lg">Just</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-700">
+                            <tr class="hover:bg-slate-800/40 transition-colors">
+                                <td class="px-4 py-2.5 text-slate-300">Interactive Menu</td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">./agy-box-manager</code></td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy</code></td>
+                            </tr>
+                            <tr class="hover:bg-slate-800/40 transition-colors">
+                                <td class="px-4 py-2.5 text-slate-300">Install Official</td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">./agy-box-manager install</code></td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-install</code></td>
+                            </tr>
+                            <tr class="hover:bg-slate-800/40 transition-colors">
+                                <td class="px-4 py-2.5 text-slate-300">Build Dev</td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">./agy-box-manager dev</code></td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-box-dev</code></td>
+                            </tr>
+                            <tr class="hover:bg-slate-800/40 transition-colors">
+                                <td class="px-4 py-2.5 text-slate-300">Enter Official</td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">./agy-box-manager enter</code></td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-enter</code></td>
+                            </tr>
+                            <tr class="hover:bg-slate-800/40 transition-colors">
+                                <td class="px-4 py-2.5 text-slate-300">Enter Dev</td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">./agy-box-manager enter dev</code></td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-enter-dev</code></td>
+                            </tr>
+                            <tr class="hover:bg-slate-800/40 transition-colors">
+                                <td class="px-4 py-2.5 text-slate-300">VDI Desktop</td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">./agy-box-manager desktop</code></td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-desktop</code></td>
+                            </tr>
+                            <tr class="hover:bg-slate-800/40 transition-colors">
+                                <td class="px-4 py-2.5 text-slate-300">Clean Official</td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">./agy-box-manager clean</code></td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-clean</code></td>
+                            </tr>
+                            <tr class="hover:bg-slate-800/40 transition-colors">
+                                <td class="px-4 py-2.5 text-slate-300">Run Tests</td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">./scripts/test-box.sh</code></td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-test</code></td>
+                            </tr>
+                            <tr class="hover:bg-slate-800/40 transition-colors">
+                                <td class="px-4 py-2.5 text-slate-300">Install Globally</td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">./agy-box-manager install-global</code></td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-install-global</code></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════ -->
+            <!-- 10. CI/CD & SECURITY                            -->
+            <!-- ═══════════════════════════════════════════════ -->
+            <section>
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
+                        <i data-lucide="lock" class="w-5 h-5 text-indigo-400"></i>
+                    </div>
+                    <h2 class="text-xl font-bold text-white">CI/CD &amp; Supply Chain Security</h2>
+                </div>
+                <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 space-y-3">
+                    <div class="flex items-start gap-3">
+                        <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0"></i>
+                        <span class="text-slate-400 text-sm">Automated linting — ShellCheck + YAML lint on every push</span>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0"></i>
+                        <span class="text-slate-400 text-sm">Docker Buildx with GitHub Actions layer caching</span>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0"></i>
+                        <span class="text-slate-400 text-sm">SBOM generation in SPDX JSON format via Anchore</span>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0"></i>
+                        <span class="text-slate-400 text-sm">SLSA build provenance attestations on container images</span>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0"></i>
+                        <span class="text-slate-400 text-sm">Integration tests running inside Distrobox containers</span>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0"></i>
+                        <span class="text-slate-400 text-sm">Auto-release on version tags with SBOM attachments</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════ -->
+            <!-- 11. SOURCE CODE VIEWER                          -->
+            <!-- ═══════════════════════════════════════════════ -->
+            <section class="no-print">
+                <details class="group" id="source-details">
+                    <summary onclick="fetchSource()" class="cursor-pointer text-sm font-medium text-white hover:text-indigo-300 transition-colors flex items-center gap-2 bg-slate-800/80 rounded-lg px-4 py-3 border border-slate-700">
+                        <i data-lucide="chevron-right" class="w-4 h-4 transition-transform group-open:rotate-90 text-indigo-400"></i>
+                        <i data-lucide="file-code" class="w-4 h-4 text-slate-400"></i>
+                        View agy-box-manager Source Code
+                    </summary>
+                    <div class="mt-3 bg-slate-900 rounded-xl border border-slate-700 overflow-hidden">
+                        <div id="source-loading" class="p-6 text-center text-slate-500 text-sm">
+                            <i data-lucide="loader-2" class="w-5 h-5 animate-spin inline-block mr-2 align-text-bottom"></i>
+                            Loading source from GitHub...
+                        </div>
+                        <pre id="source-code" class="hidden p-4 overflow-x-auto max-h-96 text-xs"><code class="text-slate-400 font-mono"></code></pre>
+                    </div>
+                </details>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════ -->
+            <!-- 12. FOOTER                                      -->
+            <!-- ═══════════════════════════════════════════════ -->
+            <footer class="text-center text-slate-500 text-xs pt-4 border-t border-slate-700/50 space-y-1">
+                <p>
+                    📦 <span class="text-slate-400 font-medium">agy-box</span> · 
+                    <a href="https://github.com/wtg-codes/agy-box" class="text-indigo-400 hover:text-indigo-300 transition-colors">GitHub</a> · 
+                    <a href="https://github.com/wtg-codes/agy-box/blob/main/LICENSE" class="text-indigo-400 hover:text-indigo-300 transition-colors">MIT License</a> · 
+                    <a href="https://github.com/wtg-codes" class="text-indigo-400 hover:text-indigo-300 transition-colors">wtg-codes</a>
+                </p>
+                <p>Declarative Student Workspace for the wtgOS Cloud-Native Laboratory</p>
+            </footer>
+
+        </div>
+    </main>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <!-- JAVASCRIPT                                      -->
+    <!-- ═══════════════════════════════════════════════ -->
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        // Initialize Mermaid with dark theme
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'dark',
+            themeVariables: {
+                darkMode: true,
+                background: '#0f172a',
+                primaryColor: '#6366f1',
+                primaryTextColor: '#e2e8f0',
+                primaryBorderColor: '#4f46e5',
+                lineColor: '#64748b',
+                secondaryColor: '#1e293b',
+                tertiaryColor: '#334155',
+                fontFamily: 'ui-sans-serif, system-ui, sans-serif'
+            },
+            flowchart: {
+                htmlLabels: true,
+                curve: 'basis'
+            }
+        });
+
+        // Copy-to-clipboard for the main install command
+        function copyCommand() {
+            const text = document.getElementById('install-cmd').textContent;
+            copyToClipboard(text, 'copy-btn', 'copy-icon', 'copy-text');
+        }
+
+        // Generic copy-to-clipboard for any element
+        function copyText(elementId) {
+            const text = document.getElementById(elementId).textContent;
+            navigator.clipboard.writeText(text).catch(() => {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+            });
+        }
+
+        function copyToClipboard(text, btnId, iconId, textId) {
+            const btn = document.getElementById(btnId);
+            const icon = document.getElementById(iconId);
+            const label = document.getElementById(textId);
+
+            navigator.clipboard.writeText(text).then(() => {
+                triggerSuccess(btn, icon, label);
+            }).catch(() => {
+                // Fallback for older browsers
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                ta.style.position = 'fixed';
+                ta.style.left = '-9999px';
+                document.body.appendChild(ta);
+                ta.select();
+                try {
+                    document.execCommand('copy');
+                    triggerSuccess(btn, icon, label);
+                } catch (e) { /* ignore */ }
+                document.body.removeChild(ta);
+            });
+        }
+
+        function triggerSuccess(btn, icon, label) {
+            btn.classList.remove('bg-slate-700', 'hover:bg-slate-600');
+            btn.classList.add('bg-emerald-600', 'hover:bg-emerald-500', 'animate-pop');
+            icon.setAttribute('data-lucide', 'check');
+            if (label) label.textContent = 'Copied!';
+            lucide.createIcons();
+
+            setTimeout(() => {
+                btn.classList.remove('bg-emerald-600', 'hover:bg-emerald-500', 'animate-pop');
+                btn.classList.add('bg-slate-700', 'hover:bg-slate-600');
+                icon.setAttribute('data-lucide', 'clipboard');
+                if (label) label.textContent = 'Copy';
+                lucide.createIcons();
+            }, 2500);
+        }
+
+        // Lazy-load source code from GitHub
+        let sourceFetched = false;
+        function fetchSource() {
+            if (sourceFetched) return;
+            sourceFetched = true;
+
+            const url = 'https://raw.githubusercontent.com/wtg-codes/agy-box/main/agy-box-manager';
+            fetch(url)
+                .then(r => r.text())
+                .then(text => {
+                    const codeEl = document.querySelector('#source-code code');
+                    codeEl.textContent = text;
+                    document.getElementById('source-loading').classList.add('hidden');
+                    document.getElementById('source-code').classList.remove('hidden');
+                })
+                .catch(() => {
+                    document.getElementById('source-loading').innerHTML =
+                        '<span class="text-amber-400">Failed to load source. ' +
+                        '<a href="' + url + '" class="text-indigo-400 underline" target="_blank">View on GitHub</a></span>';
+                });
+        }
+    </script>
+</body>
+</html>
