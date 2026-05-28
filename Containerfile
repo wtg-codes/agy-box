@@ -47,7 +47,8 @@ RUN chmod +x /usr/local/bin/entrypoint.sh \
              /usr/local/bin/agy-setup-helper \
              /usr/local/bin/agy-vdi \
              /etc/profile.d/agy-setup-check.sh \
-             /etc/icewm/startup
+             /etc/X11/icewm/startup \
+             /etc/skel/Desktop/*.desktop
 
 # Dynamically link the correct version-specific wallpaper
 RUN VERSION=$(grep -oP '^VERSION="\K[^"]+' /usr/local/bin/agy-setup-helper) && \

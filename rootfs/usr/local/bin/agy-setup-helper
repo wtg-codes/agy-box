@@ -166,6 +166,193 @@ check_api_keys() {
 }
 export -f check_api_keys
 
+# --- Host Profile Seeding Functions ---
+
+# Detect the host's Chrome profile path (Flatpak first, then standard location)
+detect_host_chrome_profile() {
+    local host_home="${DISTROBOX_HOST_HOME:-}"
+    if [[ -z "$host_home" ]]; then
+        return 1
+    fi
+    # Flatpak Chrome (preferred — typically the user's active browser)
+    local flatpak_path="${host_home}/.var/app/com.google.Chrome/config/google-chrome"
+    if [[ -d "${flatpak_path}/Default" ]]; then
+        echo "$flatpak_path"
+        return 0
+    fi
+    # Standard Chrome installation
+    local standard_path="${host_home}/.config/google-chrome"
+    if [[ -d "${standard_path}/Default" ]]; then
+        echo "$standard_path"
+        return 0
+    fi
+    return 1
+}
+
+# Seed Chrome profile from host to container (one-time copy)
+seed_chrome_profile() {
+    local src="$1"
+    local dest="${HOME}/.config/google-chrome"
+
+    mkdir -p "$dest"
+
+    rsync -a --quiet \
+        --exclude='SingletonLock' \
+        --exclude='SingletonCookie' \
+        --exclude='SingletonSocket' \
+        --exclude='Crash Reports/' \
+        --exclude='BrowserMetrics/' \
+        --exclude='DeferredBrowserMetrics/' \
+        --exclude='CrashpadMetrics*' \
+        --exclude='GPUCache/' \
+        --exclude='GrShaderCache/' \
+        --exclude='GraphiteDawnCache/' \
+        --exclude='DawnGraphiteCache/' \
+        --exclude='DawnWebGPUCache/' \
+        --exclude='ShaderCache/' \
+        --exclude='.com.google.Chrome.*' \
+        "${src}/" "${dest}/"
+
+    # Remove any lock files that snuck through
+    rm -f "${dest}/SingletonLock" "${dest}/SingletonCookie" "${dest}/SingletonSocket" 2>/dev/null || true
+
+    return 0
+}
+
+# Seed Antigravity (Agent UI) settings from host to container
+seed_antigravity_profile() {
+    local src="$1"
+    local dest="$2"
+    local container_chrome_binary="/usr/bin/google-chrome-stable"
+
+    mkdir -p "$dest"
+
+    rsync -a --quiet \
+        --exclude='Crash Reports/' \
+        --exclude='Crashpad/' \
+        --exclude='CrashpadMetrics*' \
+        --exclude='GPUCache/' \
+        --exclude='GrShaderCache/' \
+        --exclude='GraphiteDawnCache/' \
+        --exclude='DawnGraphiteCache/' \
+        --exclude='DawnWebGPUCache/' \
+        --exclude='ShaderCache/' \
+        --exclude='Cache/' \
+        --exclude='CachedData/' \
+        --exclude='Code Cache/' \
+        --exclude='DiskCache/' \
+        --exclude='Service Worker/' \
+        --exclude='SingletonLock' \
+        --exclude='SingletonCookie' \
+        --exclude='SingletonSocket' \
+        --exclude='*.log' \
+        "${src}/" "${dest}/"
+
+    # Patch settings.json to point chromeBinaryPath to the container's Chrome
+    local settings_file="${dest}/User/settings.json"
+    if [[ -f "$settings_file" ]] && command -v jq &>/dev/null; then
+        local tmp_settings
+        tmp_settings=$(mktemp)
+        jq --arg chrome "$container_chrome_binary" \
+           '.["antigravity.browser.chromeBinaryPath"] = $chrome | .["window.titleBarStyle"] = "native"' \
+           "$settings_file" > "$tmp_settings" 2>/dev/null && \
+           mv "$tmp_settings" "$settings_file" || \
+           rm -f "$tmp_settings"
+    fi
+
+    # Remove any lock files
+    rm -f "${dest}/SingletonLock" "${dest}/SingletonCookie" "${dest}/SingletonSocket" 2>/dev/null || true
+
+    return 0
+}
+
+# Interactive profile seeding wizard stage
+run_profile_seeding() {
+    local seed_flag="$HOME/.config/agy-box/.profile_seeded"
+
+    # Skip if already seeded
+    if [[ -f "$seed_flag" ]]; then
+        return 0
+    fi
+
+    local host_home="${DISTROBOX_HOST_HOME:-}"
+    if [[ -z "$host_home" ]]; then
+        log_warn "DISTROBOX_HOST_HOME is not set. Skipping profile seeding."
+        return 0
+    fi
+
+    local any_seeded=false
+
+    gum style --foreground 99 --border normal --padding "0 2" --margin "1 0" \
+        "Host Profile Seeding" \
+        "" \
+        "Your container has its own isolated home directory." \
+        "You can optionally copy settings from your host to get started faster." \
+        "This is a one-time copy — changes in the box will NOT affect the host."
+
+    # --- Chrome ---
+    local host_chrome
+    host_chrome=$(detect_host_chrome_profile 2>/dev/null || true)
+    if [[ -n "$host_chrome" ]]; then
+        local chrome_label
+        if [[ "$host_chrome" == *".var/app/com.google.Chrome"* ]]; then
+            chrome_label="Flatpak Chrome"
+        else
+            chrome_label="Google Chrome"
+        fi
+        if gum confirm "Seed container Chrome from host ${chrome_label} profile?  (bookmarks, cookies, extensions, login sessions)"; then
+            if gum spin --spinner dot --title "Copying Chrome profile from host (this may take a moment)..." -- bash -c "$(declare -f seed_chrome_profile); seed_chrome_profile '$host_chrome'"; then
+                gum style --foreground 46 "✓ Chrome profile seeded from host."
+                any_seeded=true
+            else
+                gum style --foreground 196 "✗ Failed to seed Chrome profile."
+            fi
+        else
+            gum style --foreground 214 "Skipping Chrome profile seeding."
+        fi
+    fi
+
+    # --- Antigravity (Agent UI) ---
+    local host_antigravity="${host_home}/.config/Antigravity"
+    local container_antigravity="${HOME}/.config/Antigravity-box"
+    if [[ -d "${host_antigravity}/User" ]]; then
+        if gum confirm "Seed container Antigravity (Agent UI) settings from host?  (themes, extensions, workspace state)"; then
+            if gum spin --spinner dot --title "Copying Antigravity settings from host..." -- bash -c "$(declare -f seed_antigravity_profile); seed_antigravity_profile '$host_antigravity' '$container_antigravity'"; then
+                gum style --foreground 46 "✓ Antigravity settings seeded from host (chromeBinaryPath patched for container)."
+                any_seeded=true
+            else
+                gum style --foreground 196 "✗ Failed to seed Antigravity settings."
+            fi
+        else
+            gum style --foreground 214 "Skipping Antigravity settings seeding."
+        fi
+    fi
+
+    # --- Antigravity IDE ---
+    local host_antigravity_ide="${host_home}/.config/Antigravity-ide"
+    local container_antigravity_ide="${HOME}/.config/Antigravity-ide-box"
+    if [[ -d "${host_antigravity_ide}/User" ]]; then
+        if gum confirm "Seed container Antigravity IDE settings from host?  (themes, keybindings, extensions)"; then
+            if gum spin --spinner dot --title "Copying Antigravity IDE settings from host..." -- bash -c "$(declare -f seed_antigravity_profile); seed_antigravity_profile '$host_antigravity_ide' '$container_antigravity_ide'"; then
+                gum style --foreground 46 "✓ Antigravity IDE settings seeded from host (chromeBinaryPath patched for container)."
+                any_seeded=true
+            else
+                gum style --foreground 196 "✗ Failed to seed Antigravity IDE settings."
+            fi
+        else
+            gum style --foreground 214 "Skipping Antigravity IDE settings seeding."
+        fi
+    fi
+
+    # Write flag file so we don't prompt again
+    mkdir -p "$HOME/.config/agy-box"
+    if [[ "$any_seeded" == "true" ]]; then
+        echo "seeded_at=$(date -Iseconds)" > "$seed_flag"
+    else
+        echo "skipped_at=$(date -Iseconds)" > "$seed_flag"
+    fi
+}
+
 run_audit_checks() {
     local log_file="$1"
     local config_file="$HOME/.config/environment.d/agy-box.conf"
@@ -382,6 +569,9 @@ EOF
             gum style --foreground 214 "Skipping fallback keyring configuration."
         fi
     fi
+
+    # Host Profile Seeding (one-time offer to copy host Chrome/Antigravity settings)
+    run_profile_seeding
 
     # User input collection for API Keys
     if [[ "$api_code" -eq 1 ]]; then
