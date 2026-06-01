@@ -1,0 +1,42 @@
+{
+  "theme": "base",
+  "themeVariables": {
+    "fontFamily": "Outfit, Inter, system-ui, -apple-system, sans-serif",
+    "background": "transparent",
+    "primaryColor": "#1e1b4b",
+    "primaryTextColor": "#f8fafc",
+    "primaryBorderColor": "#6366f1",
+    "lineColor": "#64748b",
+    "secondaryColor": "#064e3b",
+    "tertiaryColor": "#78350f",
+    "actorBorder": "#4f46e5",
+    "actorBkg": "#1e1b4b",
+    "actorTextColor": "#ffffff",
+    "signalColor": "#6366f1",
+    "signalTextColor": "#cbd5e1",
+    "labelBkgColor": "#1e293b",
+    "labelTextColor": "#cbd5e1",
+    "loopBkgColor": "#1e1b4b",
+    "noteBkgColor": "#451a03",
+    "noteBorderColor": "#d97706",
+    "noteTextColor": "#fef3c7"
+  },
+  "flowchart": {
+    "htmlLabels": true,
+    "useMaxWidth": true,
+    "curve": "basis",
+    "padding": 15
+  },
+  "sequence": {
+    "htmlLabels": true,
+    "useMaxWidth": true,
+    "showSequenceNumbers": true,
+    "actorMargin": 50,
+    "width": 150,
+    "height": 65,
+    "boxMargin": 10,
+    "boxTextMargin": 5,
+    "noteMargin": 10,
+    "messageMargin": 35
+  }
+}

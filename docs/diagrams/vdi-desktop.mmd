@@ -1,0 +1,27 @@
+graph TD
+    subgraph Browser ["Host Web Browser"]
+        noVNC["fa:fa-globe noVNC HTML5 Client <br> (http://localhost:6080/vnc.html)"]
+    end
+
+    subgraph Sandbox ["agy-box Container (Headless)"]
+        Websockify["fa:fa-network-wired websockify <br> (Port 6080)"]
+        X11VNC["fa:fa-desktop x11vnc <br> (Port 5900, 127.0.0.1)"]
+        Openbox["fa:fa-window-restore Openbox Window Manager <br> (DISPLAY=:99)"]
+        Xvfb["fa:fa-tv Xvfb virtual display <br> (DISPLAY=:99)"]
+        IDE["fa:fa-window-restore Google Antigravity (Agent UI) <br> (renders inside Xvfb)"]
+        Chrome["fa:fa-chrome Google Chrome <br> (renders inside Xvfb)"]
+    end
+
+    noVNC <-->|"WebSocket Stream"| Websockify
+    Websockify <-->|"RFB Loop"| X11VNC
+    X11VNC -->|"Inspect frame buffer"| Xvfb
+    Openbox -->|"Manage Windows"| Xvfb
+    IDE -->|"Draw GUI"| Xvfb
+    Chrome -->|"Draw GUI"| Xvfb
+
+    %% Styling
+    classDef client client;
+    classDef server sandbox;
+
+    class noVNC client;
+    class Websockify,X11VNC,Openbox,Xvfb,IDE,Chrome server;
