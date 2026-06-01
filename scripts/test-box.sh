@@ -124,7 +124,7 @@ if "${RUNTIME}" ps -a --format '{{.Names}}' 2>/dev/null | grep -qw "$CONTAINER_N
         distrobox rm --yes "$CONTAINER_NAME" >/dev/null || true
     fi
     if "${RUNTIME}" ps -a --format '{{.Names}}' 2>/dev/null | grep -qw "$CONTAINER_NAME"; then
-        "$rt" rm -f "$CONTAINER_NAME" >/dev/null || true
+        "${RUNTIME}" rm -f "$CONTAINER_NAME" >/dev/null || true
     fi
 fi
 
