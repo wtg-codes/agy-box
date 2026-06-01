@@ -123,59 +123,28 @@
 | **Heroicons** | 300+ | Tailwind ecosystem | MIT |
 | **Terrastruct Icons** | AWS/GCP/Azure/dev | Architecture diagrams (D2 native) | MIT |
 
-### Recommended Strategy: Dual-Layer Approach
+### Recommended Strategy: Infographic-Style Compiled Diagrams
 
 > [!IMPORTANT]
-> **Source of truth = Mermaid (`.mmd` files)** — always. The polished visual renders are a *derived output*.
+> **Source of truth = Mermaid (`.mmd` files)** — always. Polished visual renderings are committed and updated via CI.
 
 ```mermaid
 graph LR
     A[".mmd source files"] --> B["GitHub Markdown<br>(native Mermaid render)"]
-    A --> C["mmdc CI pipeline<br>(branded SVG/PNG)"]
-    C --> D["docs/diagrams/<br>polished renders"]
-    D --> E["GH Pages / README<br>(embedded images)"]
+    A --> C["compile-diagrams.yml CI pipeline<br>(mmdc + config.json + style.css)"]
+    C --> D["docs/diagrams/rendered/<br>high-fidelity SVG/PNG"]
+    D --> E["GH Pages / README / docs<br>(embedded styled images)"]
 ```
 
 #### Layer 1: Mermaid Source (`.mmd` files)
-- Extract all inline Mermaid blocks into standalone `docs/diagrams/src/*.mmd` files
-- These are the **editable source of truth**
-- GitHub renders them natively in Markdown (basic styling, no icons)
-- Apply consistent `classDef` theming across all diagrams (the agy-box ones already have a good color scheme)
+- Maintain `.mmd` files under `docs/diagrams/` (or `docs/diagrams/src/`) as the editable source of truth.
+- GitHub renders them natively in Markdown (basic styling).
 
-#### Layer 2: Polished Renders (CI-generated SVGs)
-- **Tool**: `@mermaid-js/mermaid-cli` (`mmdc`) — stays in the Mermaid ecosystem, no new language to learn
-- **Theme**: Custom `config.json` with branded `themeVariables` (indigo/slate palette matching the existing `index.html`)
-- **Icons**: Font Awesome inline icons (`fa:fa-name`) for key nodes — this is the **only icon method that works reliably in mmdc without complex Puppeteer setup**
-- **Output**: SVG files committed to `docs/diagrams/rendered/`
-- **CI**: GitHub Action on push that auto-renders changed `.mmd` → `.svg` and commits
-
-#### Which Icons Make Sense Where
-
-| Diagram | Icon Candidates | Source |
-|---------|----------------|--------|
-| System Topology | `fa:fa-desktop` (Host), `fa:fa-cube` (Container), `fa:fa-plug` (Bridge) | Font Awesome |
-| Suite Communication | `fa:fa-robot` (Agent UI), `fa:fa-code` (IDE), `fa:fa-terminal` (CLI), `fa:fa-cloud` (Google Cloud) | Font Awesome |
-| D-Bus Keyring | `fa:fa-lock` (Keyring), `fa:fa-key` (Credentials), `fa:fa-exchange` (D-Bus) | Font Awesome |
-| VDI Web Desktop | `fa:fa-tv` (Display), `fa:fa-globe` (Browser), `fa:fa-window-maximize` (Window Manager) | Font Awesome |
-| Installer Overview | `fa:fa-download` (Install), `fa:fa-beer` (Homebrew), `fa:fa-box` (Container) | Font Awesome |
-
-> [!TIP]
-> **Future upgrade path**: If D2 matures or we outgrow FA icons, we can add a D2-based rendering layer alongside Mermaid without changing the source. D2 accepts any SVG URL as an icon, giving access to Simple Icons, Lucide, etc. with zero lock-in.
-
-#### Proposed CI Workflow (`render-diagrams.yml`)
-
-```
-on:
-  push:
-    paths: ['docs/diagrams/src/**/*.mmd']
-
-jobs:
-  render:
-    steps:
-      - checkout
-      - npx mmdc -i <file>.mmd -o <file>.svg -c docs/diagrams/config.json
-      - git-auto-commit "Auto-render diagrams"
-```
+#### Layer 2: Infographic-Style Compiled Diagrams
+- **Theme Configuration**: Implement theme configuration (`config.json` and custom CSS `style.css`) under `docs/diagrams/` to customize colors, fonts (like Outfit or Inter), rounded cards, gradients, and icons.
+- **Output Directory**: Place compiled/rendered high-fidelity visual files (PNG/SVG) under `docs/diagrams/rendered/`.
+- **CI/CD Automation**: Configure or update the CI/CD pipeline (e.g. `compile-diagrams.yml`) to automatically compile the `.mmd` files to high-fidelity PNG/SVG using `mmdc` and commit them back to the repository on updates.
+- **Documentation Integration**: Reference the rendered PNG/SVG files under `docs/diagrams/rendered/` in all markdown documents (`README.md`, `architecture.md`) and HTML pages (`index.html`) to display the polished infographic-style renderings.
 
 #### Proposed Directory Structure
 
@@ -183,6 +152,7 @@ jobs:
 docs/
 ├── diagrams/
 │   ├── config.json           # Branded Mermaid theme config
+│   ├── style.css             # Custom CSS rules for rounded cards, gradients, fonts
 │   ├── src/
 │   │   ├── system-topology.mmd
 │   │   ├── setup-assistant.mmd
@@ -192,14 +162,20 @@ docs/
 │   │   └── layered-architecture.mmd
 │   └── rendered/
 │       ├── system-topology.svg
+│       ├── system-topology.png
 │       ├── setup-assistant.svg
+│       ├── setup-assistant.png
 │       ├── dbus-keyring.svg
+│       ├── dbus-keyring.png
 │       ├── vdi-desktop.svg
+│       ├── vdi-desktop.png
 │       ├── suite-communication.svg
-│       └── layered-architecture.svg
-├── architecture.md           # References rendered SVGs + links to .mmd source
-├── SETUP.md
-└── index.html                # Embeds rendered SVGs instead of inline Mermaid
+│       ├── suite-communication.png
+│       ├── layered-architecture.svg
+│       └── layered-architecture.png
+├── architecture.md           # References rendered PNG/SVG files in docs/diagrams/rendered/
+├── SETUP.md                  # References rendered PNG/SVG files in docs/diagrams/rendered/
+└── index.html                # References rendered PNG/SVG files in docs/diagrams/rendered/
 ```
 
 ---
@@ -436,8 +412,8 @@ graph TD
 | 1 | New repo name: `agy-easy-install` | 🟡 Proposed | Awaiting user confirmation |
 | 2 | Kill Ink variant | ✅ Done | Local folder deleted, archive GitHub repo |
 | 3 | Mermaid as diagram source of truth | ✅ Decided | Extract to `.mmd` files, keep editable |
-| 4 | Diagram rendering tool: `mmdc` (Mermaid CLI) | 🟡 Proposed | Simplest path, FA icons, CI-friendly |
-| 5 | Icon library: Font Awesome (inline) | 🟡 Proposed | Only option that works reliably in mmdc without complex setup |
+| 4 | Diagram compilation tool: `mmdc` (Mermaid CLI) | ✅ Decided | Use `mmdc` in `compile-diagrams.yml` to auto-compile `.mmd` to PNG/SVG |
+| 5 | Theme configuration & CSS | ✅ Decided | Use `config.json` and custom `style.css` under `docs/diagrams/` for rounded cards, fonts, and gradients |
 | 6 | Old repo strategy: deprecate + archive | ✅ Decided | Banner + redirect + archive |
 | 7 | agy-box-manager pinning strategy | ❓ Open | Release tag vs main — needs decision |
 | 8 | versions.json scope expansion | ❓ Open | Should it track agy-box versions? |
