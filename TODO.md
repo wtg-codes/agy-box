@@ -36,9 +36,8 @@
 - [ ] Expand `SETUP.md` troubleshooting FAQ with 10+ common issues
 
 ### Workstream 2: Visual Diagrams
-- [ ] Extract all inline Mermaid blocks to standalone files under `docs/diagrams/src/`
-- [ ] Style diagrams using custom brand variables config
-- [ ] Set up `mmdc` script/CI workflow to auto-render `.mmd` -> `.svg` on push
+- [x] Migrate to native `.mmd` files directly under `docs/diagrams/` and remove compiled `.svg` files
+- [x] Embed native Mermaid blocks in Markdown and index.html
 
 ### Workstream 3 & 4: Downstream & Rename Integration
 - [ ] Update any references pointing to the old `agv-easy-install` name to the new `agy-easy-install` name

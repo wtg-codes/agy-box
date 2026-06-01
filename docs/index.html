@@ -271,7 +271,73 @@
                         Layered Architecture — Host Integration Bridge
                     </summary>
                     <div class="mt-3 bg-slate-900 rounded-xl p-4 border border-slate-700 overflow-x-auto">
-                        <img src="diagrams/system-topology.svg" alt="Layered Architecture — Host Integration Bridge" class="w-full max-w-4xl mx-auto rounded-lg">
+                        <div class="mermaid w-full max-w-4xl mx-auto rounded-lg">
+graph TD
+    subgraph Host ["Host OS (Immutable/Atomic e.g., Bluefin, Silverblue)"]
+        UserHome["User Home (~/) &lt;br&gt; stores .config/environment.d/agy-box.conf"]
+        Display["Display Server (Wayland / X11)"]
+        DBus["D-Bus Session Bus &lt;br&gt; (Secret Service / GNOME Keyring)"]
+        FlatpakChrome["Un-sandboxed Chrome Binary &lt;br&gt; (/var/lib/flatpak/.../chrome)"]
+    end
+
+    subgraph Bridge ["Distrobox Bridge"]
+        MountHome["Home Volume Mount"]
+        ForwardSockets["Socket Forwarding (X11/Wayland/DBUS)"]
+    end
+
+    subgraph Sandbox ["agy-box Sandbox Container (Ubuntu Toolbox Base)"]
+        BaseOS["Base OS Layer (Ubuntu)"]
+        KeyringClient["Keyring integration (libsecret-1-0)"]
+        
+        subgraph Setup ["First-Time Setup Assistant"]
+            SetupHelper["agy-setup-helper &lt;br&gt; (checks API Keys, Keyring, Git, Chrome)"]
+            ProfileHook["/etc/profile.d/agy-setup-check.sh"]
+        end
+
+        subgraph Suite ["Antigravity Developer Suite"]
+            AgentUI["Google Antigravity (Agent UI) &lt;br&gt; (canvas workspace, terminal, course labs)"]
+            IDE["Antigravity IDE &lt;br&gt; (VS Code-based developer environment)"]
+            CLI["Antigravity CLI (agy) &lt;br&gt; (WebSocket loops, lab submission)"]
+            SDK["Antigravity Python SDK (google-antigravity) &lt;br&gt; (GCS auth, local Port 8080 API)"]
+            ChromeWrapper["Google Chrome &lt;br&gt; (google-chrome-stable wrapper)"]
+        end
+    end
+
+    UserHome &lt;--&gt;|"Mounts to /var/home/wtg"| MountHome
+    MountHome &lt;--&gt; BaseOS
+    
+    DBus --&gt;|"Forward D-Bus Socket"| ForwardSockets
+    ForwardSockets --&gt; KeyringClient
+    KeyringClient --&gt;|"Decrypt tokens"| ChromeWrapper
+    KeyringClient --&gt;|"Decrypt tokens"| AgentUI
+    KeyringClient --&gt;|"Decrypt tokens"| IDE
+    
+    Display --&gt;|"X11 / Wayland Socket Forwarding"| ForwardSockets
+    ForwardSockets --&gt; AgentUI
+    ForwardSockets --&gt; IDE
+    ForwardSockets --&gt; ChromeWrapper
+    
+    AgentUI &lt;--&gt;|"WebSocket Loop"| CLI
+    IDE &lt;--&gt;|"WebSocket Loop"| CLI
+    SDK --&gt;|"Local API calls (Port 8080)"| AgentUI
+    AgentUI --&gt;|"Chrome DevTools Protocol (CDP)"| ChromeWrapper
+    IDE --&gt;|"Chrome DevTools Protocol (CDP)"| ChromeWrapper
+    ChromeWrapper --&gt;|"Launch un-sandboxed"| FlatpakChrome
+    
+    ProfileHook --&gt;|"Trigger on first bash login"| SetupHelper
+    SetupHelper --&gt;|"Verify & write keys"| UserHome
+
+    %% Modern Theme Styling
+    classDef host fill:#e0f2fe,stroke:#0284c7,stroke-width:2px,color:#0369a1;
+    classDef bridge fill:#fffbeb,stroke:#d97706,stroke-width:2px,color:#b45309;
+    classDef sandbox fill:#f0fdf4,stroke:#16a34a,stroke-width:2px,color:#15803d;
+    classDef setup fill:#faf5ff,stroke:#9333ea,stroke-width:2px,color:#7e22ce;
+
+    class UserHome,Display,DBus,FlatpakChrome host;
+    class MountHome,ForwardSockets bridge;
+    class BaseOS,KeyringClient,IDE,CLI,SDK,ChromeWrapper sandbox;
+    class SetupHelper,ProfileHook setup;
+                        </div>
                     </div>
                 </details>
 
@@ -282,7 +348,38 @@
                         Product Communication — The Antigravity Suite
                     </summary>
                     <div class="mt-3 bg-slate-900 rounded-xl p-4 border border-slate-700 overflow-x-auto">
-                        <img src="diagrams/product-communication.svg" alt="Product Communication — The Antigravity Suite" class="w-full max-w-4xl mx-auto rounded-lg">
+                        <div class="mermaid w-full max-w-4xl mx-auto rounded-lg">
+flowchart LR
+    subgraph Sandbox ["agy-box Distrobox Container"]
+        SDK["Antigravity Python SDK&lt;br&gt;('google-antigravity')"]
+        CLI["Antigravity CLI&lt;br&gt;('agy')"]
+        IDE["Antigravity IDE&lt;br&gt;('/usr/bin/antigravity-ide')"]
+        AgentUI["Google Antigravity (Agent UI)&lt;br&gt;('/usr/bin/antigravity')"]
+        Chrome["Google Chrome&lt;br&gt;('google-chrome-stable')"]
+        
+        SDK --&gt;|"Local Host API Calls (Port 8080)"| AgentUI
+        CLI --&gt;|"WebSocket Communication"| AgentUI
+        AgentUI --&gt;|"Chrome DevTools Protocol (CDP)"| Chrome
+        IDE --&gt;|"Chrome DevTools Protocol (CDP)"| Chrome
+    end
+    
+    subgraph External ["External Services"]
+        GCS["Google Cloud Services (Vertex / Gemini API)"]
+        GH["GitHub API (Lab Submission)"]
+    end
+
+    AgentUI --&gt; GCS
+    IDE --&gt; GCS
+    SDK --&gt; GCS
+    CLI --&gt; GH
+
+    %% Styling
+    classDef container fill:#f0fdf4,stroke:#16a34a,stroke-width:2px,color:#15803d;
+    classDef external fill:#f3f4f6,stroke:#4b5563,stroke-width:2px,color:#374151;
+
+    class SDK,CLI,IDE,AgentUI,Chrome container;
+    class GCS,GH external;
+                        </div>
                     </div>
                 </details>
             </section>
