@@ -23,7 +23,7 @@ rm k9s_Linux_amd64.tar.gz checksums.sha256 k9s
 
 # Install helm
 HELM_VERSION="v3.21.0"
-HELM_SHA256="0e3c20f221b74285e0db235e1837af340dd0957528dc701cffc26b2f8cc42fdd"
+HELM_SHA256="0093eb572e3d2380f094df162ddb525e219249de88957afe24cfbb19632acd36"
 curl -sSLO --http1.1 --connect-timeout 5 --retry 5 --retry-delay 2 "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz"
 echo "${HELM_SHA256}  helm-${HELM_VERSION}-linux-amd64.tar.gz" | sha256sum -c -
 tar -xzf "helm-${HELM_VERSION}-linux-amd64.tar.gz" linux-amd64/helm
