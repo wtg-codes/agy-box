@@ -2,6 +2,8 @@
 # scripts/assert-box.sh - Asserts that the toolchain is healthy inside the container.
 set -euo pipefail
 
+export PATH="$HOME/.local/bin:$PATH"
+
 RED="\033[0;31m"
 GREEN="\033[0;32m"
 NC="\033[0m"
@@ -42,8 +44,8 @@ assert_cmd "Antigravity SDK" "python3" "python3 -c \"import google.antigravity\"
 
 # Assert Desktop Apps (Checking path & permissions)
 assert_cmd "Google Chrome" "google-chrome-stable" "google-chrome-stable --version" || errors=$((errors+1))
-assert_cmd "Google Antigravity (Agent UI)" "antigravity" "test -x /usr/bin/antigravity" || errors=$((errors+1))
-assert_cmd "Antigravity IDE" "antigravity-ide" "test -x /usr/bin/antigravity-ide" || errors=$((errors+1))
+assert_cmd "Google Antigravity (Agent UI)" "antigravity" "test -x \"$HOME/.local/bin/antigravity\" && test -d \"$HOME/.local/share/antigravity\"" || errors=$((errors+1))
+assert_cmd "Antigravity IDE" "antigravity-ide" "test -x \"$HOME/.local/bin/antigravity-ide\" && test -d \"$HOME/.local/share/antigravity-ide\"" || errors=$((errors+1))
 assert_cmd "IceWM Startup Script" "icewm-session" "test -x /etc/X11/icewm/startup" || errors=$((errors+1))
 assert_cmd "IceWM Preferences" "icewm-session" "test -f /etc/X11/icewm/preferences" || errors=$((errors+1))
 

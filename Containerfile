@@ -4,42 +4,17 @@ LABEL org.opencontainers.image.description="Declarative Student Workspace for wt
 
 ENV PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin
 
+ARG TARGETARCH
+
 # 1. Install agent dependencies
 COPY scripts/install-agent-deps.sh /tmp/
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
-    /tmp/install-agent-deps.sh && rm /tmp/install-agent-deps.sh
+    /tmp/install-agent-deps.sh "${TARGETARCH}" && rm /tmp/install-agent-deps.sh
 
-# 2. Install Google Antigravity (Agent UI)
-COPY scripts/install-antigravity.sh /tmp/
-RUN /tmp/install-antigravity.sh && rm /tmp/install-antigravity.sh
-
-# 2b. Install Antigravity IDE (Stable 1.23.2)
-COPY scripts/install-antigravity-ide.sh /tmp/
-RUN /tmp/install-antigravity-ide.sh && rm /tmp/install-antigravity-ide.sh
-
-# 3. Install Antigravity CLI
-COPY scripts/install-antigravity-cli.sh /tmp/
-RUN /tmp/install-antigravity-cli.sh && rm /tmp/install-antigravity-cli.sh
-
-# 4. Install Antigravity SDK
-COPY scripts/install-antigravity-sdk.sh /tmp/
-RUN --mount=type=cache,target=/root/.cache/pip \
-    /tmp/install-antigravity-sdk.sh && rm /tmp/install-antigravity-sdk.sh
-
-# 5. Install Google ADK
-COPY scripts/install-google-adk.sh /tmp/
-RUN --mount=type=cache,target=/root/.cache/pip \
-    /tmp/install-google-adk.sh && rm /tmp/install-google-adk.sh
-
-# 6. Install CNCF Tooling
+# 2. Install CNCF Tooling
 COPY scripts/install-tools.sh /tmp/
-RUN /tmp/install-tools.sh && rm /tmp/install-tools.sh
-
-# 7. Install Gemini CLI
-COPY scripts/install-gemini-cli.sh /tmp/
-RUN --mount=type=cache,target=/root/.npm \
-    /tmp/install-gemini-cli.sh && rm /tmp/install-gemini-cli.sh
+RUN /tmp/install-tools.sh "${TARGETARCH}" && rm /tmp/install-tools.sh
 
 # 8. Copy rootfs and configure entrypoint
 COPY rootfs/ /
