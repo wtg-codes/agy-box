@@ -1,4 +1,4 @@
-FROM ghcr.io/ublue-os/ubuntu-toolbox:latest
+FROM ghcr.io/ublue-os/ubuntu-toolbox@sha256:3f785ee330215c50b5144a78b0edb846919feed9ad8cdf1326de04a70732c1b5
 
 LABEL org.opencontainers.image.description="Declarative Student Workspace for wtgOS Cloud-Native Laboratory"
 
@@ -50,6 +50,8 @@ RUN chmod +x /usr/local/bin/entrypoint.sh \
              /etc/X11/icewm/startup \
              /etc/skel/Desktop/*.desktop
 
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 # Dynamically link the correct version-specific wallpaper
 RUN VERSION=$(grep -oP '^VERSION="\K[^"]+' /usr/local/bin/agy-setup-helper) && \
     major=$(echo "$VERSION" | cut -d. -f1) && \
@@ -59,7 +61,7 @@ RUN VERSION=$(grep -oP '^VERSION="\K[^"]+' /usr/local/bin/agy-setup-helper) && \
         ln -sf "${WALLPAPER_NAME}" /usr/share/agy-box/wallpaper.png; \
     else \
         # Fallback to the latest available wallpaper if version-specific one doesn't exist
-        LATEST_WALLPAPER=$(ls -v /usr/share/agy-box/wallpaper-v*.png 2>/dev/null | tail -n 1) && \
+        LATEST_WALLPAPER=$(find /usr/share/agy-box/ -maxdepth 1 -name "wallpaper-v*.png" | sort -V | tail -n 1) && \
         if [ -n "$LATEST_WALLPAPER" ]; then \
             ln -sf "$(basename "$LATEST_WALLPAPER")" /usr/share/agy-box/wallpaper.png; \
         fi \

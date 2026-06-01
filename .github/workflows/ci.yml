@@ -34,9 +34,27 @@ jobs:
         run: |
           find . -type f \( -name "*.sh" -o -name "agy-box-manager" \) -print0 | xargs -0 shellcheck
 
+      - name: Lint Containerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Containerfile
+
+  test-scripts:
+    name: Run Script Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Bats
+        run: npm install bats
+
+      - name: Run Bats Tests
+        run: ./node_modules/.bin/bats tests/
+
   build-image:
     name: Build Image
-    needs: lint
+    needs: [lint, test-scripts]
     runs-on: ubuntu-latest
     permissions:
       contents: read
