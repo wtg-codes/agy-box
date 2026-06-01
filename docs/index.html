@@ -271,58 +271,7 @@
                         Layered Architecture — Host Integration Bridge
                     </summary>
                     <div class="mt-3 bg-slate-900 rounded-xl p-4 border border-slate-700 overflow-x-auto">
-                        <pre class="mermaid">
-graph TD
-    subgraph Host["Host OS (Immutable/Atomic)"]
-        UserHome["User Home (~/)"]
-        Display["Display Server (Wayland / X11)"]
-        DBus["D-Bus Session Bus (Keyring)"]
-        FlatpakChrome["Chrome Binary (Flatpak)"]
-    end
-
-    subgraph Bridge["Distrobox Bridge"]
-        MountHome["Home Volume Mount"]
-        ForwardSockets["Socket Forwarding"]
-    end
-
-    subgraph Sandbox["agy-box Container (Ubuntu)"]
-        BaseOS["Base OS Layer"]
-        KeyringClient["Keyring (libsecret)"]
-
-        subgraph Setup["Setup Assistant"]
-            SetupHelper["agy-setup-helper"]
-            ProfileHook["profile.d hook"]
-        end
-
-        subgraph Suite["Antigravity Suite"]
-            AgentUI["Agent UI"]
-            IDE["IDE"]
-            CLI["CLI (agy)"]
-            SDK["SDK (Python)"]
-            ChromeWrapper["Chrome Wrapper"]
-        end
-    end
-
-    UserHome <-->|"Mount"| MountHome
-    MountHome <--> BaseOS
-    DBus -->|"D-Bus Socket"| ForwardSockets
-    ForwardSockets --> KeyringClient
-    KeyringClient -->|"Decrypt"| ChromeWrapper
-    KeyringClient -->|"Decrypt"| AgentUI
-    KeyringClient -->|"Decrypt"| IDE
-    Display -->|"X11/Wayland"| ForwardSockets
-    ForwardSockets --> AgentUI
-    ForwardSockets --> IDE
-    ForwardSockets --> ChromeWrapper
-    AgentUI <-->|"WebSocket"| CLI
-    IDE <-->|"WebSocket"| CLI
-    SDK -->|"Port 8080"| AgentUI
-    AgentUI -->|"CDP"| ChromeWrapper
-    IDE -->|"CDP"| ChromeWrapper
-    ChromeWrapper -->|"Launch"| FlatpakChrome
-    ProfileHook -->|"First login"| SetupHelper
-    SetupHelper -->|"Write keys"| UserHome
-                        </pre>
+                        <img src="diagrams/rendered/system-topology.svg" alt="Layered Architecture — Host Integration Bridge" class="w-full max-w-4xl mx-auto rounded-lg shadow-lg border border-slate-700">
                     </div>
                 </details>
 
@@ -333,31 +282,7 @@ graph TD
                         Product Communication — The Antigravity Suite
                     </summary>
                     <div class="mt-3 bg-slate-900 rounded-xl p-4 border border-slate-700 overflow-x-auto">
-                        <pre class="mermaid">
-flowchart LR
-    subgraph Sandbox["agy-box Container"]
-        SDK["Antigravity SDK (Python)"]
-        CLI["CLI (agy)"]
-        IDE["Antigravity IDE"]
-        AgentUI["Agent UI"]
-        Chrome["Google Chrome"]
-
-        SDK -->|"Port 8080 API"| AgentUI
-        CLI -->|"WebSocket"| AgentUI
-        AgentUI -->|"CDP"| Chrome
-        IDE -->|"CDP"| Chrome
-    end
-
-    subgraph External["External Services"]
-        GCS["Google Cloud / Gemini API"]
-        GH["GitHub API"]
-    end
-
-    AgentUI --> GCS
-    IDE --> GCS
-    SDK --> GCS
-    CLI --> GH
-                        </pre>
+                        <img src="diagrams/rendered/product-communication.svg" alt="Product Communication — The Antigravity Suite" class="w-full max-w-4xl mx-auto rounded-lg shadow-lg border border-slate-700">
                     </div>
                 </details>
             </section>
