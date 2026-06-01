@@ -1,0 +1,6 @@
+# IceWM preference overrides for agy-box VDI
+# These take priority over preferences and theme settings.
+
+# Use pcmanfm for file browsing (container-local, not host Nautilus)
+FileManagerCommand="pcmanfm %s"
+TerminalCommand="xterm -fa Monospace -fs 12"

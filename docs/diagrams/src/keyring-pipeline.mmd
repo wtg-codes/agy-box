@@ -1,0 +1,35 @@
+graph LR
+    subgraph Sandbox ["agy-box Container"]
+        IDE["Google Antigravity (Agent UI)"]
+        Chrome["Google Chrome"]
+        LibSecret["libsecret-1.0 Client"]
+    end
+
+    subgraph Bridge ["Socket Bind Forwarding"]
+        DBusSocket["/run/user/1000/bus"]
+    end
+
+    subgraph Host ["Host Session"]
+        HostDBus["D-Bus Session Daemon"]
+        Keyring["GNOME Keyring Daemon <br> (Secret Service API)"]
+    end
+
+    IDE -->|Request stored secret| LibSecret
+    Chrome -->|Request stored secret| LibSecret
+    LibSecret -->|D-Bus Messages| DBusSocket
+    DBusSocket -->|Forward| HostDBus
+    HostDBus -->|Method Call| Keyring
+    Keyring -->|Return Credentials| HostDBus
+    HostDBus -->|Forward| DBusSocket
+    DBusSocket -->|D-Bus Reply| LibSecret
+    LibSecret -->|Decrypted Token| IDE
+    LibSecret -->|Decrypted Token| Chrome
+
+    %% Modern Theme Styling
+    classDef host fill:#e0f2fe,stroke:#0284c7,stroke-width:2px,color:#0369a1;
+    classDef bridge fill:#fffbeb,stroke:#d97706,stroke-width:2px,color:#b45309;
+    classDef sandbox fill:#f0fdf4,stroke:#16a34a,stroke-width:2px,color:#15803d;
+
+    class HostDBus,Keyring host;
+    class DBusSocket bridge;
+    class IDE,Chrome,LibSecret sandbox;

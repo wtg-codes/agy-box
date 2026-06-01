@@ -17,6 +17,38 @@ export GALLIUM_DRIVER=llvmpipe
 unset WAYLAND_DISPLAY
 unset XDG_SESSION_TYPE
 
+# ── Host isolation ────────────────────────────────────────────────────
+# The container shares the host's D-Bus session bus via Distrobox.
+# Without these guards, gsettings writes, file-picker dialogs, and app
+# launches can leak through to the host GNOME desktop.
+
+# Block dconf/gsettings writes from reaching the host.
+# All gsettings operations use an in-memory backend that is discarded on exit.
+export GSETTINGS_BACKEND=memory
+
+# Prevent GTK apps from routing file pickers through the host's
+# xdg-desktop-portal-gnome (which opens Nautilus on the host display).
+export GTK_USE_PORTAL=0
+
+# Tell xdg-open there is no desktop environment so it falls back to
+# direct app launch via xdg-mime instead of D-Bus portal activation.
+unset XDG_CURRENT_DESKTOP
+export DE=generic
+
+# Clear host GNOME session identifiers passed through by Distrobox.
+# These cause apps to think they are in a full GNOME session and use
+# GNOME-specific D-Bus services (portals, file manager, etc.) on the host.
+unset DESKTOP_SESSION
+unset XDG_SESSION_DESKTOP
+unset GDMSESSION
+
+# Clear stale host display references that can cause binaries to
+# render on the host Xwayland (:0) instead of the VDI Xvfb (:99).
+unset GNOME_SETUP_DISPLAY
+unset XAUTHORITY
+unset DISPLAY
+# ── End host isolation ────────────────────────────────────────────────
+
 # Load and export environment variables defined in environment.d
 # Helper to source all .conf files from a directory
 _load_env_dir() {

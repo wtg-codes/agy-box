@@ -1,0 +1,30 @@
+flowchart LR
+    subgraph Sandbox ["agy-box Distrobox Container"]
+        SDK["Antigravity Python SDK<br>('google-antigravity')"]
+        CLI["Antigravity CLI<br>('agy')"]
+        IDE["Antigravity IDE<br>('/usr/bin/antigravity-ide')"]
+        AgentUI["Google Antigravity (Agent UI)<br>('/usr/bin/antigravity')"]
+        Chrome["Google Chrome<br>('google-chrome-stable')"]
+        
+        SDK -->|"Local Host API Calls (Port 8080)"| AgentUI
+        CLI -->|"WebSocket Communication"| AgentUI
+        AgentUI -->|"Chrome DevTools Protocol (CDP)"| Chrome
+        IDE -->|"Chrome DevTools Protocol (CDP)"| Chrome
+    end
+    
+    subgraph External ["External Services"]
+        GCS["Google Cloud Services (Vertex / Gemini API)"]
+        GH["GitHub API (Lab Submission)"]
+    end
+
+    AgentUI --> GCS
+    IDE --> GCS
+    SDK --> GCS
+    CLI --> GH
+
+    %% Styling
+    classDef container fill:#f0fdf4,stroke:#16a34a,stroke-width:2px,color:#15803d;
+    classDef external fill:#f3f4f6,stroke:#4b5563,stroke-width:2px,color:#374151;
+
+    class SDK,CLI,IDE,AgentUI,Chrome container;
+    class GCS,GH external;
