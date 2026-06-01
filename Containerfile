@@ -1,45 +1,20 @@
-FROM ghcr.io/ublue-os/ubuntu-toolbox:latest
+FROM ghcr.io/ublue-os/ubuntu-toolbox@sha256:3f785ee330215c50b5144a78b0edb846919feed9ad8cdf1326de04a70732c1b5
 
 LABEL org.opencontainers.image.description="Declarative Student Workspace for wtgOS Cloud-Native Laboratory"
 
 ENV PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin
 
+ARG TARGETARCH
+
 # 1. Install agent dependencies
 COPY scripts/install-agent-deps.sh /tmp/
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
-    /tmp/install-agent-deps.sh && rm /tmp/install-agent-deps.sh
+    /tmp/install-agent-deps.sh "${TARGETARCH}" && rm /tmp/install-agent-deps.sh
 
-# 2. Install Google Antigravity (Agent UI)
-COPY scripts/install-antigravity.sh /tmp/
-RUN /tmp/install-antigravity.sh && rm /tmp/install-antigravity.sh
-
-# 2b. Install Antigravity IDE (Stable 1.23.2)
-COPY scripts/install-antigravity-ide.sh /tmp/
-RUN /tmp/install-antigravity-ide.sh && rm /tmp/install-antigravity-ide.sh
-
-# 3. Install Antigravity CLI
-COPY scripts/install-antigravity-cli.sh /tmp/
-RUN /tmp/install-antigravity-cli.sh && rm /tmp/install-antigravity-cli.sh
-
-# 4. Install Antigravity SDK
-COPY scripts/install-antigravity-sdk.sh /tmp/
-RUN --mount=type=cache,target=/root/.cache/pip \
-    /tmp/install-antigravity-sdk.sh && rm /tmp/install-antigravity-sdk.sh
-
-# 5. Install Google ADK
-COPY scripts/install-google-adk.sh /tmp/
-RUN --mount=type=cache,target=/root/.cache/pip \
-    /tmp/install-google-adk.sh && rm /tmp/install-google-adk.sh
-
-# 6. Install CNCF Tooling
+# 2. Install CNCF Tooling
 COPY scripts/install-tools.sh /tmp/
-RUN /tmp/install-tools.sh && rm /tmp/install-tools.sh
-
-# 7. Install Gemini CLI
-COPY scripts/install-gemini-cli.sh /tmp/
-RUN --mount=type=cache,target=/root/.npm \
-    /tmp/install-gemini-cli.sh && rm /tmp/install-gemini-cli.sh
+RUN /tmp/install-tools.sh "${TARGETARCH}" && rm /tmp/install-tools.sh
 
 # 8. Copy rootfs and configure entrypoint
 COPY rootfs/ /
@@ -50,6 +25,8 @@ RUN chmod +x /usr/local/bin/entrypoint.sh \
              /etc/X11/icewm/startup \
              /etc/skel/Desktop/*.desktop
 
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 # Dynamically link the correct version-specific wallpaper
 RUN VERSION=$(grep -oP '^VERSION="\K[^"]+' /usr/local/bin/agy-setup-helper) && \
     major=$(echo "$VERSION" | cut -d. -f1) && \
@@ -59,7 +36,7 @@ RUN VERSION=$(grep -oP '^VERSION="\K[^"]+' /usr/local/bin/agy-setup-helper) && \
         ln -sf "${WALLPAPER_NAME}" /usr/share/agy-box/wallpaper.png; \
     else \
         # Fallback to the latest available wallpaper if version-specific one doesn't exist
-        LATEST_WALLPAPER=$(ls -v /usr/share/agy-box/wallpaper-v*.png 2>/dev/null | tail -n 1) && \
+        LATEST_WALLPAPER=$(find /usr/share/agy-box/ -maxdepth 1 -name "wallpaper-v*.png" | sort -V | tail -n 1) && \
         if [ -n "$LATEST_WALLPAPER" ]; then \
             ln -sf "$(basename "$LATEST_WALLPAPER")" /usr/share/agy-box/wallpaper.png; \
         fi \

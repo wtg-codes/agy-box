@@ -34,9 +34,27 @@ jobs:
         run: |
           find . -type f \( -name "*.sh" -o -name "agy-box-manager" \) -print0 | xargs -0 shellcheck
 
+      - name: Lint Containerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Containerfile
+
+  test-scripts:
+    name: Run Script Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Bats
+        run: npm install bats
+
+      - name: Run Bats Tests
+        run: ./node_modules/.bin/bats tests/
+
   build-image:
     name: Build Image
-    needs: lint
+    needs: [lint, test-scripts]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -48,11 +66,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to the Container registry
-        if: github.event_name != 'pull_request'
+        if: github.event.repository.fork == false
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -67,6 +88,7 @@ jobs:
           tags: |
             type=ref,event=branch
             type=ref,event=pr
+            type=raw,value=pr-${{ github.event.pull_request.number }},enable=${{ github.event_name == 'pull_request' }}
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -77,9 +99,10 @@ jobs:
         with:
           context: .
           file: ./Containerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          load: ${{ github.event_name == 'pull_request' }}
-          tags: ${{ github.event_name == 'pull_request' && 'localhost/agy-box:dev' || steps.meta.outputs.tags }}
+          push: ${{ github.event.repository.fork == false }}
+          load: ${{ github.event.repository.fork == true }}
+          platforms: ${{ (github.event.repository.fork == false) && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
+          tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -87,25 +110,20 @@ jobs:
       - name: Get primary tag
         id: primary-tag
         run: |
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            echo "tag=localhost/agy-box:dev" >> "$GITHUB_OUTPUT"
-          else
-            TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n 1)
-            echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          fi
+          TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n 1)
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
-      - name: Save OCI Image as tarball (PR only)
-        if: github.event_name == 'pull_request'
+      - name: Pull image for scanning
+        if: github.event.repository.fork == false
         run: |
-          docker save -o /tmp/agy-box-dev.tar localhost/agy-box:dev
+          docker pull "${{ steps.primary-tag.outputs.tag }}"
 
-      - name: Upload Image Artifact (PR only)
-        if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v4
+      - name: Run Grype vulnerability scan
+        uses: anchore/scan-action@v3
         with:
-          name: agy-box-dev-image
-          path: /tmp/agy-box-dev.tar
-          retention-days: 1
+          image: ${{ steps.primary-tag.outputs.tag }}
+          fail-build: true
+          severity-cutoff: critical
 
   run-tests:
     name: Run Tests
@@ -115,24 +133,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Download Image Artifact (PR only)
-        if: github.event_name == 'pull_request'
-        uses: actions/download-artifact@v4
-        with:
-          name: agy-box-dev-image
-          path: /tmp
-
-      - name: Load OCI Image (PR only)
-        if: github.event_name == 'pull_request'
-        run: |
-          docker load -i /tmp/agy-box-dev.tar
-
       - name: Install Distrobox
         run: |
           curl -s https://raw.githubusercontent.com/89luca89/distrobox/main/install | sudo sh
 
-      - name: Pull Image if Push
-        if: github.event_name != 'pull_request'
+      - name: Log in to the Container registry
+        if: github.event.repository.fork == false
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull Image
         run: |
           docker pull "${{ needs.build-image.outputs.primary-tag }}"
 
@@ -140,7 +153,7 @@ jobs:
         env:
           SKIP_BUILD: "true"
           RUNTIME: "docker"
-          IMAGE_NAME: ${{ github.event_name == 'pull_request' && 'localhost/agy-box:dev' || needs.build-image.outputs.primary-tag }}
+          IMAGE_NAME: ${{ needs.build-image.outputs.primary-tag }}
         run: |
           ./scripts/test-box.sh
 

@@ -99,7 +99,7 @@ fi
 
 SKIP_BUILD_DETECTED=false
 if [[ "${FORCE_BUILD:-false}" != "true" ]] && [[ "$IMAGE_EXISTS" = "true" ]]; then
-    if [[ -f "$STATE_FILE" ]] && [[ "$(cat "$STATE_FILE")" = "$CURRENT_HASH" ]]; then
+    if [[ "${SKIP_BUILD:-false}" = "true" ]] || { [[ -f "$STATE_FILE" ]] && [[ "$(cat "$STATE_FILE")" = "$CURRENT_HASH" ]]; }; then
         SKIP_BUILD_DETECTED=true
     fi
 fi
@@ -124,7 +124,7 @@ if "${RUNTIME}" ps -a --format '{{.Names}}' 2>/dev/null | grep -qw "$CONTAINER_N
         distrobox rm --yes "$CONTAINER_NAME" >/dev/null || true
     fi
     if "${RUNTIME}" ps -a --format '{{.Names}}' 2>/dev/null | grep -qw "$CONTAINER_NAME"; then
-        "$rt" rm -f "$CONTAINER_NAME" >/dev/null || true
+        "${RUNTIME}" rm -f "$CONTAINER_NAME" >/dev/null || true
     fi
 fi
 
@@ -135,6 +135,9 @@ log_success "Created distrobox container '$CONTAINER_NAME'."
 sleep 2
 
 # --- Run Assertions Inside Distrobox ---
+log_info "Installing agent toolchain inside the container..."
+distrobox enter "$CONTAINER_NAME" -- "$REPO_DIR/scripts/install-agent-toolchain.sh"
+
 log_info "Running test assertions inside the container..."
 
 # We execute distrobox enter to run our test suite script
