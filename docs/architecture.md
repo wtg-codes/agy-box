@@ -50,9 +50,31 @@ To support remote development, headless environments (e.g. Google Cloud Shell, V
 
 ![VDI Web Desktop Headless Display Routing](diagrams/rendered/vdi-desktop.svg)
 
+## 6. Cloud & Alternative Deployment Architectures
+
+Because `agy-box` is built as a self-contained, standard OCI image, it can execute without the host-integration layers (such as host home folder bind-mounts or local Wayland compositor sockets) required for distrobox. 
+
+### A. Standalone Headless Deployment (Cloud VMs)
+When running on standard Cloud VMs (Compute Engine, EC2):
+1. **Graphics Routing:** The local X11/Wayland display server is bypassed. Instead, the entrypoint starts **Xvfb** (X Virtual Framebuffer) inside the container at display `:1.0`.
+2. **Display Streaming:** **x11vnc** hooks into the virtual framebuffer and streams the graphical window manager (Openbox) via the RFB protocol on port `5900`.
+3. **Web Proxying:** **websockify** translates the RFB stream into a WebSocket connection and hosts the **noVNC** HTML5 client on port `8080` (or `6080`), allowing remote developers to interact with the GUI directly via web browser.
+
+### B. Devcontainer Integration (GitHub Codespaces / Coder)
+When used as a devcontainer:
+1. **Workspace Mounting:** The cloud provider automatically mounts the active repository workspace folder to `/workspaces/<repo-name>` inside the container.
+2. **Port Forwarding:** The provider forwards the standard communication ports (e.g., `8080` for the Antigravity API and `9222` for the Chrome DevTools Protocol), exposing them securely over HTTPS via OAuth proxy loops.
+3. **Toolchain Pre-installation:** The container loads with all necessary CLI (`agy`), SDK, and editor extensions pre-cached, meaning zero startup lag for new developers.
+
+### C. Jules VM Execution Parity
+When executed by the autonomous agent orchestration runtime (Jules):
+1. The orchestrator spins up the image inside a sandboxed VM.
+2. It bypasses GUI/Desktop services entirely, running task executors and bash verification gates directly inside the container.
+3. Using the exact same image ensures that any test assertions executed in CI or on the agent's VM are 100% consistent with the developer's local environment.
+
 ---
 
-## 6. Architectural Decision Records (ADRs)
+## 7. Architectural Decision Records (ADRs)
 
 The following architectural decision records document the technical reasoning and trade-offs for core system designs:
 

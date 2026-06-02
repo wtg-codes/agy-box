@@ -219,7 +219,49 @@ You can also bypass the interactive menu by passing commands directly, which is 
 | **Run Integration Tests** | `agy-box-manager test` | `just agy-test` |
 
 
-*Note: The CLI will automatically configure Bash and Zsh auto-completions for you the very first time you execute the script.*
+## Alternative & Cloud Deployments
+
+While `agy-box` is optimized for local execution via Distrobox, it is built as a standard, OCI-compliant container image (`ghcr.io/wtg-codes/agy-box-image:latest`). This enables deployment across various cloud and remote environments:
+
+### 1. Cloud Virtual Machines (GCP Compute Engine, AWS EC2, Azure VMs)
+You can run `agy-box` as a standalone daemon on any cloud instance running Docker or Podman.
+*   **Run command:**
+    ```bash
+    docker run -d \
+      --name agy-sandbox \
+      -p 8080:8080 \
+      -p 2222:22 \
+      --security-opt label=disable \
+      ghcr.io/wtg-codes/agy-box-image:latest
+    ```
+*   **Access Paths:**
+    *   **noVNC HTML5 VDI Desktop:** Access a full graphical virtual desktop directly via `http://<vm-ip>:8080/vnc.html` (authenticated with your workspace password).
+    *   **SSH Tunneling:** SSH directly into the sandbox via `ssh -p 2222 developer@<vm-ip>`.
+
+### 2. Cloud IDE Platforms (GitHub Codespaces, Coder, Gitpod)
+The `agy-box` image can serve as a base for cloud workspaces. 
+*   **GitHub Codespaces (`.devcontainer/devcontainer.json`):**
+    ```json
+    {
+      "name": "Antigravity Cloud Sandbox",
+      "image": "ghcr.io/wtg-codes/agy-box-image:latest",
+      "forwardPorts": [8080, 9222],
+      "customizations": {
+        "codespaces": {
+          "openFiles": ["README.md"]
+        }
+      }
+    }
+    ```
+    This launches a cloud workspace containing the entire Antigravity toolchain, fully integrated with your browser-based VS Code interface.
+
+### 3. Jules VM Sandbox Execution (Agent Parity)
+The cloud agent runtime execution system (Jules) pulls the `agy-box-image` directly to execute code, run validations, and perform refactoring. By using the exact same OCI image in the cloud VM as you do locally, you guarantee 100% environment parity, ensuring "works on my machine" translates perfectly to "works on the cloud agent."
+
+### 4. Kubernetes (Stateful Dev Pods)
+For enterprise multi-agent pipelines, `agy-box` can be scheduled on a Kubernetes cluster as a stateful container pod to act as a remote workspace node.
+
+---
 
 ## Testing
 
