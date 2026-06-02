@@ -50,3 +50,13 @@ To support remote development, headless environments (e.g. Google Cloud Shell, V
 
 ![VDI Web Desktop Headless Display Routing](diagrams/rendered/vdi-desktop.svg)
 
+---
+
+## 6. Architectural Decision Records (ADRs)
+
+The following architectural decision records document the technical reasoning and trade-offs for core system designs:
+
+- [ADR-0001: Distrobox Sandbox Base](architecture/adr/0001-distrobox-sandbox-base.md)
+- [ADR-0002: Credentials Decryption via D-Bus Session Keyring Forwarding and libsecret](architecture/adr/0002-dbus-keyring-decryption.md)
+- [ADR-0003: Virtual Desktop Display Routing](architecture/adr/0003-headless-novnc-display-routing.md)
+- [ADR-0004: Interactive Setup Assistant Hook](architecture/adr/0004-setup-assistant-profile-hook.md)
