@@ -98,15 +98,21 @@ if "${RUNTIME}" image inspect "$IMAGE_NAME" &>/dev/null; then
 fi
 
 SKIP_BUILD_DETECTED=false
-if [[ "${FORCE_BUILD:-false}" != "true" ]] && [[ "$IMAGE_EXISTS" = "true" ]]; then
+if [[ "${SKIP_BUILD:-false}" = "true" ]]; then
+    SKIP_BUILD_DETECTED=true
+elif [[ "${FORCE_BUILD:-false}" != "true" ]] && [[ "$IMAGE_EXISTS" = "true" ]]; then
     if [[ -f "$STATE_FILE" ]] && [[ "$(cat "$STATE_FILE")" = "$CURRENT_HASH" ]]; then
         SKIP_BUILD_DETECTED=true
     fi
 fi
 
 if [[ "$SKIP_BUILD_DETECTED" = "true" ]]; then
-    log_success "No container files modified since last build. Skipping image rebuild."
-    log_info "(Set FORCE_BUILD=true to override)"
+    if [[ "${SKIP_BUILD:-false}" = "true" ]]; then
+        log_success "SKIP_BUILD is set. Skipping image rebuild."
+    else
+        log_success "No container files modified since last build. Skipping image rebuild."
+        log_info "(Set FORCE_BUILD=true to override)"
+    fi
 else
     log_info "Building image $IMAGE_NAME..."
     "$RUNTIME" build -t "$IMAGE_NAME" -f "$REPO_DIR/Containerfile" "$REPO_DIR"
