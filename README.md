@@ -102,7 +102,7 @@ graph TD
 
         subgraph Suite ["Antigravity Developer Suite"]
             AgentUI["Google Antigravity (Agent UI) <br> (canvas workspace, terminal, course labs)"]
-            IDE["Antigravity IDE <br> (VS Code-based developer environment)"]
+            G_IDE["Antigravity IDE <br> (VS Code-based developer environment)"]
             CLI["Antigravity CLI (agy) <br> (WebSocket loops, lab submission)"]
             SDK["Antigravity Python SDK (google-antigravity) <br> (GCS auth, local Port 8080 API)"]
             ChromeWrapper["Google Chrome <br> (google-chrome-stable wrapper)"]
@@ -116,18 +116,18 @@ graph TD
     ForwardSockets --> KeyringClient
     KeyringClient -->|"Decrypt tokens"| ChromeWrapper
     KeyringClient -->|"Decrypt tokens"| AgentUI
-    KeyringClient -->|"Decrypt tokens"| IDE
+    KeyringClient -->|"Decrypt tokens"| G_IDE
     
     Display -->|"X11 / Wayland Socket Forwarding"| ForwardSockets
     ForwardSockets --> AgentUI
-    ForwardSockets --> IDE
+    ForwardSockets --> G_IDE
     ForwardSockets --> ChromeWrapper
     
     AgentUI <-->|"WebSocket Loop"| CLI
-    IDE <-->|"WebSocket Loop"| CLI
+    G_IDE <-->|"WebSocket Loop"| CLI
     SDK -->|"Local API calls (Port 8080)"| AgentUI
     AgentUI -->|"Chrome DevTools Protocol (CDP)"| ChromeWrapper
-    IDE -->|"Chrome DevTools Protocol (CDP)"| ChromeWrapper
+    G_IDE -->|"Chrome DevTools Protocol (CDP)"| ChromeWrapper
     ChromeWrapper -->|"Launch un-sandboxed"| FlatpakChrome
     
     ProfileHook -->|"Trigger on first bash login"| SetupHelper
@@ -141,7 +141,7 @@ graph TD
 
     class UserHome,Display,DBus,FlatpakChrome host;
     class MountHome,ForwardSockets bridge;
-    class BaseOS,KeyringClient,IDE,CLI,SDK,ChromeWrapper sandbox;
+    class BaseOS,KeyringClient,G_IDE,CLI,SDK,ChromeWrapper,AgentUI sandbox;
     class SetupHelper,ProfileHook setup;
 ```
 
@@ -156,14 +156,14 @@ flowchart LR
     subgraph Sandbox ["agy-box Distrobox Container"]
         SDK["Antigravity Python SDK<br>('google-antigravity')"]
         CLI["Antigravity CLI<br>('agy')"]
-        IDE["Antigravity IDE<br>('/usr/bin/antigravity-ide')"]
+        G_IDE["Antigravity IDE<br>('/usr/bin/antigravity-ide')"]
         AgentUI["Google Antigravity (Agent UI)<br>('/usr/bin/antigravity')"]
         Chrome["Google Chrome<br>('google-chrome-stable')"]
         
         SDK -->|"Local Host API Calls (Port 8080)"| AgentUI
         CLI -->|"WebSocket Communication"| AgentUI
         AgentUI -->|"Chrome DevTools Protocol (CDP)"| Chrome
-        IDE -->|"Chrome DevTools Protocol (CDP)"| Chrome
+        G_IDE -->|"Chrome DevTools Protocol (CDP)"| Chrome
     end
     
     subgraph External ["External Services"]
@@ -172,7 +172,7 @@ flowchart LR
     end
 
     AgentUI --> GCS
-    IDE --> GCS
+    G_IDE --> GCS
     SDK --> GCS
     CLI --> GH
 
@@ -180,7 +180,7 @@ flowchart LR
     classDef container fill:#f0fdf4,stroke:#16a34a,stroke-width:2px,color:#15803d;
     classDef external fill:#f3f4f6,stroke:#4b5563,stroke-width:2px,color:#374151;
 
-    class SDK,CLI,IDE,AgentUI,Chrome container;
+    class SDK,CLI,G_IDE,AgentUI,Chrome container;
     class GCS,GH external;
 ```
 
