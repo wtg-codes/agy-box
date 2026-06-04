@@ -459,6 +459,131 @@ run_audit_checks() {
 }
 export -f run_audit_checks
 
+# Configure Google Workspace (Drive, Gmail, Calendar) and Stitch Design AI MCP servers
+setup_gws_mcp_stitch() {
+    local mcp_config="$HOME/.gemini/config/mcp_config.json"
+    local oauth_reuse="$HOME/.config/tridorian/gws-mcp-oauth.json"
+    
+    gum style --foreground 99 --border normal --padding "0 2" --margin "1 0" \
+        "Google Workspace & Stitch MCP Setup" \
+        "" \
+        "Configure Google Workspace (Drive, Gmail, Calendar) and Stitch Design AI" \
+        "MCP servers to enable agentic workflows and design-to-code capabilities."
+
+    if ! gum confirm "Would you like to set up Google Workspace & Stitch MCP servers?"; then
+        gum style --foreground 214 "Skipping GWS and Stitch MCP setup."
+        return 0
+    fi
+
+    # Read existing defaults if they exist
+    local existing_client_id=""
+    local existing_client_secret=""
+    local existing_stitch_key=""
+
+    if [[ -f "$oauth_reuse" ]] && command -v jq &>/dev/null; then
+        existing_client_id=$(jq -r '.web.client_id // empty' "$oauth_reuse" || true)
+        existing_client_secret=$(jq -r '.web.client_secret // empty' "$oauth_reuse" || true)
+        existing_stitch_key=$(jq -r '.stitch.api_key // empty' "$oauth_reuse" || true)
+    fi
+
+    # 1. Stitch API Key
+    local stitch_prompt="Enter Stitch API Key"
+    if [[ -n "$existing_stitch_key" ]]; then
+        stitch_prompt+=" (Current: $(mask_key "$existing_stitch_key"))"
+    fi
+    local input_stitch
+    input_stitch=$(gum input --placeholder "$stitch_prompt")
+    if [[ -z "$input_stitch" ]]; then
+        input_stitch="$existing_stitch_key"
+    fi
+
+    # 2. GCP Web Client ID
+    local cid_prompt="Enter GCP OAuth Web Client ID"
+    if [[ -n "$existing_client_id" ]]; then
+        cid_prompt+=" (Current: $(mask_key "$existing_client_id"))"
+    fi
+    local input_cid
+    input_cid=$(gum input --placeholder "$cid_prompt")
+    if [[ -z "$input_cid" ]]; then
+        input_cid="$existing_client_id"
+    fi
+
+    # 3. GCP Web Client Secret
+    local sec_prompt="Enter GCP OAuth Web Client Secret"
+    if [[ -n "$existing_client_secret" ]]; then
+        sec_prompt+=" (Current: $(mask_key "$existing_client_secret"))"
+    fi
+    local input_sec
+    input_sec=$(gum input --placeholder "$sec_prompt")
+    if [[ -z "$input_sec" ]]; then
+        input_sec="$existing_client_secret"
+    fi
+
+    # Write configs
+    if [[ -n "$input_cid" || -n "$input_sec" || -n "$input_stitch" ]]; then
+        # Ensure directories exist
+        mkdir -p "$(dirname "$mcp_config")"
+        mkdir -p "$(dirname "$oauth_reuse")"
+
+        # Save to reusable credentials JSON
+        if command -v jq &>/dev/null; then
+            local oauth_json="{}"
+            if [[ -f "$oauth_reuse" ]]; then
+                oauth_json=$(cat "$oauth_reuse")
+            fi
+            oauth_json=$(echo "$oauth_json" | jq \
+                --arg cid "$input_cid" \
+                --arg sec "$input_sec" \
+                --arg skey "$input_stitch" \
+                '.web.client_id = $cid | .web.client_secret = $sec | .web.redirect_uris = ["https://antigravity.google/oauth-callback"] | .web.name = "tridorian-GWS-MCP" | .stitch.serverUrl = "https://stitch.googleapis.com/mcp" | .stitch.api_key = $skey')
+            echo "$oauth_json" > "$oauth_reuse"
+            chmod 600 "$oauth_reuse"
+        fi
+
+        # Update or create ~/.gemini/config/mcp_config.json
+        if command -v jq &>/dev/null; then
+            local config_json='{"mcpServers":{}}'
+            if [[ -f "$mcp_config" ]]; then
+                config_json=$(cat "$mcp_config")
+            fi
+
+            # Add / update servers
+            config_json=$(echo "$config_json" | jq \
+                --arg cid "$input_cid" \
+                --arg sec "$input_sec" \
+                --arg skey "$input_stitch" \
+                '.mcpServers.filesystem = {command: "npx", args: ["-y", "@modelcontextprotocol/server-filesystem", "/var/home/wtg/Repos"]} |
+                 .mcpServers.github = {command: "npx", args: ["-y", "--package", "github-mcp-server", "github-mcp-server-mcp"]} |
+                 .mcpServers["sequential-thinking"] = {command: "npx", args: ["-y", "@modelcontextprotocol/server-sequential-thinking"]} |
+                 (if $skey != "" then .mcpServers.stitch = {serverUrl: "https://stitch.googleapis.com/mcp", headers: {"X-Goog-Api-Key": $skey}} else del(.mcpServers.stitch) end) |
+                 (if $cid != "" and $sec != "" then
+                    .mcpServers["google-developer-knowledge"] = {serverUrl: "https://developerknowledge.googleapis.com/mcp", oauth: {clientId: $cid, clientSecret: $sec}} |
+                    .mcpServers["gws-calendar"] = {serverUrl: "https://calendarmcp.googleapis.com/mcp/v1", oauth: {clientId: $cid, clientSecret: $sec}} |
+                    .mcpServers["gws-chat"] = {serverUrl: "https://chatmcp.googleapis.com/mcp/v1", oauth: {clientId: $cid, clientSecret: $sec}} |
+                    .mcpServers["gws-docs"] = {serverUrl: "https://docsmcp.googleapis.com/mcp/v1", oauth: {clientId: $cid, clientSecret: $sec}} |
+                    .mcpServers["gws-drive"] = {serverUrl: "https://drivemcp.googleapis.com/mcp/v1", oauth: {clientId: $cid, clientSecret: $sec}} |
+                    .mcpServers["gws-gmail"] = {serverUrl: "https://gmailmcp.googleapis.com/mcp/v1", oauth: {clientId: $cid, clientSecret: $sec}} |
+                    .mcpServers["gws-people"] = {serverUrl: "https://people.googleapis.com/mcp/v1", oauth: {clientId: $cid, clientSecret: $sec}}
+                  else . end)')
+            echo "$config_json" > "$mcp_config"
+            chmod 600 "$mcp_config"
+            gum style --foreground 46 "✓ Configuration successfully written to $mcp_config"
+            
+            if [[ -n "$input_cid" ]]; then
+                gum style --foreground 214 --border normal --padding "0 1" \
+                    "IMPORTANT: To complete authentication for Google Workspace MCP servers:" \
+                    "1. Start the interactive Antigravity CLI by running 'agy -i'" \
+                    "2. Type '/mcp' and press Enter" \
+                    "3. Select each server to Authenticate via browser and copy-paste the code."
+            fi
+        else
+            gum style --foreground 196 "Error: jq is required to update JSON configuration files."
+        fi
+    else
+        gum style --foreground 214 "No changes made."
+    fi
+}
+
 main() {
     # Fix ownership of files copied from /etc/skel during container initialization
     if [ -d "$HOME/.config" ]; then
@@ -628,6 +753,9 @@ EOF
         fi
     fi
 
+    # GWS MCP & Stitch Setup
+    setup_gws_mcp_stitch
+    
     # Optional Skills Pack & Security Auditing
     if gum confirm "Would you like to run the optional Developer Skills Pack & Security Audit?"; then
         local audit_log
