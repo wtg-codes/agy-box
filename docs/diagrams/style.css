@@ -1,0 +1,218 @@
+/* Custom CSS for professional infographic style diagrams in agy-box */
+
+/* Import Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* Import Font Awesome 6 Icons */
+@import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css');
+
+/* Global Font Override */
+.mermaid, .mermaid * {
+  font-family: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif !important;
+}
+
+/* Background canvas setting */
+.mermaid svg {
+  background-color: transparent !important;
+}
+
+/* Subgraphs (clusters) styling */
+.cluster rect {
+  fill: #0f172a !important;
+  fill-opacity: 0.65 !important;
+  stroke: #334155 !important;
+  stroke-width: 2px !important;
+  rx: 16px !important; /* Rounded corners */
+  ry: 16px !important;
+}
+
+.cluster-label, .cluster-label * {
+  fill: #f8fafc !important;
+  font-weight: 700 !important;
+  font-size: 14px !important;
+  letter-spacing: 0.05em !important;
+  text-transform: uppercase !important;
+}
+
+/* Node (cards) styling */
+.node rect, .node circle, .node polygon, .node path {
+  rx: 12px !important; /* Rounded cards */
+  ry: 12px !important;
+  stroke-width: 2px !important;
+}
+
+/* Text styles for labels */
+.node .label, .nodeText {
+  color: #f8fafc !important;
+  fill: #f8fafc !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  line-height: 1.4 !important;
+}
+
+/* Class-based styles for custom themes */
+/* 1. Host OS / Infrastructure (Blue) */
+.host rect {
+  fill: #0c4a6e !important;
+  stroke: #0284c7 !important;
+}
+.host .label, .host text {
+  color: #e0f2fe !important;
+  fill: #e0f2fe !important;
+}
+
+/* 2. Bridge / Sockets (Amber) */
+.bridge rect {
+  fill: #78350f !important;
+  stroke: #d97706 !important;
+}
+.bridge .label, .bridge text {
+  color: #fef3c7 !important;
+  fill: #fef3c7 !important;
+}
+
+/* 3. Sandbox Container (Green) */
+.sandbox rect {
+  fill: #064e3b !important;
+  stroke: #10b981 !important;
+}
+.sandbox .label, .sandbox text {
+  color: #d1fae5 !important;
+  fill: #d1fae5 !important;
+}
+
+/* 4. Setup Assistant (Purple) */
+.setup rect {
+  fill: #581c87 !important;
+  stroke: #a855f7 !important;
+}
+.setup .label, .setup text {
+  color: #f3e8ff !important;
+  fill: #f3e8ff !important;
+}
+
+/* 5. External Services (Slate/Grey) */
+.external rect {
+  fill: #374151 !important;
+  stroke: #6b7280 !important;
+}
+.external .label, .external text {
+  color: #f3f4f6 !important;
+  fill: #f3f4f6 !important;
+}
+
+/* 6. Clients / Interactive nodes (Indigo) */
+.client rect {
+  fill: #312e81 !important;
+  stroke: #6366f1 !important;
+}
+.client .label, .client text {
+  color: #e0e7ff !important;
+  fill: #e0e7ff !important;
+}
+
+/* Styling edges (lines) and arrows */
+.edgePath .path {
+  stroke: #64748b !important;
+  stroke-width: 2.5px !important;
+  stroke-dasharray: none !important;
+}
+
+.edgeThickness-normal {
+  stroke-width: 2.5px !important;
+}
+
+.arrowheadPath {
+  fill: #64748b !important;
+  stroke: none !important;
+}
+
+.edgeLabel rect {
+  fill: #0f172a !important;
+  fill-opacity: 0.9 !important;
+  rx: 6px !important;
+  ry: 6px !important;
+  stroke: #334155 !important;
+  stroke-width: 1px !important;
+}
+
+.edgeLabel span, .edgeLabel text {
+  color: #94a3b8 !important;
+  fill: #94a3b8 !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  font-family: 'Inter', sans-serif !important;
+}
+
+/* Sequence diagram styles */
+.actor {
+  stroke: #6366f1 !important;
+  fill: #1e1b4b !important;
+  stroke-width: 2px !important;
+  rx: 10px !important;
+  ry: 10px !important;
+}
+
+text.actor {
+  fill: #ffffff !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
+}
+
+.actor-line {
+  stroke: #4f46e5 !important;
+  stroke-width: 2px !important;
+  stroke-dasharray: 6 4 !important;
+}
+
+.messageLine0, .messageLine1 {
+  stroke: #6366f1 !important;
+  stroke-width: 2px !important;
+}
+
+.messageText {
+  fill: #cbd5e1 !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}
+
+#arrowhead {
+  fill: #6366f1 !important;
+}
+
+.labelBox {
+  stroke: #334155 !important;
+  fill: #1e293b !important;
+  rx: 6px !important;
+  ry: 6px !important;
+}
+
+.labelText {
+  fill: #f1f5f9 !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+}
+
+.loopLine {
+  stroke: #6366f1 !important;
+  stroke-width: 2px !important;
+}
+
+.loopText {
+  fill: #cbd5e1 !important;
+  font-weight: bold !important;
+}
+
+.note {
+  stroke: #d97706 !important;
+  fill: #451a03 !important;
+  rx: 8px !important;
+  ry: 8px !important;
+}
+
+.noteText, .noteText * {
+  fill: #fef3c7 !important;
+  color: #fef3c7 !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+}

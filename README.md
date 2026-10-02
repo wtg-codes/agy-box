@@ -77,73 +77,7 @@ Unlike traditional isolated virtual machines or containers, Distrobox provides a
 
 The diagram below outlines the layering stack and the host integration bridge of the `agy-box` sandbox developer environment:
 
-```mermaid
-graph TD
-    subgraph Host ["Host OS (Immutable/Atomic e.g., Bluefin, Silverblue)"]
-        UserHome["User Home (~/) <br> stores .config/environment.d/agy-box.conf"]
-        Display["Display Server (Wayland / X11)"]
-        DBus["D-Bus Session Bus <br> (Secret Service / GNOME Keyring)"]
-        FlatpakChrome["Un-sandboxed Chrome Binary <br> (/var/lib/flatpak/.../chrome)"]
-    end
-
-    subgraph Bridge ["Distrobox Bridge"]
-        MountHome["Home Volume Mount"]
-        ForwardSockets["Socket Forwarding (X11/Wayland/DBUS)"]
-    end
-
-    subgraph Sandbox ["agy-box Sandbox Container (Ubuntu Toolbox Base)"]
-        BaseOS["Base OS Layer (Ubuntu)"]
-        KeyringClient["Keyring integration (libsecret-1-0)"]
-        
-        subgraph Setup ["First-Time Setup Assistant"]
-            SetupHelper["agy-setup-helper <br> (checks API Keys, Keyring, Git, Chrome)"]
-            ProfileHook["/etc/profile.d/agy-setup-check.sh"]
-        end
-
-        subgraph Suite ["Antigravity Developer Suite"]
-            AgentUI["Google Antigravity (Agent UI) <br> (canvas workspace, terminal, course labs)"]
-            IDE["Antigravity IDE <br> (VS Code-based developer environment)"]
-            CLI["Antigravity CLI (agy) <br> (WebSocket loops, lab submission)"]
-            SDK["Antigravity Python SDK (google-antigravity) <br> (GCS auth, local Port 8080 API)"]
-            ChromeWrapper["Google Chrome <br> (google-chrome-stable wrapper)"]
-        end
-    end
-
-    UserHome <-->|"Mounts to /var/home/wtg"| MountHome
-    MountHome <--> BaseOS
-    
-    DBus -->|"Forward D-Bus Socket"| ForwardSockets
-    ForwardSockets --> KeyringClient
-    KeyringClient -->|"Decrypt tokens"| ChromeWrapper
-    KeyringClient -->|"Decrypt tokens"| AgentUI
-    KeyringClient -->|"Decrypt tokens"| IDE
-    
-    Display -->|"X11 / Wayland Socket Forwarding"| ForwardSockets
-    ForwardSockets --> AgentUI
-    ForwardSockets --> IDE
-    ForwardSockets --> ChromeWrapper
-    
-    AgentUI <-->|"WebSocket Loop"| CLI
-    IDE <-->|"WebSocket Loop"| CLI
-    SDK -->|"Local API calls (Port 8080)"| AgentUI
-    AgentUI -->|"Chrome DevTools Protocol (CDP)"| ChromeWrapper
-    IDE -->|"Chrome DevTools Protocol (CDP)"| ChromeWrapper
-    ChromeWrapper -->|"Launch un-sandboxed"| FlatpakChrome
-    
-    ProfileHook -->|"Trigger on first bash login"| SetupHelper
-    SetupHelper -->|"Verify & write keys"| UserHome
-
-    %% Modern Theme Styling
-    classDef host fill:#e0f2fe,stroke:#0284c7,stroke-width:2px,color:#0369a1;
-    classDef bridge fill:#fffbeb,stroke:#d97706,stroke-width:2px,color:#b45309;
-    classDef sandbox fill:#f0fdf4,stroke:#16a34a,stroke-width:2px,color:#15803d;
-    classDef setup fill:#faf5ff,stroke:#9333ea,stroke-width:2px,color:#7e22ce;
-
-    class UserHome,Display,DBus,FlatpakChrome host;
-    class MountHome,ForwardSockets bridge;
-    class BaseOS,KeyringClient,IDE,CLI,SDK,ChromeWrapper sandbox;
-    class SetupHelper,ProfileHook setup;
-```
+![agy-box System Topology](docs/diagrams/rendered/system-topology.svg)
 
 ---
 
@@ -151,38 +85,7 @@ graph TD
 
 The developer environment packages four distinct products of the Google Antigravity ecosystem, each serving a specific role in agentic development:
 
-```mermaid
-flowchart LR
-    subgraph Sandbox ["agy-box Distrobox Container"]
-        SDK["Antigravity Python SDK<br>('google-antigravity')"]
-        CLI["Antigravity CLI<br>('agy')"]
-        IDE["Antigravity IDE<br>('/usr/bin/antigravity-ide')"]
-        AgentUI["Google Antigravity (Agent UI)<br>('/usr/bin/antigravity')"]
-        Chrome["Google Chrome<br>('google-chrome-stable')"]
-        
-        SDK -->|"Local Host API Calls (Port 8080)"| AgentUI
-        CLI -->|"WebSocket Communication"| AgentUI
-        AgentUI -->|"Chrome DevTools Protocol (CDP)"| Chrome
-        IDE -->|"Chrome DevTools Protocol (CDP)"| Chrome
-    end
-    
-    subgraph External ["External Services"]
-        GCS["Google Cloud Services (Vertex / Gemini API)"]
-        GH["GitHub API (Lab Submission)"]
-    end
-
-    AgentUI --> GCS
-    IDE --> GCS
-    SDK --> GCS
-    CLI --> GH
-
-    %% Styling
-    classDef container fill:#f0fdf4,stroke:#16a34a,stroke-width:2px,color:#15803d;
-    classDef external fill:#f3f4f6,stroke:#4b5563,stroke-width:2px,color:#374151;
-
-    class SDK,CLI,IDE,AgentUI,Chrome container;
-    class GCS,GH external;
-```
+![Antigravity Product Communication](docs/diagrams/rendered/product-communication.svg)
 
 #### 1. Google Antigravity (Agent UI) / Antigravity "2.0"
 *   **Role & Description:** The agent-first UI (canvas, terminal, course labs) featuring the Gemini-powered software engineering assistant.

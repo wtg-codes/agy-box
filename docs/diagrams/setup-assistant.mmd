@@ -1,0 +1,63 @@
+sequenceDiagram
+    autonumber
+    actor User
+    participant Hook as profile.d/agy-setup-check.sh
+    participant Helper as usr/local/bin/agy-setup-helper
+    participant HostFS as Host Filesystem (~/.config/agy-box)
+    participant DBus as Host D-Bus Session
+    participant Config as environment.d/agy-box.conf
+
+    User->>Hook: Launch interactive shell (tty)
+    Hook->>HostFS: Check if .setup_done exists
+    alt Flag exists
+        HostFS-->>Hook: Yes, skip setup
+    else Flag does not exist
+        HostFS-->>Hook: No, trigger setup assistant
+        Hook->>Helper: Execute
+        Helper->>User: Display greeting banner & prompt to run setup [Y/n]
+        alt User declines
+            User-->>Helper: 'n'
+            Helper->>HostFS: Create .setup_done
+            Helper-->>User: Exit immediately
+        else User accepts
+            User-->>Helper: 'Y' (or default)
+            
+            Note over Helper,DBus: Stage 1: Keyring & D-Bus Validation
+            Helper->>DBus: Test ListNames reply via dbus-send
+            DBus-->>Helper: Reply received (healthy)
+            Helper->>Helper: Check if secret-tool is installed
+            
+            Note over Helper,Config: Stage 2: API Keys Configuration
+            Helper->>Config: Search for GEMINI_API_KEY / ANTIGRAVITY_API_KEY
+            alt Keys not found
+                Helper->>User: Prompt to configure API keys now? [Y/n]
+                User-->>Helper: 'Y'
+                Helper->>User: Request GEMINI_API_KEY
+                User-->>Helper: Enter API key (or skip)
+                Helper->>User: Request ANTIGRAVITY_API_KEY
+                User-->>Helper: Enter API key (or skip)
+                Helper->>Config: Write keys to environment.d config
+            end
+            
+            Note over Helper: Stage 3: Google Chrome Health
+            Helper->>Helper: Execute google-chrome-stable --version
+            
+            Note over Helper: Stage 4: Git Identity Configuration
+            Helper->>Helper: Read global user.name & user.email
+            alt Git configs missing
+                Helper->>User: Prompt and read Git user.name / user.email
+                Helper->>Helper: Write global git configs
+            end
+
+            Note over Helper: Stage 4.5: Optional Skills Pack & Security Auditing
+            alt User opts-in to Audit
+                Helper->>Helper: Audit root boundary, DBus owner, and scan wildcard ports
+                Helper->>Helper: Verify Android USB, gcloud, VDI toolchains
+                Helper->>HostFS: Offer to harden key file permissions (chmod 600)
+            end
+
+            Note over Helper,HostFS: Stage 5: Flag Completion
+            Helper->>HostFS: Create ~/.config/agy-box/.setup_done
+            Helper-->>User: Success message & exit
+        end
+    end
