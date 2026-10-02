@@ -52,16 +52,59 @@ jobs:
       - name: Run Bats Tests
         run: ./node_modules/.bin/bats tests/
 
-  build-image:
-    name: Build Image
-    needs: [lint, test-scripts]
+  build-and-test:
+    name: Build & Validate Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and load image into Docker
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Containerfile
+          load: true
+          platforms: linux/amd64
+          tags: localhost/agy-box:test
+          cache-from: |
+            type=gha,scope=build-${{ github.ref_name }}
+            type=gha,scope=build-main
+          cache-to: type=gha,mode=max,scope=build-${{ github.ref_name }}
+
+      - name: Install Distrobox
+        run: |
+          curl -s https://raw.githubusercontent.com/89luca89/distrobox/main/install | sudo sh
+
+      - name: Run Distrobox Integration Tests
+        env:
+          SKIP_BUILD: "true"
+          RUNTIME: "docker"
+          IMAGE_NAME: "localhost/agy-box:test"
+        run: |
+          ./scripts/test-box.sh
+
+      - name: Run Grype vulnerability scan (Local Image)
+        uses: anchore/scan-action@v7
+        with:
+          image: localhost/agy-box:test
+          fail-build: false
+          severity-cutoff: critical
+          only-fixed: true
+
+  publish-and-release:
+    name: Publish Multi-Arch & Release
+    needs: [build-and-test, lint, test-scripts]
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
-    outputs:
-      primary-tag: ${{ steps.primary-tag.outputs.tag }}
-      digest: ${{ steps.build-push.outputs.digest }}
+      id-token: write
+      attestations: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -73,7 +116,6 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to the Container registry
-        if: github.event.repository.fork == false
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -87,141 +129,41 @@ jobs:
           images: ghcr.io/${{ github.repository }}
           tags: |
             type=ref,event=branch
-            type=ref,event=pr
-            type=raw,value=pr-${{ github.event.pull_request.number }},enable=${{ github.event_name == 'pull_request' }}
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
 
-      - name: Build and push OCI Image
+      - name: Build and push Multi-Arch OCI Image
         id: build-push
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Containerfile
-          push: ${{ github.event.repository.fork == false }}
-          load: ${{ github.event.repository.fork == true }}
-          platforms: ${{ (github.event.repository.fork == false) && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
+          push: true
+          platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Get primary tag
-        id: primary-tag
-        run: |
-          TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n 1)
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-
-      - name: Pull image for scanning
-        if: github.event.repository.fork == false
-        run: |
-          docker pull "${{ steps.primary-tag.outputs.tag }}"
-
-      - name: Run Grype vulnerability scan
-        uses: anchore/scan-action@v7
-        with:
-          image: ${{ steps.primary-tag.outputs.tag }}
-          fail-build: false
-          severity-cutoff: critical
-          only-fixed: true
-
-  run-tests:
-    name: Run Tests
-    needs: build-image
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install Distrobox
-        run: |
-          curl -s https://raw.githubusercontent.com/89luca89/distrobox/main/install | sudo sh
-
-      - name: Log in to the Container registry
-        if: github.event.repository.fork == false
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Pull Image
-        run: |
-          docker pull "${{ needs.build-image.outputs.primary-tag }}"
-
-      - name: Run Validation Checks
-        env:
-          SKIP_BUILD: "true"
-          RUNTIME: "docker"
-          IMAGE_NAME: ${{ needs.build-image.outputs.primary-tag }}
-        run: |
-          ./scripts/test-box.sh
-
-  generate-sbom:
-    name: Generate SBOM
-    needs: [build-image, run-tests]
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+          cache-from: |
+            type=gha,scope=build-${{ github.ref_name }}
+            type=gha,scope=build-main
+          cache-to: type=gha,mode=max,scope=build-main
 
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
         with:
-          image: ${{ needs.build-image.outputs.primary-tag }}
+          image: ${{ steps.meta.outputs.tags[0] }}
           format: spdx-json
           output-file: sbom.spdx.json
-
-      - name: Upload SBOM Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: sbom
-          path: sbom.spdx.json
-          retention-days: 5
-
-  attest-provenance:
-    name: Attest Provenance
-    needs: [build-image, run-tests]
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write
-      attestations: write
-      packages: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Log in to the Container registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Attest Build Provenance
         uses: actions/attest-build-provenance@v2.2.0
         with:
           subject-name: ghcr.io/${{ github.repository }}
-          subject-digest: ${{ needs.build-image.outputs.digest }}
+          subject-digest: ${{ steps.build-push.outputs.digest }}
           push-to-registry: true
 
-  publish-release:
-    name: Publish Release
-    needs: generate-sbom
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Download SBOM Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: sbom
-
       - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
