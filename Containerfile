@@ -12,7 +12,13 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     /tmp/install-agent-deps.sh "${TARGETARCH}" && rm /tmp/install-agent-deps.sh
 
-# 2. Install CNCF Tooling
+# 2. Install Open WebUI (Local Workspace Web Dashboard)
+COPY scripts/install-open-webui.sh /tmp/
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    /tmp/install-open-webui.sh && rm /tmp/install-open-webui.sh
+
+# 3. Install CNCF Tooling
 COPY scripts/install-tools.sh /tmp/
 RUN /tmp/install-tools.sh "${TARGETARCH}" && rm /tmp/install-tools.sh
 

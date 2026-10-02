@@ -1224,6 +1224,7 @@ cmd_interactive() {
                 if check_container_exists "$DEV_CONTAINER_NAME"; then
                     workspace_options+=("💻 Enter Dev Workspace")
                     workspace_options+=("🖥️  Start VDI Web Desktop (Dev)")
+                    workspace_options+=("🌐 Launch Local Web Dashboard (agy-local-ui)")
                 fi
 
                 workspace_options+=("🔙 Back to Main Menu")
@@ -1249,6 +1250,12 @@ cmd_interactive() {
                         ;;
                     "🖥️  Start VDI Web Desktop (Dev)")
                         cmd_desktop dev
+                        echo ""
+                        read -n 1 -s -r -p "Press any key to continue..."
+                        ;;
+                    "🌐 Launch Local Web Dashboard (agy-local-ui)")
+                        gum style --foreground 212 "🚀 Launching Local Web Dashboard via agy-box..."
+                        distrobox enter "$CONTAINER_NAME" -- just agy-local-ui &
                         echo ""
                         read -n 1 -s -r -p "Press any key to continue..."
                         ;;
