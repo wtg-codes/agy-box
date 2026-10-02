@@ -6,6 +6,7 @@ on:
       - 'docs/diagrams/*.mmd'
       - 'docs/diagrams/config.json'
       - 'docs/diagrams/style.css'
+      - 'docs/diagrams/puppeteer-config.json'
       - '.github/workflows/compile-diagrams.yml'
   workflow_dispatch:
 
@@ -23,8 +24,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
-          cache-dependency-path: 'package-lock.json'
 
       - name: Install Mermaid CLI
         run: |
@@ -39,8 +38,8 @@ jobs:
             if [ -f "$file" ]; then
               basename=$(basename "$file" .mmd)
               echo "Compiling $file to SVG & PNG..."
-              mmdc -i "$file" -o "docs/diagrams/rendered/${basename}.svg" -c docs/diagrams/config.json -C docs/diagrams/style.css -b transparent
-              mmdc -i "$file" -o "docs/diagrams/rendered/${basename}.png" -c docs/diagrams/config.json -C docs/diagrams/style.css -b transparent
+              mmdc -i "$file" -o "docs/diagrams/rendered/${basename}.svg" -c docs/diagrams/config.json -C docs/diagrams/style.css -p docs/diagrams/puppeteer-config.json -b transparent
+              mmdc -i "$file" -o "docs/diagrams/rendered/${basename}.png" -c docs/diagrams/config.json -C docs/diagrams/style.css -p docs/diagrams/puppeteer-config.json -b transparent
             fi
           done
 
