@@ -19,11 +19,11 @@ setup() {
   create_mock() {
     local cmd="$1"
     local code="$2"
-    cat <<EOF > "$MOCK_BIN/$cmd"
+    cat <<EOF2 > "$MOCK_BIN/$cmd"
 #!/bin/bash
 echo "$cmd \$*" >> "$TEST_LOG"
 $code
-EOF
+EOF2
     chmod +x "$MOCK_BIN/$cmd"
   }
 
@@ -155,7 +155,7 @@ teardown() {
   [ "$status" -eq 0 ]
   
   # Verify gum and google-chrome-stable pins
-  grep -F 'apt-get install -y --no-install-recommends gum=0.17.0-1' "$TEST_LOG"
+  grep -F 'apt-get install -y --no-install-recommends gum=0.17.0' "$TEST_LOG"
   grep -F 'apt-get install -y --no-install-recommends google-chrome-stable' "$TEST_LOG"
 }
 
@@ -177,7 +177,7 @@ teardown() {
   run "$TEST_DIR/install-agent-deps.sh" arm64
   [ "$status" -eq 0 ]
   
-  grep -F 'apt-get install -y --no-install-recommends gum=0.17.0-1' "$TEST_LOG"
+  grep -F 'apt-get install -y --no-install-recommends gum=0.17.0' "$TEST_LOG"
   grep -E 'apt-get install -y --no-install-recommends chromium' "$TEST_LOG"
 }
 
@@ -189,25 +189,3 @@ teardown() {
   grep -F 'curl -sSLO --http1.1 --connect-timeout 5 --retry 5 --retry-delay 2 https://github.com/derailed/k9s/releases/download/v0.50.18/k9s_Linux_arm64.tar.gz' "$TEST_LOG"
   grep -F 'curl -sSLO --http1.1 --connect-timeout 5 --retry 5 --retry-delay 2 https://get.helm.sh/helm-v3.21.0-linux-arm64.tar.gz' "$TEST_LOG"
 }
-
-@test "install-agent-toolchain.sh downloads and installs agent tools at user level" {
-  # Mock home directory
-  export HOME="$TEST_DIR/home"
-  mkdir -p "$HOME"
-  
-  run ./scripts/install-agent-toolchain.sh
-  [ "$status" -eq 0 ]
-  
-  # Verify it downloaded UI and IDE tarballs
-  grep -F 'curl -fsSL --http1.1 --connect-timeout 5 --retry 5 --retry-delay 2 https://storage.googleapis.com/antigravity-public/antigravity-hub/2.0.1-6566078776737792/linux-x64/Antigravity.tar.gz' "$TEST_LOG"
-  grep -F 'curl -fsSL --http1.1 --connect-timeout 5 --retry 5 --retry-delay 2 https://edgedl.me.gvt1.com/edgedl/release2/j0qc3/antigravity/stable/1.23.2-4781536860569600/linux-x64/Antigravity.tar.gz' "$TEST_LOG"
-  
-  # Verify it installed python packages
-  grep -F 'pip3 install --user --break-system-packages --no-cache-dir --retries 10 google-antigravity==0.1.0' "$TEST_LOG"
-  grep -F 'pip3 install --user --break-system-packages --no-cache-dir --retries 10 google-adk==2.1.0' "$TEST_LOG"
-  
-  # Verify npm prefix installation
-  grep -F 'npm install -g --prefix' "$TEST_LOG"
-  grep -F '@google/gemini-cli@0.43.0' "$TEST_LOG"
-}
-

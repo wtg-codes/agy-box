@@ -43,7 +43,7 @@ echo "Installing Charm Gum..."
 mkdir -p /etc/apt/keyrings
 curl -fsSL https://repo.charm.sh/apt/gpg.key | gpg --dearmor -o /etc/apt/keyrings/charm.gpg
 echo "deb [signed-by=/etc/apt/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *" > /etc/apt/sources.list.d/charm.list
-apt-get update && apt-get install -y --no-install-recommends gum=0.17.0-1 && rm -rf /var/lib/apt/lists/*
+apt-get update && apt-get install -y --no-install-recommends gum=0.17.0 && rm -rf /var/lib/apt/lists/*
 
 # 3. Install Google Chrome (amd64) or Chromium (arm64) for agent-based browsing
 if [[ "$TARGETARCH" = "arm64" ]]; then
@@ -72,5 +72,3 @@ else
     printf '#!/bin/bash\nexec /usr/bin/google-chrome-stable.orig --disable-dev-shm-usage --disable-gpu --disable-crash-reporter --no-sandbox "$@"' > /usr/bin/google-chrome-stable
     chmod +x /usr/bin/google-chrome-stable
 fi
-
-
