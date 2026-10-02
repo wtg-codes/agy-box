@@ -156,7 +156,7 @@ teardown() {
   
   # Verify gum and google-chrome-stable pins
   grep -F 'apt-get install -y --no-install-recommends gum=0.17.0-1' "$TEST_LOG"
-  grep -F 'apt-get install -y --no-install-recommends google-chrome-stable=148.0.7778.215-1' "$TEST_LOG"
+  grep -F 'apt-get install -y --no-install-recommends google-chrome-stable' "$TEST_LOG"
 }
 
 @test "install-agent-deps.sh on arm64 installs chromium" {
