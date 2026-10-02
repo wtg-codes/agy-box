@@ -59,7 +59,7 @@ if [[ "$TARGETARCH" = "arm64" ]]; then
     else
         CHROMIUM_BIN="/usr/bin/chromium"
     fi
-    printf "#!/bin/bash\nexec ${CHROMIUM_BIN} --disable-dev-shm-usage --disable-gpu --disable-crash-reporter --no-sandbox \"\$@\"" > /usr/bin/google-chrome-stable
+    printf '#!/bin/bash\nexec %s --disable-dev-shm-usage --disable-gpu --disable-crash-reporter --no-sandbox "$@"\n' "${CHROMIUM_BIN}" > /usr/bin/google-chrome-stable
     chmod +x /usr/bin/google-chrome-stable
 else
     echo "Installing Google Chrome for amd64..."
