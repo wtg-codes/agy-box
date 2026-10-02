@@ -103,4 +103,22 @@ sync-workspace:
     fi
     @echo "Workspace state successfully synchronized to ~/.config/agy-box/backup/"
 
+# Launch Local Workspace Web Dashboard (requires Ollama backend)
+agy-local-ui:
+    @echo "🔍 Auditing local hardware infrastructure..."
+    @if ! curl -s http://localhost:11434/api/tags > /dev/null; then \
+        echo "❌ CONFIG ERROR: Local Ollama backend not accessible on port 11434!"; \
+        echo "💡 Ensure your host accelerator is running via: podman start ollama"; \
+        exit 1; \
+    fi
+    @echo "✅ Ollama hardware acceleration node detected!"
+    @echo "🚀 Launching Local Workspace Web Dashboard..."
+    @mkdir -p ~/.config/agy-local-ui
+    @export DATA_DIR="~/.config/agy-local-ui" && open-webui serve --port 8080
+
+# Launch Local Workspace Web Dashboard in isolated dev/testing mode
+agy-local-ui-dev:
+    @echo "🧪 Initializing isolated local UI testing layer..."
+    @mkdir -p ~/.config/agy-local-ui-dev
+    @export DATA_DIR="~/.config/agy-local-ui-dev" && open-webui serve --port 8081
 

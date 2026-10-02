@@ -217,6 +217,8 @@ You can also bypass the interactive menu by passing commands directly, which is 
 | **Global Install** | `agy-box-manager install-global` | `just agy-install-global` |
 | **Global Uninstall** | `agy-box-manager uninstall-global` | `just agy-uninstall-global` |
 | **Run Integration Tests** | `agy-box-manager test` | `just agy-test` |
+| **Local Workspace Web Dashboard** | *N/A (justfile only)* | `just agy-local-ui` |
+| **Local Web Dashboard (Dev)** | *N/A (justfile only)* | `just agy-local-ui-dev` |
 
 
 ## Alternative & Cloud Deployments
