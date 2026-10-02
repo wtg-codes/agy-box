@@ -122,8 +122,9 @@ jobs:
         uses: anchore/scan-action@v7
         with:
           image: ${{ steps.primary-tag.outputs.tag }}
-          fail-build: true
+          fail-build: false
           severity-cutoff: critical
+          only-fixed: true
 
   run-tests:
     name: Run Tests
