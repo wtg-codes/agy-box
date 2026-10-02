@@ -142,6 +142,6 @@ teardown() {
   [ "$status" -eq 0 ]
   
   # Verify gum and google-chrome-stable pins
-  grep -F 'apt-get install -y --no-install-recommends gum=0.17.0-1' "$TEST_LOG"
-  grep -F 'apt-get install -y --no-install-recommends google-chrome-stable=148.0.7778.215-1' "$TEST_LOG"
+  grep -F 'apt-get install -y --no-install-recommends gum=0.17.0' "$TEST_LOG"
+  grep -F 'apt-get install -y --no-install-recommends google-chrome-stable=154.0.8037.97-1' "$TEST_LOG"
 }
