@@ -33,7 +33,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     /tmp/install-google-adk.sh && rm /tmp/install-google-adk.sh
 
 # 5b. Install Open WebUI (Local Workspace Web Dashboard)
-RUN pip3 install --no-cache-dir --break-system-packages open-webui
+RUN pip3 install --no-cache-dir --break-system-packages --ignore-installed open-webui
 
 # 6. Install CNCF Tooling
 COPY scripts/install-tools.sh /tmp/
