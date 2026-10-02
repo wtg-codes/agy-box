@@ -103,4 +103,16 @@ sync-workspace:
     fi
     @echo "Workspace state successfully synchronized to ~/.config/agy-box/backup/"
 
+# Run Bats unit tests for installation scripts
+test-scripts:
+    @if command -v bats >/dev/null 2>&1; then \
+        bats tests/; \
+    elif [ -f ./node_modules/.bin/bats ]; then \
+        ./node_modules/.bin/bats tests/; \
+    else \
+        echo "bats not found locally, falling back to container..."; \
+        runtime=$(command -v podman &>/dev/null && echo "podman" || echo "docker"); \
+        $runtime run --rm -v "$(pwd):/code" -w /code docker.io/bats/bats:latest tests/; \
+    fi
+
 
