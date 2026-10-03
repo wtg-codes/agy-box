@@ -15,6 +15,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
   cancel-in-progress: true
 
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
 jobs:
   lint:
     name: Lint Codebase
@@ -52,9 +55,14 @@ jobs:
       - name: Run Bats Tests
         run: ./node_modules/.bin/bats tests/
 
-  build-and-test:
-    name: Build & Validate Image
-    runs-on: ubuntu-latest
+  # amd64: build once, test it, and (on main/tags) push the exact same build by
+  # digest. The push step reuses the local BuildKit cache, so it does not rebuild.
+  build-amd64:
+    name: Build & Validate Image (amd64)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -70,10 +78,8 @@ jobs:
           load: true
           platforms: linux/amd64
           tags: localhost/agy-box:test
-          cache-from: |
-            type=gha,scope=build-${{ github.ref_name }}
-            type=gha,scope=build-main
-          cache-to: type=gha,mode=max,scope=build-${{ github.ref_name }}
+          cache-from: type=gha,scope=amd64
+          cache-to: type=gha,mode=max,scope=amd64
 
       - name: Install Distrobox
         run: |
@@ -87,17 +93,126 @@ jobs:
         run: |
           ./scripts/test-box.sh
 
-      - name: Run Grype vulnerability scan (Local Image)
-        uses: anchore/scan-action@v7
+      # Catalog the image once with Syft, then let Grype scan the SBOM instead of
+      # re-cataloging the multi-GB image a second time.
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
         with:
           image: localhost/agy-box:test
+          format: spdx-json
+          output-file: sbom.spdx.json
+          upload-artifact: false
+
+      - name: Run Grype vulnerability scan
+        uses: anchore/scan-action@v7
+        with:
+          sbom: sbom.spdx.json
           fail-build: false
           severity-cutoff: critical
           only-fixed: true
 
+      - name: Upload SBOM Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.spdx.json
+          retention-days: 5
+
+      - name: Log in to the Container registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push amd64 image by digest
+        id: push
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Containerfile
+          platforms: linux/amd64
+          outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=amd64
+
+      - name: Export digest
+        if: github.event_name != 'pull_request'
+        run: |
+          mkdir -p "${RUNNER_TEMP}/digests"
+          digest="${{ steps.push.outputs.digest }}"
+          touch "${RUNNER_TEMP}/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-amd64
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # arm64: built natively on an Arm runner (no QEMU emulation). Runs in parallel
+  # with the amd64 build/test job instead of waiting for it. On PRs it only
+  # builds (proves the arm64 build works and warms the cache); on main/tags it
+  # pushes the image by digest.
+  build-arm64:
+    name: Build Image (arm64, native)
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to the Container registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build (and on main/tags, push) arm64 image by digest
+        id: push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Containerfile
+          platforms: linux/arm64
+          outputs: >-
+            ${{ github.event_name == 'pull_request'
+            && 'type=cacheonly'
+            || format('type=image,name={0},push-by-digest=true,name-canonical=true,push=true', env.IMAGE) }}
+          cache-from: type=gha,scope=arm64
+          cache-to: type=gha,mode=max,scope=arm64
+
+      - name: Export digest
+        if: github.event_name != 'pull_request'
+        run: |
+          mkdir -p "${RUNNER_TEMP}/digests"
+          digest="${{ steps.push.outputs.digest }}"
+          touch "${RUNNER_TEMP}/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-arm64
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # Only tag/publish once every check has passed. Until this job runs, the
+  # per-arch images exist only as untagged digests.
   publish-and-release:
     name: Publish Multi-Arch & Release
-    needs: [build-and-test, lint, test-scripts]
+    needs: [build-amd64, build-arm64, lint, test-scripts]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
@@ -106,11 +221,17 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+      - name: Download SBOM
+        uses: actions/download-artifact@v4
+        with:
+          name: sbom
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -126,53 +247,31 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository }}
+          images: ${{ env.IMAGE }}
           tags: |
             type=ref,event=branch
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
 
-      - name: Build and push Multi-Arch OCI Image
-        id: build-push
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Containerfile
-          push: true
-          platforms: linux/amd64,linux/arm64
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: |
-            type=gha,scope=build-${{ github.ref_name }}
-            type=gha,scope=build-main
-          cache-to: type=gha,mode=max,scope=build-main
-
-      - name: Get primary tag
-        id: primary-tag
+      - name: Create and push multi-arch manifest
+        id: manifest
+        working-directory: ${{ runner.temp }}/digests
         run: |
-          TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n 1)
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-
-      - name: Generate SBOM
-        uses: anchore/sbom-action@v0
-        with:
-          image: ${{ steps.primary-tag.outputs.tag }}
-          format: spdx-json
-          output-file: sbom.spdx.json
-
-      - name: Upload SBOM Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: sbom
-          path: sbom.spdx.json
-          retention-days: 5
+          # shellcheck disable=SC2046
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.IMAGE }}@sha256:%s ' *)
+          TAG=$(jq -r '.tags[0]' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+          docker buildx imagetools inspect "$TAG"
+          DIGEST=$(docker buildx imagetools inspect "$TAG" --format '{{json .Manifest}}' | jq -r '.digest')
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
 
       - name: Attest Build Provenance
         uses: actions/attest-build-provenance@v2.2.0
         with:
-          subject-name: ghcr.io/${{ github.repository }}
-          subject-digest: ${{ steps.build-push.outputs.digest }}
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.manifest.outputs.digest }}
           push-to-registry: true
 
       - name: Create GitHub Release
