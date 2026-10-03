@@ -1,0 +1,102 @@
+---
+name: GHCR cleanup (untagged images)
+
+# Deletes untagged image versions from ghcr.io/<owner>/<repo>.
+#
+# A naive "delete every untagged version" would break published images:
+# platform manifests inside an image index, BuildKit attestation manifests
+# (SBOM/provenance) and sigstore referrers pushed by
+# actions/attest-build-provenance are all *untagged* package versions that
+# tagged images still reference. dataaxiom/ghcr-cleanup-action builds the
+# reference graph first and never deletes a digest that is still used by a
+# tagged image (shared children are reference-counted), and it deletes the
+# children/referrers of an image only together with that image.
+#
+# Safe defaults:
+#   - manual runs default to dry_run=true;
+#   - scheduled runs are DRY RUNS unless the repository variable
+#     GHCR_CLEANUP_ENABLED is set to "true"
+#     (Settings -> Secrets and variables -> Actions -> Variables);
+#   - only images older than `older_than` are considered, so a digest pushed
+#     by an in-flight CI run (pushed by digest, tagged only at the end) is
+#     never deleted;
+#   - latest, main and version tags (anything containing a dot) are excluded
+#     from every rule as an extra safety net.
+#
+# See CONTRIBUTING.md ("Container registry maintenance").
+
+"on":
+  schedule:
+    - cron: "23 4 * * 1"  # weekly, Monday 04:23 UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run: only log what would be deleted"
+        type: boolean
+        default: true
+      older_than:
+        description: "Only delete images older than this (e.g. '1 day', '1 hour'). Must not be empty."
+        type: string
+        default: "1 day"
+
+# Never run concurrently with the re-tag workflow (or another cleanup run).
+concurrency:
+  group: ghcr-maintenance
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    name: Delete untagged image versions
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Resolve mode
+        id: mode
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
+          INPUT_OLDER_THAN: ${{ inputs.older_than }}
+          CLEANUP_ENABLED: ${{ vars.GHCR_CLEANUP_ENABLED }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            dry_run="$INPUT_DRY_RUN"
+            older_than="$INPUT_OLDER_THAN"
+          else
+            older_than="1 day"
+            if [ "$CLEANUP_ENABLED" = "true" ]; then
+              dry_run=false
+            else
+              dry_run=true
+              echo "::notice::Scheduled run is a DRY RUN. Set repository variable GHCR_CLEANUP_ENABLED=true to enable deletion."
+            fi
+          fi
+          if [ -z "${older_than// /}" ]; then
+            echo "::error::older_than must not be empty (use e.g. '1 hour')"
+            exit 1
+          fi
+          {
+            echo "package=${GITHUB_REPOSITORY#*/}"
+            echo "dry_run=${dry_run}"
+            echo "older_than=${older_than}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Event: ${EVENT_NAME}  dry_run: ${dry_run}  older_than: ${older_than}" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Delete untagged images (multi-arch / attestation aware)
+        uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f  # v1.2.2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          owner: ${{ github.repository_owner }}
+          package: ${{ steps.mode.outputs.package }}
+          delete-untagged: true
+          # Drop tagged sha256-* sigstore referrers whose subject no longer exists.
+          delete-orphaned-images: true
+          exclude-tags: "latest,main,*.*"
+          older-than: ${{ steps.mode.outputs.older_than }}
+          dry-run: ${{ steps.mode.outputs.dry_run }}
+          # Post-run check that every multi-arch image still has all children.
+          validate: true

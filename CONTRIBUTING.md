@@ -55,3 +55,14 @@ just agy-test
   - `docs: update system topology diagram`
   - `style: lint cleanup`
 - **CI Pipelines**: On every pull request, GitHub Actions builds the image and runs the integration test suite automatically. Make sure all local lints and tests pass before pushing!
+
+---
+
+## 4. Container registry maintenance (GHCR)
+
+Two manual-first workflows maintain `ghcr.io/wtg-codes/agy-box`. Both run in the `ghcr-maintenance` concurrency group, use only the workflow's `GITHUB_TOKEN` (`packages: write`), and default to **dry run**.
+
+- **[ghcr-retag-amd64-only.yml](.github/workflows/ghcr-retag-amd64-only.yml)** (one-off, *Actions → GHCR re-tag legacy images → Run workflow*): images published before PR #24 contain a QEMU-built "arm64" entry that is really amd64 userland. For every tag whose index lists a non-amd64 platform, it re-points the tag to an index containing only the original `linux/amd64` manifest and its attestation manifest (`docker buildx imagetools create --platform linux/amd64`; nothing is rebuilt, manifest digests are unchanged). Already amd64-only tags (`latest`, `main`, releases) and `sha256-*` referrer tags are never touched. Inputs: `dry_run` (default `true`), `tags` (optional subset).
+- **[ghcr-cleanup.yml](.github/workflows/ghcr-cleanup.yml)** (weekly + manual): deletes untagged image versions with [`dataaxiom/ghcr-cleanup-action`](https://github.com/dataaxiom/ghcr-cleanup-action), which understands image indexes, BuildKit attestation manifests and sigstore referrers and never deletes a digest still referenced by a tagged image. Only images older than `older_than` (default `1 day`) are considered, so in-flight CI pushes are safe. Scheduled runs stay dry runs until the repository variable `GHCR_CLEANUP_ENABLED` is set to `true`.
+
+One-time order after the re-tag workflow lands: run the re-tag with `dry_run=true` and review → run it with `dry_run=false` → run the cleanup with `dry_run=true` (`older_than: 1 hour`, no CI/CD run in progress) and review → run the cleanup with `dry_run=false`. The old multi-arch indexes are then untagged and get removed together with their fake-arm64 children.
