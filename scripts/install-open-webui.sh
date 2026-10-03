@@ -38,4 +38,4 @@ ln -sf /opt/open-webui-venv/bin/open-webui /usr/local/bin/open-webui
 
 # Cleanup
 apt-get clean
-rm -rf /var/lib/apt/lists/* /root/.cache
+rm -rf /var/lib/apt/lists/*
