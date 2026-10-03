@@ -55,6 +55,15 @@ jobs:
       - name: Run Bats Tests
         run: ./node_modules/.bin/bats tests/
 
+  # Architecture note: only linux/amd64 is built and published.
+  # The upstream base image (ghcr.io/ublue-os/ubuntu-toolbox) is published for
+  # linux/amd64 only, so a native arm64 build fails with
+  # InvalidBaseImagePlatform / "exec format error". Earlier QEMU-based "arm64"
+  # builds only succeeded because BuildKit silently fell back to the amd64 base,
+  # i.e. previously published "arm64" images were actually amd64 userland.
+  # Re-add a native `ubuntu-24.04-arm` job (push-by-digest, merged in
+  # publish-and-release) once the base image ships a multi-arch manifest list.
+  #
   # amd64: build once, test it, and (on main/tags) push the exact same build by
   # digest. The push step reuses the local BuildKit cache, so it does not rebuild.
   build-amd64:
@@ -69,6 +78,9 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          # Runners are ephemeral; skip the ~30s builder teardown at job end.
+          cleanup: false
 
       - name: Build and load image into Docker
         uses: docker/build-push-action@v5
@@ -79,7 +91,30 @@ jobs:
           platforms: linux/amd64
           tags: localhost/agy-box:test
           cache-from: type=gha,scope=amd64
-          cache-to: type=gha,mode=max,scope=amd64
+          cache-to: type=gha,mode=max,scope=amd64,ignore-error=true
+
+      - name: Install Syft
+        id: syft
+        uses: anchore/sbom-action/download-syft@v0
+
+      - name: Install Grype
+        id: grype
+        uses: anchore/scan-action/download-grype@v7
+
+      # Cataloging the multi-GB image (~3 min) and downloading the Grype DB are
+      # independent of the integration tests, so run them in the background
+      # while the tests execute. The SBOM is generated once; Grype then scans
+      # the SBOM instead of re-cataloging the image.
+      - name: Start SBOM generation and Grype DB update (background)
+        env:
+          SYFT: ${{ steps.syft.outputs.cmd }}
+          GRYPE: ${{ steps.grype.outputs.cmd }}
+        run: |
+          mkdir -p "${RUNNER_TEMP}/scan"
+          nohup bash -c '"$SYFT" scan docker:localhost/agy-box:test -o spdx-json=sbom.spdx.json \
+            > "$RUNNER_TEMP/scan/syft.log" 2>&1; echo $? > "$RUNNER_TEMP/scan/syft.rc"' > /dev/null 2>&1 &
+          nohup bash -c '"$GRYPE" db update \
+            > "$RUNNER_TEMP/scan/grype-db.log" 2>&1; echo $? > "$RUNNER_TEMP/scan/grype-db.rc"' > /dev/null 2>&1 &
 
       - name: Install Distrobox
         run: |
@@ -93,29 +128,33 @@ jobs:
         run: |
           ./scripts/test-box.sh
 
-      # Catalog the image once with Syft, then let Grype scan the SBOM instead of
-      # re-cataloging the multi-GB image a second time.
-      - name: Generate SBOM
-        uses: anchore/sbom-action@v0
-        with:
-          image: localhost/agy-box:test
-          format: spdx-json
-          output-file: sbom.spdx.json
-          upload-artifact: false
+      - name: Wait for SBOM
+        run: |
+          timeout 1200 bash -c 'until [ -f "$RUNNER_TEMP/scan/syft.rc" ]; do sleep 2; done'
+          cat "${RUNNER_TEMP}/scan/syft.log"
+          rc=$(cat "${RUNNER_TEMP}/scan/syft.rc")
+          if [ "$rc" != "0" ]; then
+            echo "::error::Syft SBOM generation failed (exit $rc)"
+            exit "$rc"
+          fi
+          ls -lh sbom.spdx.json
 
+      # Informational scan (does not fail the build), equivalent to the former
+      # anchore/scan-action config: fail-build=false, only-fixed=true.
       - name: Run Grype vulnerability scan
-        uses: anchore/scan-action@v7
-        with:
-          sbom: sbom.spdx.json
-          fail-build: false
-          severity-cutoff: critical
-          only-fixed: true
+        env:
+          GRYPE: ${{ steps.grype.outputs.cmd }}
+        run: |
+          timeout 600 bash -c 'until [ -f "$RUNNER_TEMP/scan/grype-db.rc" ]; do sleep 2; done' || true
+          cat "${RUNNER_TEMP}/scan/grype-db.log" || true
+          "$GRYPE" sbom:sbom.spdx.json --only-fixed -o table || echo "::warning::Grype scan did not complete"
 
       - name: Upload SBOM Artifact
         uses: actions/upload-artifact@v4
         with:
           name: sbom
           path: sbom.spdx.json
+          if-no-files-found: error
           retention-days: 5
 
       - name: Log in to the Container registry
@@ -139,10 +178,11 @@ jobs:
 
       - name: Export digest
         if: github.event_name != 'pull_request'
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
         run: |
           mkdir -p "${RUNNER_TEMP}/digests"
-          digest="${{ steps.push.outputs.digest }}"
-          touch "${RUNNER_TEMP}/digests/${digest#sha256:}"
+          touch "${RUNNER_TEMP}/digests/${DIGEST#sha256:}"
 
       - name: Upload digest
         if: github.event_name != 'pull_request'
@@ -153,66 +193,11 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  # arm64: built natively on an Arm runner (no QEMU emulation). Runs in parallel
-  # with the amd64 build/test job instead of waiting for it. On PRs it only
-  # builds (proves the arm64 build works and warms the cache); on main/tags it
-  # pushes the image by digest.
-  build-arm64:
-    name: Build Image (arm64, native)
-    runs-on: ubuntu-24.04-arm
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to the Container registry
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build (and on main/tags, push) arm64 image by digest
-        id: push
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./Containerfile
-          platforms: linux/arm64
-          outputs: >-
-            ${{ github.event_name == 'pull_request'
-            && 'type=cacheonly'
-            || format('type=image,name={0},push-by-digest=true,name-canonical=true,push=true', env.IMAGE) }}
-          cache-from: type=gha,scope=arm64
-          cache-to: type=gha,mode=max,scope=arm64
-
-      - name: Export digest
-        if: github.event_name != 'pull_request'
-        run: |
-          mkdir -p "${RUNNER_TEMP}/digests"
-          digest="${{ steps.push.outputs.digest }}"
-          touch "${RUNNER_TEMP}/digests/${digest#sha256:}"
-
-      - name: Upload digest
-        if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
-        with:
-          name: digests-arm64
-          path: ${{ runner.temp }}/digests/*
-          if-no-files-found: error
-          retention-days: 1
-
   # Only tag/publish once every check has passed. Until this job runs, the
-  # per-arch images exist only as untagged digests.
+  # pushed image exists only as an untagged digest.
   publish-and-release:
-    name: Publish Multi-Arch & Release
-    needs: [build-amd64, build-arm64, lint, test-scripts]
+    name: Publish & Release
+    needs: [build-amd64, lint, test-scripts]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
@@ -254,7 +239,10 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
 
-      - name: Create and push multi-arch manifest
+      # Tags the pushed digest(s). With a single (amd64) source this copies the
+      # image index produced by the build as-is; the loop over digest files keeps
+      # it ready for additional architectures later.
+      - name: Tag and push image manifest
         id: manifest
         working-directory: ${{ runner.temp }}/digests
         run: |

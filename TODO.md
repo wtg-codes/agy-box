@@ -2,6 +2,7 @@
 
 ## Architectural Goals
 - **Multi-Architecture Support**: Update the CI pipeline and Docker build configuration to support generating multi-arch images (e.g., `amd64`, `arm64`) using `docker buildx`.
+  - *Blocked by base image*: `ghcr.io/ublue-os/ubuntu-toolbox` is published for `linux/amd64` only (single `latest` tag, no manifest list), so CI currently builds and publishes amd64 only. Earlier "arm64" images built under QEMU were actually amd64 userland. Enabling arm64 requires a multi-arch base (e.g. `quay.io/toolbx/ubuntu-toolbox:24.04`, which publishes amd64 + arm64) and re-adding a native `ubuntu-24.04-arm` build job.
 - **Component Separation**: Evaluate moving deeply specific agent tooling out of the base container into dynamically loaded modules to keep the core image size small.
 
 ## Technical Debt
