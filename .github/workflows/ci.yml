@@ -15,6 +15,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
   cancel-in-progress: true
 
+# Least privilege by default; jobs that need more override this.
+permissions:
+  contents: read
+
 env:
   IMAGE: ghcr.io/${{ github.repository }}
 
@@ -82,6 +86,23 @@ jobs:
           # Runners are ephemeral; skip the ~30s builder teardown at job end.
           cleanup: false
 
+      # OCI labels (source, revision, created, version, ...). Computed once and
+      # applied to both the tested (loaded) build and the pushed build so their
+      # configs match; labels only touch the image config, so layers stay cached.
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+          # Keep the Containerfile's description instead of the repo description.
+          labels: |
+            org.opencontainers.image.description=Declarative Student Workspace for wtgOS Cloud-Native Laboratory
+
       - name: Build and load image into Docker
         uses: docker/build-push-action@v5
         with:
@@ -90,6 +111,7 @@ jobs:
           load: true
           platforms: linux/amd64
           tags: localhost/agy-box:test
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=amd64
           cache-to: type=gha,mode=max,scope=amd64,ignore-error=true
 
@@ -137,17 +159,28 @@ jobs:
             echo "::error::Syft SBOM generation failed (exit $rc)"
             exit "$rc"
           fi
+          if ! jq -e '.spdxVersion' sbom.spdx.json > /dev/null; then
+            echo "::error::sbom.spdx.json is not a valid SPDX JSON document"
+            exit 1
+          fi
           ls -lh sbom.spdx.json
 
-      # Informational scan (does not fail the build), equivalent to the former
-      # anchore/scan-action config: fail-build=false, only-fixed=true.
+      # Informational scan: findings do not fail the build (no --fail-on),
+      # equivalent to the former anchore/scan-action config fail-build=false,
+      # only-fixed=true. Real Grype errors (e.g. no usable DB) still fail.
       - name: Run Grype vulnerability scan
         env:
           GRYPE: ${{ steps.grype.outputs.cmd }}
         run: |
-          timeout 600 bash -c 'until [ -f "$RUNNER_TEMP/scan/grype-db.rc" ]; do sleep 2; done' || true
+          if ! timeout 600 bash -c 'until [ -f "$RUNNER_TEMP/scan/grype-db.rc" ]; do sleep 2; done'; then
+            echo "::warning::Background Grype DB update did not finish within 10 min"
+          fi
           cat "${RUNNER_TEMP}/scan/grype-db.log" || true
-          "$GRYPE" sbom:sbom.spdx.json --only-fixed -o table || echo "::warning::Grype scan did not complete"
+          db_rc=$(cat "${RUNNER_TEMP}/scan/grype-db.rc" 2> /dev/null || echo "missing")
+          if [ "$db_rc" != "0" ]; then
+            echo "::warning::Background Grype DB update failed (exit ${db_rc}); grype will retry the download itself"
+          fi
+          "$GRYPE" sbom:sbom.spdx.json --only-fixed -o table
 
       - name: Upload SBOM Artifact
         uses: actions/upload-artifact@v4
@@ -174,6 +207,7 @@ jobs:
           file: ./Containerfile
           platforms: linux/amd64
           outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=amd64
 
       - name: Export digest
