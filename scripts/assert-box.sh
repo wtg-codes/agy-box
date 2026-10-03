@@ -49,6 +49,12 @@ assert_cmd "Antigravity IDE" "antigravity-ide" "test -x \"$HOME/.local/bin/antig
 assert_cmd "IceWM Startup Script" "icewm-session" "test -x /etc/X11/icewm/startup" || errors=$((errors+1))
 assert_cmd "IceWM Preferences" "icewm-session" "test -f /etc/X11/icewm/preferences" || errors=$((errors+1))
 
+# Assert Open WebUI (fast checks only; the server is not started)
+OPEN_WEBUI_PY="/opt/open-webui-venv/bin/python"
+assert_cmd "Open WebUI (on PATH)" "open-webui" "test -x \"\$(command -v open-webui)\"" || errors=$((errors+1))
+assert_cmd "Open WebUI (venv import)" "$OPEN_WEBUI_PY" "\"$OPEN_WEBUI_PY\" -c 'import open_webui'" || errors=$((errors+1))
+assert_cmd "Open WebUI (CPU-only PyTorch)" "$OPEN_WEBUI_PY" "\"$OPEN_WEBUI_PY\" -c 'import sys, torch; sys.exit(1 if torch.version.cuda else 0)'" || errors=$((errors+1))
+
 if [ "$errors" -gt 0 ]; then
     echo -e "${RED}✗ $errors test assertions failed inside the container.${NC}"
     exit 1

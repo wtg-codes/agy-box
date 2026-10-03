@@ -21,9 +21,20 @@ apt-get update
 # Install Python 3.12 and its venv module
 apt-get install -y --no-install-recommends python3.12 python3.12-venv
 
-# Install open-webui via pipx using Python 3.12
-# We inject python3.12 so it ignores system python3
-PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install open-webui --python python3.12
+# Install uv for high-speed parallel package downloads and wheel caching
+PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install uv
+
+# Create isolated virtualenv for Open WebUI with Python 3.12
+uv venv /opt/open-webui-venv --python python3.12
+
+# Install CPU-only PyTorch first to avoid downloading ~4.5 GB of NVIDIA CUDA blobs
+uv pip install --python /opt/open-webui-venv/bin/python --index-url https://download.pytorch.org/whl/cpu torch torchvision
+
+# Install Open WebUI into the virtual environment (reuses pre-installed CPU torch)
+uv pip install --python /opt/open-webui-venv/bin/python open-webui
+
+# Expose open-webui binary on system PATH
+ln -sf /opt/open-webui-venv/bin/open-webui /usr/local/bin/open-webui
 
 # Cleanup
 apt-get clean

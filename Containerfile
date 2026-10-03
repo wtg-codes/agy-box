@@ -16,7 +16,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 COPY scripts/install-open-webui.sh /tmp/
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
-    /tmp/install-open-webui.sh && rm /tmp/install-open-webui.sh
+    --mount=type=cache,target=/root/.cache/uv,sharing=locked \
+    UV_LINK_MODE=copy /tmp/install-open-webui.sh && rm /tmp/install-open-webui.sh
 
 # 3. Install CNCF Tooling
 COPY scripts/install-tools.sh /tmp/
