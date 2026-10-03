@@ -77,6 +77,18 @@ for cmd in curl tar sha256sum sha512sum python3 pip3 npm; do
     command -v "$cmd" >/dev/null 2>&1 || die "required command '${cmd}' not found in PATH."
 done
 
+# Ensure user directories in HOME are writable. When distrobox initializes,
+# files from /etc/skel may be copied with root ownership if the container was
+# started by root/distrobox-init. Fix ownership using passwordless sudo.
+for d in "$HOME/.config" "$HOME/.gemini" "$HOME/.local" "$HOME/Desktop"; do
+    if [ -e "$d" ] && [ ! -w "$d" ]; then
+        if command -v sudo &>/dev/null && sudo -n true 2>/dev/null; then
+            sudo chown -R "$(id -u):$(id -g)" "$d" 2>/dev/null || true
+            chmod -R u+rwX "$d" 2>/dev/null || true
+        fi
+    fi
+done
+
 BIN_DIR="$HOME/.local/bin"
 SHARE_DIR="$HOME/.local/share"
 mkdir -p "$BIN_DIR" "$SHARE_DIR"
@@ -119,7 +131,18 @@ write_file_atomic() {
 # missing; never overwrite existing user settings on re-runs.
 ensure_default_settings() {
     local file=$1
-    mkdir -p "$(dirname "$file")"
+    local dir
+    dir="$(dirname "$file")"
+    if [ ! -d "$dir" ]; then
+        if ! mkdir -p "$dir" 2>/dev/null; then
+            if command -v sudo &>/dev/null && sudo -n true 2>/dev/null; then
+                sudo mkdir -p "$dir"
+                sudo chown -R "$(id -u):$(id -g)" "$dir" 2>/dev/null || true
+            else
+                mkdir -p "$dir"
+            fi
+        fi
+    fi
     if [ ! -f "$file" ]; then
         echo '{"antigravity.account.enableTelemetry": false}' > "$file"
     fi

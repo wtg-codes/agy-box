@@ -35,7 +35,8 @@ RUN chmod +x /usr/local/bin/entrypoint.sh \
              /usr/local/bin/agy-install-toolchain \
              /etc/profile.d/agy-setup-check.sh \
              /etc/X11/icewm/startup \
-             /etc/skel/Desktop/*.desktop
+             /etc/skel/Desktop/*.desktop && \
+    chmod -R ugo+rwX /etc/skel
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 

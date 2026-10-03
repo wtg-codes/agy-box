@@ -567,7 +567,8 @@ setup_gws_mcp_stitch() {
                 --arg cid "$input_cid" \
                 --arg sec "$input_sec" \
                 --arg skey "$input_stitch" \
-                '.mcpServers.filesystem = {command: "npx", args: ["-y", "@modelcontextprotocol/server-filesystem", "/var/home/wtg/Repos"]} |
+                --arg repos "${DISTROBOX_HOST_HOME:-$HOME}/Repos" \
+                '.mcpServers.filesystem = {command: "npx", args: ["-y", "@modelcontextprotocol/server-filesystem", $repos]} |
                  .mcpServers.github = {command: "npx", args: ["-y", "--package", "github-mcp-server", "github-mcp-server-mcp"]} |
                  .mcpServers["sequential-thinking"] = {command: "npx", args: ["-y", "@modelcontextprotocol/server-sequential-thinking"]} |
                  (if $skey != "" then .mcpServers.stitch = {serverUrl: "https://stitch.googleapis.com/mcp", headers: {"X-Goog-Api-Key": $skey}} else del(.mcpServers.stitch) end) |
