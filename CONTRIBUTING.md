@@ -2,22 +2,32 @@
 
 Thank you for your interest in contributing to `agy-box`! This guide outlines how to set up your local development environment, explains the repository layout, and reviews code contribution workflows.
 
+> 🌐 New here? The [project website](https://wtg-codes.github.io/agy-box/) gives a quick visual overview of what the box contains.
+
 ---
 
 ## 1. Repository Layout
 
 The repository is structured as a Distrobox overlay template:
 
-- 📂 **[rootfs/](file:///var/home/wtg/Repos/agy-box/rootfs)**: Files copied directly into the root filesystem (`/`) of the container during the build.
-  - 📂 **[rootfs/etc/profile.d/agy-setup-check.sh](file:///var/home/wtg/Repos/agy-box/rootfs/etc/profile.d/agy-setup-check.sh)**: Hook that launches the interactive setup helper on first interactive TTY shell login.
-  - 📂 **[rootfs/usr/local/bin/agy-setup-helper](file:///var/home/wtg/Repos/agy-box/rootfs/usr/local/bin/agy-setup-helper)**: Interactive first-time CLI helper verifying API keys, D-Bus, Chrome version, and Git setups.
-  - 📂 **[rootfs/usr/local/bin/entrypoint.sh](file:///var/home/wtg/Repos/agy-box/rootfs/usr/local/bin/entrypoint.sh)**: Custom entrypoint running inside the container to align sandbox user permissions.
-- 📂 **[scripts/](file:///var/home/wtg/Repos/agy-box/scripts)**: Package dependency configuration and helper scripts.
-  - 📄 **[scripts/install-agent-deps.sh](file:///var/home/wtg/Repos/agy-box/scripts/install-agent-deps.sh)**: Installs basic dependencies and system-level requirements (like `libsecret-1-0` for keyring mapping).
-  - 📄 **[scripts/install-agent-toolchain.sh](file:///var/home/wtg/Repos/agy-box/scripts/install-agent-toolchain.sh)**: Per-user Antigravity toolchain installer (Agent UI, IDE, `agy` CLI, SDK, ADK, Gemini CLI → `~/.local`). Shipped in the image as `/usr/local/bin/agy-install-toolchain` and run inside the box by `agy-box-manager install|dev|update-toolchain`; the toolchain itself is not baked into the image.
-  - 📄 **[scripts/test-box.sh](file:///var/home/wtg/Repos/agy-box/scripts/test-box.sh)**: Integration test harness asserting that all commands are functional inside the sandbox.
-- 📄 **[agy-box-manager](file:///var/home/wtg/Repos/agy-box/agy-box-manager)**: The central interactive terminal menu tool to install, run, or remove container environments.
-- 📄 **[justfile](file:///var/home/wtg/Repos/agy-box/justfile)**: Standard automation recipes.
+- 📄 **[Containerfile](Containerfile)**: Image definition. Based on `ghcr.io/ublue-os/ubuntu-toolbox` (pinned by digest; Ubuntu 26.04 LTS, `linux/amd64` only).
+- 📂 **[rootfs/](rootfs)**: Files copied directly into the root filesystem (`/`) of the container during the build.
+  - 📂 **[rootfs/etc/profile.d/agy-setup-check.sh](rootfs/etc/profile.d/agy-setup-check.sh)**: Hook that launches the interactive setup helper on first interactive TTY shell login.
+  - 📂 **[rootfs/usr/local/bin/agy-setup-helper](rootfs/usr/local/bin/agy-setup-helper)**: Interactive first-time CLI helper verifying API keys, D-Bus, Chrome version, and Git setups. Its `VERSION` variable is the image version (it also selects the versioned wallpaper).
+  - 📂 **[rootfs/usr/local/bin/agy-vdi](rootfs/usr/local/bin/agy-vdi)**: Starts the noVNC VDI desktop (Xvfb, IceWM, x11vnc, websockify).
+  - 📂 **[rootfs/usr/local/bin/entrypoint.sh](rootfs/usr/local/bin/entrypoint.sh)**: Custom entrypoint running inside the container to align sandbox user permissions.
+  - 📂 **[rootfs/etc/X11/icewm/](rootfs/etc/X11/icewm)** and **[rootfs/etc/skel/](rootfs/etc/skel)**: IceWM desktop configuration, desktop icons, and default user settings.
+- 📂 **[scripts/](scripts)**: Package dependency configuration and helper scripts.
+  - 📄 **[scripts/install-agent-deps.sh](scripts/install-agent-deps.sh)**: Installs basic dependencies and system-level requirements (like `libsecret-1-0` for keyring mapping, Chrome, the VDI stack, and Gum).
+  - 📄 **[scripts/install-open-webui.sh](scripts/install-open-webui.sh)**: Installs Open WebUI into `/opt/open-webui-venv` with `uv` and CPU-only PyTorch.
+  - 📄 **[scripts/install-tools.sh](scripts/install-tools.sh)**: Installs pinned, checksum-verified CNCF tools (`kubectl`, `helm`, `k9s`).
+  - 📄 **[scripts/install-agent-toolchain.sh](scripts/install-agent-toolchain.sh)**: Per-user Antigravity toolchain installer (Agent UI, IDE, `agy` CLI, SDK, ADK, Gemini CLI → `~/.local`). Shipped in the image as `/usr/local/bin/agy-install-toolchain` and run inside the box by `agy-box-manager install|dev|update-toolchain`; the toolchain itself is not baked into the image.
+  - 📄 **[scripts/test-box.sh](scripts/test-box.sh)**: Integration test harness that builds the image, creates a temporary distrobox, installs the toolchain, and runs the assertions.
+  - 📄 **[scripts/assert-box.sh](scripts/assert-box.sh)**: Assertions asserting that all commands are functional inside the sandbox.
+- 📂 **[tests/](tests)**: Bats unit tests for the installation scripts.
+- 📂 **[docs/](docs)**: Architecture guide, setup guide, ADRs, Mermaid diagram sources (`docs/diagrams/*.mmd`) with their rendered SVG/PNG, and the GitHub Pages site (`docs/index.html`).
+- 📄 **[agy-box-manager](agy-box-manager)**: The central interactive terminal menu tool to install, run, or remove container environments.
+- 📄 **[justfile](justfile)**: Standard automation recipes.
 
 ---
 
@@ -28,7 +38,16 @@ To make code changes and test them locally:
 ### Step 1: Make your changes
 Edit scripts, `Containerfile`, or rootfs configurations.
 
-### Step 2: Build the development image
+### Step 2: Run the fast checks
+These do not need an image build:
+```bash
+yamllint -c .yamllint.yml .
+shellcheck scripts/*.sh agy-box-manager
+hadolint Containerfile
+just test-scripts   # Bats unit tests (falls back to a bats container if bats is not installed)
+```
+
+### Step 3: Build the development image
 Build a local container image named `localhost/agy-box:dev` from your files:
 ```bash
 # Using agy-box-manager:
@@ -38,11 +57,14 @@ Build a local container image named `localhost/agy-box:dev` from your files:
 just agy-box-dev
 ```
 
-### Step 3: Run integration tests
+### Step 4: Run integration tests
 Verify that your changes didn't break any application binaries or configurations inside the container:
 ```bash
 just agy-test
 ```
+
+### Editing diagrams
+Edit the Mermaid sources in `docs/diagrams/*.mmd` only. The [`compile-diagrams.yml`](.github/workflows/compile-diagrams.yml) workflow re-renders `docs/diagrams/rendered/*.svg|png` and commits them back to your branch automatically (commit message tagged `[skip ci]`, so push a follow-up commit if you need CI to run on the final head).
 
 ---
 
@@ -54,7 +76,8 @@ just agy-test
   - `fix: correct D-Bus keyring validation checks`
   - `docs: update system topology diagram`
   - `style: lint cleanup`
-- **CI Pipelines**: On every pull request, GitHub Actions builds the image and runs the integration test suite automatically. Make sure all local lints and tests pass before pushing!
+- **CI Pipelines**: On every pull request, GitHub Actions lints the repository (yamllint, ShellCheck, hadolint), runs the Bats tests, builds the `linux/amd64` image, runs the Distrobox integration test suite against it, and generates an SBOM plus an informational Grype vulnerability scan. Pull requests never push images to GHCR. Make sure all local lints and tests pass before pushing!
+- **Releases**: Maintainers bump `VERSION` in `agy-box-manager` and `rootfs/usr/local/bin/agy-setup-helper` (plus the version shown in `docs/index.html`), merge to `main`, and push a `v<version>` tag. See [Releases](README.md#releases).
 
 ---
 
