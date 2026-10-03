@@ -12,7 +12,7 @@ graph TD
     end
 
     subgraph Sandbox ["agy-box Sandbox Container (Ubuntu Toolbox Base)"]
-        BaseOS["fa:fa-linux Base OS Layer (Ubuntu)"]
+        BaseOS["fa:fa-linux Base OS Layer (Ubuntu 26.04 LTS, amd64)"]
         KeyringClient["fa:fa-key Keyring integration (libsecret-1-0)"]
         
         subgraph Setup ["First-Time Setup Assistant"]
@@ -29,7 +29,7 @@ graph TD
         end
     end
 
-    UserHome <-->|"Mounts to $HOME"| MountHome
+    UserHome <-->|"Host home at same path + isolated box home (~/.config/agy-box/home)"| MountHome
     MountHome <--> BaseOS
     
     DBus -->|"Forward D-Bus Socket"| ForwardSockets
