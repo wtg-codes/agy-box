@@ -134,10 +134,10 @@ agy-local-ui:
     @echo "✅ Ollama hardware acceleration node detected!"
     @echo "🚀 Launching Local Workspace Web Dashboard..."
     @mkdir -p ~/.config/agy-local-ui
-    @export DATA_DIR="~/.config/agy-local-ui" && open-webui serve --port 8080
+    @export DATA_DIR="$HOME/.config/agy-local-ui" && open-webui serve --port 8080
 
 # Launch Local Workspace Web Dashboard in isolated dev/testing mode
 agy-local-ui-dev:
     @echo "🧪 Initializing isolated local UI testing layer..."
     @mkdir -p ~/.config/agy-local-ui-dev
-    @export DATA_DIR="~/.config/agy-local-ui-dev" && open-webui serve --port 8081
+    @export DATA_DIR="$HOME/.config/agy-local-ui-dev" && open-webui serve --port 8081
