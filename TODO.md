@@ -2,24 +2,52 @@
 
 ## Architectural Goals
 - **Multi-Architecture Support**: Update the CI pipeline and Docker build configuration to support generating multi-arch images (e.g., `amd64`, `arm64`) using `docker buildx`.
-  - *Blocked by base image*: `ghcr.io/ublue-os/ubuntu-toolbox` is published for `linux/amd64` only (single `latest` tag, no manifest list), so CI currently builds and publishes amd64 only. Earlier "arm64" images built under QEMU were actually amd64 userland. Enabling arm64 requires a multi-arch base (e.g. `quay.io/toolbx/ubuntu-toolbox:24.04`, which publishes amd64 + arm64) and re-adding a native `ubuntu-24.04-arm` build job.
+  - *Blocked by base image*: `ghcr.io/ublue-os/ubuntu-toolbox` is published for `linux/amd64` only (single `latest` tag, no manifest list), so CI currently builds and publishes amd64 only. Earlier "arm64" images built under QEMU were actually amd64 userland. Enabling arm64 requires a multi-arch base and re-adding a native `ubuntu-24.04-arm` build job — see [Possible future work](#possible-future-work).
 - **Component Separation**: Evaluate moving deeply specific agent tooling out of the base container into dynamically loaded modules to keep the core image size small.
+  - *Status (v0.6.0)*: The Antigravity toolchain (Agent UI, IDE, CLI, SDK, Google ADK, Gemini CLI) moved out of the image into a per-user install (`scripts/install-agent-toolchain.sh` → `~/.local`). Remaining: decide whether Open WebUI (the largest layer) should also become an optional module.
 
 ## Technical Debt
-- **Containerfile Linting**: Implement `hadolint` in the GitHub Actions workflow to ensure `Containerfile` adheres to best practices.
-- **Shell Script Linting**: Add `shellcheck` into the linting workflow to validate the integrity of scripts within `scripts/`.
+- ~~**Containerfile Linting**: Implement `hadolint` in the GitHub Actions workflow to ensure `Containerfile` adheres to best practices.~~ ✅ Done (v0.6.0, `Lint Codebase` job).
+- ~~**Shell Script Linting**: Add `shellcheck` into the linting workflow to validate the integrity of scripts within `scripts/`.~~ ✅ Done (v0.6.0; also covers `agy-box-manager`, `agy-setup-helper`, `agy-vdi`, and the IceWM startup script).
 - **Dependency Pinning**: Ensure all package installations inside the `Containerfile` and scripts use strictly pinned versions instead of `latest` where possible.
+  - *Status (v0.6.0)*: Base image pinned by digest; `kubectl`, `helm`, `k9s`, Gum, Antigravity tarballs, SDK, ADK, and Gemini CLI pinned. Still unpinned: Google Chrome (`google-chrome-stable`), apt packages, `uv`, Open WebUI and PyTorch wheels.
+- **Unused legacy install scripts**: `scripts/install-gemini-cli.sh` and `scripts/install-google-adk.sh` are no longer called by the `Containerfile` (superseded by `scripts/install-agent-toolchain.sh`) but are still exercised by Bats tests. Remove them and point the tests at the toolchain installer.
+- **`agy-box-manager` runtime selection**: The manager always prefers Podman when installed and ignores a user-provided `DBX_CONTAINER_MANAGER` (see [docs/SETUP.md](docs/SETUP.md) Q4). Honor the variable.
 
 ## Testing Plans
-- **Unit Testing for Scripts**: Introduce a framework like `Bats` (Bash Automated Testing System) to assert the scripts execute and install dependencies accurately without having to build the entire container every time.
-- **Integration Testing**: Added a local integration test suite in `scripts/test-box.sh`. Next step is to run these assertions automatically in the CI pipeline.
+- ~~**Unit Testing for Scripts**: Introduce a framework like `Bats` (Bash Automated Testing System) to assert the scripts execute and install dependencies accurately without having to build the entire container every time.~~ ✅ Done (v0.6.0, `tests/install_scripts.bats`, `Run Script Tests` job).
+- ~~**Integration Testing**: Added a local integration test suite in `scripts/test-box.sh`. Next step is to run these assertions automatically in the CI pipeline.~~ ✅ Done (v0.6.0, the `Build & Validate Image (amd64)` job runs `scripts/test-box.sh` against the freshly built image).
 - **PR Preview Environments**: Setup a way to dynamically test container image builds on pull requests, pushing to temporary PR-specific tags instead of polluting `latest`.
+  - *Status (v0.6.0)*: PRs build and test the image but never push it (no `pr-N` tags). Publishing PR previews would need a GHCR retention policy first (see below).
 
 ## Documentation & Community
-- **CONTRIBUTING.md**: Create detailed contribution guidelines for new developers outlining branch strategies and commit conventions.
+- ~~**CONTRIBUTING.md**: Create detailed contribution guidelines for new developers outlining branch strategies and commit conventions.~~ ✅ Done ([CONTRIBUTING.md](CONTRIBUTING.md)).
 - **Code of Conduct**: Add a standard Code of Conduct document to the repository.
 - **Architecture & Product Sync**: Periodically verify and update the sandbox architecture and product deep-dives (README.md) to reflect new versions, installation endpoints, and configuration options.
 - **Settings Schema Mapping**: Document user settings schema for Antigravity IDE and CLI in a dedicated `docs/settings-reference.md` file.
 
 ## Security
 - **Container Vulnerability Scanning**: Integrate `Trivy` or `Grype` into the CI/CD pipeline to automatically block builds that introduce critical CVEs.
+  - *Status (v0.6.0)*: Grype scans the Syft SBOM on every build, but **informationally** (`--only-fixed`, no `--fail-on`). Blocking is tracked under [Possible future work](#possible-future-work).
+
+## Possible future work
+
+Ideas that are not scheduled yet. Each needs a decision before implementation.
+
+### Images & platforms
+- **Optional CUDA PyTorch variant for Open WebUI**: Offer CUDA-enabled PyTorch either as a separate image tag (e.g. `ghcr.io/wtg-codes/agy-box:<version>-cuda`) or as an opt-in installer inside the box. Only useful with NVIDIA GPU passthrough into the container, and adds roughly 4.5 GB of NVIDIA libraries, so the default image stays CPU-only.
+- **Real arm64 support**: Move to a multi-arch base image — `quay.io/toolbx/ubuntu-toolbox:26.04` (same Ubuntu release as today) and `:24.04` both publish `linux/amd64` + `linux/arm64` — and add a native `ubuntu-24.04-arm` CI job that builds and tests arm64 and pushes by digest, merged into one manifest list in `Publish & Release`. Also requires arm64 builds of the Antigravity tarballs (currently `linux-x64` only) and keeping the Chromium fallback in `install-agent-deps.sh`.
+- **v0.6.0 wallpaper asset**: Add `rootfs/usr/share/agy-box/wallpaper-v0.6.0.png`. Until then the `Containerfile` falls back to the newest existing wallpaper (`wallpaper-v0.5.0.png`).
+
+### Toolchain
+- **`agy-box-manager update-toolchain` command**: Re-run the per-user toolchain installer (`agy-install-toolchain`) inside an existing box to pick up new Antigravity/SDK/ADK/Gemini CLI versions without recreating the container (unless the toolchain fix PR already adds an equivalent).
+- **Update notes**: Show what changed (image tag, toolchain versions) when `agy-box-manager install` recreates an existing box, e.g. by linking the GitHub Release notes for the pulled tag.
+
+### CI/CD & supply chain
+- **In-registry SBOM attestation**: Re-introduce an SBOM attestation using BuildKit's native `sbom: true` (`docker/build-push-action`), which stores the SBOM in the image index, as a replacement for the removed `actions/attest-sbom` step (dropped because the SBOM exceeded the 16 MB attestation limit).
+- **Stricter Grype gating**: Fail the build on critical vulnerabilities that have a fix available (`grype --only-fixed --fail-on critical`), possibly with an allow-list file for accepted findings.
+- **GHCR retention policy**: Every push to `main` leaves the previous digest untagged. Add a scheduled cleanup (e.g. `actions/delete-package-versions` or `dataaxiom/ghcr-cleanup-action`) that prunes untagged digests older than N days while keeping anything referenced by a tag or attestation.
+- **Keep GitHub Actions current**: v0.6.0 moved all workflows off the deprecated Node 20 runtime; add Dependabot (`package-ecosystem: github-actions`) so future major versions arrive as PRs.
+- **GitHub Actions cache size**: The `type=gha,mode=max` layer cache for the multi-GB image competes for the repository's 10 GB Actions cache quota. Consider `mode=min`, or a registry cache (`type=registry,ref=ghcr.io/wtg-codes/agy-box:buildcache,mode=max`).
+- **Test for stray NVIDIA pip packages**: Extend `scripts/assert-box.sh` to fail if any `nvidia-*` Python packages are present in `/opt/open-webui-venv` (`uv pip list` / `pip list`), complementing the existing `torch.version.cuda` check.
+- **Mermaid render on PRs**: `compile-diagrams.yml` commits rendered diagrams back to the branch with `[skip ci]`, which leaves that head commit without PR checks. Consider rendering in CI without committing, or committing with a token that triggers CI.
