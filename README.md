@@ -85,18 +85,20 @@ The diagram below outlines the layering stack and the host integration bridge of
 
 The developer environment packages four distinct products of the Google Antigravity ecosystem, each serving a specific role in agentic development:
 
+> **How the toolchain is installed:** the Antigravity toolchain is **not baked into the container image**. The image ships a per-user installer, `/usr/local/bin/agy-install-toolchain` (source: [`scripts/install-agent-toolchain.sh`](scripts/install-agent-toolchain.sh)), which installs the Agent UI, IDE, `agy` CLI, SDK, Google ADK and Gemini CLI into the box user's `~/.local` (pinned versions, checksum-verified). `agy-box-manager install` / `dev` run it automatically right after creating the box and then export `agy` to the host's `~/.local/bin`. Re-run it at any time to repair or update the toolchain with `agy-box-manager update-toolchain` (or `update-toolchain dev`) on the host, or `agy-install-toolchain` inside the box.
+
 ![Antigravity Product Communication](docs/diagrams/rendered/product-communication.svg)
 
 #### 1. Google Antigravity (Agent UI) / Antigravity "2.0"
 *   **Role & Description:** The agent-first UI (canvas, terminal, course labs) featuring the Gemini-powered software engineering assistant.
 *   **Install & Build Mechanics:**
-    *   **Source Script:** Built using `scripts/install-antigravity.sh` during the container image build.
+    *   **Source Script:** Installed per user by `agy-install-toolchain` (`scripts/install-agent-toolchain.sh`) when the box is created.
     *   **Package Origin:** Linux x64 tarball fetched from the Google Cloud Storage bucket:
         `https://storage.googleapis.com/antigravity-public/antigravity-hub/2.0.1-6566078776737792/linux-x64/Antigravity.tar.gz`
     *   **Integrity Check:** Validated via SHA-256 hash `0727e1f56961b6d2347941f278da69cc6c17de3befe988524848cd167380e9ab`.
-    *   **Installation Directory:** Extracted directly to `/usr/share/antigravity`.
-    *   **Execution Wrapper:** Accessible globally via `/usr/bin/antigravity`. The wrapper script launches the Agent UI with `--disable-dev-shm-usage` to prevent crashes when running under standard container runtimes.
-    *   **Default Configuration:** Pre-configured telemetry settings mapped into `/etc/skel/.config/Antigravity/User/settings.json` which disables telemetry (`"antigravity.account.enableTelemetry": false`) by default for all new shell users.
+    *   **Installation Directory:** Extracted to `~/.local/share/antigravity`.
+    *   **Execution Wrapper:** `~/.local/bin/antigravity` (on `PATH` in box shells and the VDI desktop). The wrapper script launches the Agent UI with `--disable-dev-shm-usage` to prevent crashes when running under standard container runtimes.
+    *   **Default Configuration:** The installer creates `~/.config/Antigravity/User/settings.json` with telemetry disabled (`"antigravity.account.enableTelemetry": false`) if it does not exist yet; existing settings are preserved on re-runs.
 *   **Usage Workflows:**
     *   **Launch:** Run `antigravity` inside the container terminal.
     *   **Browser Control:** Uses Chrome Developer Protocol (CDP) to drive the container-installed `google-chrome-stable` to execute agentic browser interactions.
@@ -105,13 +107,13 @@ The developer environment packages four distinct products of the Google Antigrav
 #### 2. Antigravity IDE (VS Code-based Classic IDE)
 *   **Role & Description:** The classic VS Code-based developer IDE.
 *   **Install & Build Mechanics:**
-    *   **Source Script:** Built using `scripts/install-antigravity-ide.sh` during the container image build.
+    *   **Source Script:** Installed per user by `agy-install-toolchain` (`scripts/install-agent-toolchain.sh`) when the box is created.
     *   **Package Origin:** Linux x64 tarball fetched from Google Cloud Storage:
         `https://edgedl.me.gvt1.com/edgedl/release2/j0qc3/antigravity/stable/1.23.2-4781536860569600/linux-x64/Antigravity.tar.gz`
     *   **Integrity Check:** Validated via SHA-256 hash `5232a4048ff4fa15685d9a981ba4fba573e297f3efc9b76f638e794baf775725`.
-    *   **Installation Directory:** Extracted directly to `/usr/share/antigravity-ide`.
-    *   **Execution Wrapper:** Accessible globally via `/usr/bin/antigravity-ide`. The wrapper script launches the classic IDE with `--disable-dev-shm-usage` to prevent shared memory crashes.
-    *   **Default Configuration:** Pre-configured telemetry settings mapped into `/etc/skel/.config/Antigravity-ide/User/settings.json` which disables telemetry by default.
+    *   **Installation Directory:** Extracted to `~/.local/share/antigravity-ide`.
+    *   **Execution Wrapper:** `~/.local/bin/antigravity-ide`. The wrapper script launches the classic IDE with `--disable-dev-shm-usage` to prevent shared memory crashes.
+    *   **Default Configuration:** The installer creates `~/.config/Antigravity-ide/User/settings.json` with telemetry disabled if it does not exist yet.
 *   **Usage Workflows:**
     *   **Launch:** Run `antigravity-ide` inside the container terminal.
     *   **Settings Path:** Workspace configuration and accounts are persisted in `~/.config/Antigravity-ide-box`.
@@ -119,11 +121,11 @@ The developer environment packages four distinct products of the Google Antigrav
 #### 3. Antigravity CLI (`agy`)
 *   **Role & Description:** A native command-line utility used to interface with the Antigravity developer environment, run course labs, submit tasks, and verify local agent status.
 *   **Install & Build Mechanics:**
-    *   **Source Script:** Configured via `scripts/install-antigravity-cli.sh`.
+    *   **Source Script:** Installed per user by `agy-install-toolchain` (`scripts/install-agent-toolchain.sh`) when the box is created.
     *   **Package Origin:** Precompiled Linux x64 executable tarball:
         `https://storage.googleapis.com/antigravity-public/antigravity-cli/1.0.0-5288553236791296/linux-x64/cli_linux_x64.tar.gz`
     *   **Integrity Check:** Validated using SHA-512 hash `5ccdcc01fb863c7e8e56473c6c95dba75fed4fd2a242200d80cfc4c7fab811b733f5a7fab25332130aad298e72627e1018e6911a5658f4f059ef6e019f211972`.
-    *   **Target Path:** Placed directly at `/usr/bin/agy` for global execution.
+    *   **Target Path:** `~/.local/bin/agy` inside the box. `agy-box-manager` also exports it to the host as `~/.local/bin/agy` (a `distrobox-export` shim that runs the box's `agy`); an existing host-native `agy` is never overwritten.
 *   **Usage Workflows:**
     *   **Launch:** Executed via `agy` (e.g. `agy --version` or `agy --help`).
     *   **Lab Submission:** Interacts with GitHub APIs using Git config files and GitHub Personal Access Tokens stored in `~/.config/environment.d/antigravity-mcp.conf`.
@@ -132,10 +134,10 @@ The developer environment packages four distinct products of the Google Antigrav
 #### 4. Antigravity SDK (`google-antigravity`)
 *   **Role & Description:** Programmatic Python SDK allowing developers to control Antigravity agents, run custom code analysis modules, and write custom extension scripts.
 *   **Install & Build Mechanics:**
-    *   **Source Script:** Configured via `scripts/install-antigravity-sdk.sh`.
+    *   **Source Script:** Installed per user by `agy-install-toolchain` (`scripts/install-agent-toolchain.sh`) when the box is created.
     *   **Package Origin:** Standard Python Package Index (PyPI).
-    *   **Install Command:** `pip3 install --no-cache-dir --break-system-packages google-antigravity==0.1.0`.
-    *   **Target Path:** Installed container-wide in python's system site-packages (e.g. `/usr/local/lib/python3.*/dist-packages/google_antigravity`).
+    *   **Install Command:** `pip3 install --user --break-system-packages google-antigravity==0.1.0`.
+    *   **Target Path:** The user's site-packages under `~/.local/lib/python3.*/site-packages/`.
 *   **Usage Workflows:**
     *   **Import:** Used in Python files by running `import google.antigravity`.
     *   **API Control:** Commands are sent programmatically from the script to the local Agent UI backend server running on port `8080` (or dynamically mapped ports).
@@ -214,6 +216,7 @@ You can also bypass the interactive menu by passing commands directly, which is 
 | **VDI Desktop (Official)** | `agy-box-manager desktop` | `just agy-desktop` |
 | **VDI Desktop (Dev)** | `agy-box-manager desktop dev` | `just agy-desktop-dev` |
 | **Clean Official Env** | `agy-box-manager clean` | `just agy-clean` |
+| **Install/Update Toolchain** | `agy-box-manager update-toolchain [dev]` | `just agy-update-toolchain` / `just agy-update-toolchain-dev` |
 | **Global Install** | `agy-box-manager install-global` | `just agy-install-global` |
 | **Global Uninstall** | `agy-box-manager uninstall-global` | `just agy-uninstall-global` |
 | **Run Integration Tests** | `agy-box-manager test` | `just agy-test` |

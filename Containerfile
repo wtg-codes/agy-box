@@ -25,9 +25,14 @@ RUN /tmp/install-tools.sh "${TARGETARCH}" && rm /tmp/install-tools.sh
 
 # 8. Copy rootfs and configure entrypoint
 COPY rootfs/ /
+# The Antigravity toolchain is NOT baked into the image. Ship its per-user
+# installer instead; agy-box-manager runs it inside the box after creation
+# (`distrobox enter <box> -- agy-install-toolchain`), installing into ~/.local.
+COPY scripts/install-agent-toolchain.sh /usr/local/bin/agy-install-toolchain
 RUN chmod +x /usr/local/bin/entrypoint.sh \
              /usr/local/bin/agy-setup-helper \
              /usr/local/bin/agy-vdi \
+             /usr/local/bin/agy-install-toolchain \
              /etc/profile.d/agy-setup-check.sh \
              /etc/X11/icewm/startup \
              /etc/skel/Desktop/*.desktop

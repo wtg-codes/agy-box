@@ -420,6 +420,21 @@ run_audit_checks() {
 
         # D. Developer Skills Pack Checks
         echo "Skills Check:"
+
+        # Antigravity toolchain (per-user install in ~/.local/bin, not baked into the image)
+        local missing_toolchain=0
+        local tool
+        for tool in agy antigravity antigravity-ide gemini adk; do
+            if [[ -x "$HOME/.local/bin/$tool" ]]; then
+                echo "OK:Antigravity toolchain component '$tool' is installed."
+            else
+                echo "WARN:Antigravity toolchain component '$tool' not found in ~/.local/bin."
+                missing_toolchain=$((missing_toolchain + 1))
+            fi
+        done
+        if [[ "$missing_toolchain" -gt 0 ]]; then
+            echo "WARN:Run 'agy-install-toolchain' (or 'agy-box-manager update-toolchain' on the host) to install the Antigravity toolchain."
+        fi
         
         # Android Pack
         if command -v adb &>/dev/null; then

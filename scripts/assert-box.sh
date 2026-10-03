@@ -37,10 +37,14 @@ assert_cmd "helm" "helm" "helm version" || errors=$((errors+1))
 assert_cmd "k9s" "k9s" "k9s version" || errors=$((errors+1))
 
 # Assert AI Agent Tools
+assert_cmd "Toolchain installer (agy-install-toolchain)" "agy-install-toolchain" "test -f /usr/local/bin/agy-install-toolchain && test -x /usr/local/bin/agy-install-toolchain" || errors=$((errors+1))
 assert_cmd "Gemini CLI" "gemini" "gemini --help" || errors=$((errors+1))
 assert_cmd "Google ADK" "adk" "adk --help" || errors=$((errors+1))
 assert_cmd "Antigravity CLI (agy)" "agy" "agy --version" || errors=$((errors+1))
 assert_cmd "Antigravity SDK" "python3" "python3 -c \"import google.antigravity\"" || errors=$((errors+1))
+# Login shells must find the per-user toolchain via /etc/profile.d/agy-toolchain.sh
+# (POSIX sh, starting from a PATH without ~/.local/bin, as under distrobox enter).
+assert_cmd "Toolchain on login-shell PATH (profile.d)" "sh" "env PATH=/usr/local/bin:/usr/bin:/bin sh -c '. /etc/profile.d/agy-toolchain.sh && test \"\$(command -v agy)\" = \"\$HOME/.local/bin/agy\"'" || errors=$((errors+1))
 
 # Assert Desktop Apps (Checking path & permissions)
 assert_cmd "Google Chrome" "google-chrome-stable" "google-chrome-stable --version" || errors=$((errors+1))

@@ -12,6 +12,14 @@ NC='\033[0m' # No Color
 CONTAINER_NAME="agy-box-test"
 IMAGE_NAME="${IMAGE_NAME:-localhost/agy-box:dev}"
 
+# Like agy-box-manager, create the box with an isolated --home so the toolchain
+# install and the agy host export are exercised exactly as for real users. Under
+# /tmp because distrobox always bind-mounts /tmp at the same path in the box.
+TEST_ROOT="$(mktemp -d /tmp/agy-box-test.XXXXXX)"
+TEST_HOME="$TEST_ROOT/home"          # box $HOME (manager: ~/.config/agy-box/home)
+TEST_EXPORT_DIR="$TEST_ROOT/bin"     # host export dir (manager: ~/.local/bin)
+mkdir -p "$TEST_HOME" "$TEST_EXPORT_DIR"
+
 log_info() {
     echo -e "${CYAN}[INFO]${NC} $1"
 }
@@ -32,6 +40,17 @@ log_error() {
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_DIR=$(dirname "$SCRIPT_DIR")
 
+# Run a function from agy-box-manager (same code path as `agy-box-manager
+# install|dev|update-toolchain|clean`). Sourced in a subshell so the manager's
+# globals (e.g. CONTAINER_NAME) don't leak; arguments are expanded beforehand.
+manager_fn() {
+    (
+        # shellcheck source=/dev/null
+        source "$REPO_DIR/agy-box-manager"
+        "$@"
+    )
+}
+
 # --- Cleanup function ---
 cleanup() {
     log_info "Cleaning up..."
@@ -50,6 +69,7 @@ cleanup() {
     else
         log_info "No test container '$CONTAINER_NAME' to clean up."
     fi
+    rm -rf "$TEST_ROOT" 2>/dev/null || true
 }
 
 # Register cleanup trap
@@ -128,19 +148,59 @@ if "${RUNTIME}" ps -a --format '{{.Names}}' 2>/dev/null | grep -qw "$CONTAINER_N
     fi
 fi
 
-distrobox create -i "$IMAGE_NAME" -n "$CONTAINER_NAME" --hostname "$CONTAINER_NAME" --yes
+distrobox create -i "$IMAGE_NAME" -n "$CONTAINER_NAME" --hostname "$CONTAINER_NAME" --home "$TEST_HOME" --yes
 log_success "Created distrobox container '$CONTAINER_NAME'."
 
 # Sleep briefly to ensure Podman container registration is fully synced to disk
 sleep 2
 
-# --- Run Assertions Inside Distrobox ---
-log_info "Installing agent toolchain inside the container..."
-distrobox enter "$CONTAINER_NAME" -- "$REPO_DIR/scripts/install-agent-toolchain.sh"
+# --- Install Toolchain (real user path) ---
+# Runs the in-image /usr/local/bin/agy-install-toolchain inside the box and
+# exports the agy CLI to the host, via the manager's own install_toolchain_in_box.
+log_info "Installing agent toolchain inside the container (agy-box-manager install path)..."
+manager_fn install_toolchain_in_box "$CONTAINER_NAME" "$TEST_HOME" "$TEST_EXPORT_DIR"
+log_success "Toolchain installed and agy CLI exported."
 
+# --- Verify the exported host shim ---
+verify_host_shim() {
+    local shim="$TEST_EXPORT_DIR/agy"
+    log_info "Verifying exported host shim $shim..."
+    if [[ ! -x "$shim" ]] || ! grep -q "distrobox_binary" "$shim"; then
+        log_error "Exported agy shim missing or not a distrobox export: $shim"
+        exit 1
+    fi
+    if ! grep -qF "'$TEST_HOME/.local/bin/agy'" "$shim"; then
+        log_error "Exported agy shim does not point at the box's ~/.local/bin/agy:"
+        cat "$shim" >&2
+        exit 1
+    fi
+    # Run from the host (outside the box): the shim must enter the box and run agy.
+    if ! (unset CONTAINER_ID; "$shim" --version); then
+        log_error "Exported agy shim failed to run 'agy --version' from the host."
+        exit 1
+    fi
+    log_success "Exported host shim runs agy from the host."
+}
+verify_host_shim
+
+# --- Run Assertions Inside Distrobox ---
 log_info "Running test assertions inside the container..."
 
 # We execute distrobox enter to run our test suite script
 distrobox enter "$CONTAINER_NAME" -- "$REPO_DIR/scripts/assert-box.sh"
+
+# --- Re-run (agy-box-manager update-toolchain path) ---
+log_info "Re-running the toolchain install to verify it is idempotent (update-toolchain path)..."
+manager_fn install_toolchain_in_box "$CONTAINER_NAME" "$TEST_HOME" "$TEST_EXPORT_DIR"
+verify_host_shim
+
+# --- Uninstall path: remove the export (agy-box-manager clean) ---
+log_info "Removing the exported agy CLI (agy-box-manager clean path)..."
+manager_fn unexport_agy_cli "$CONTAINER_NAME" "$TEST_EXPORT_DIR"
+if [[ -e "$TEST_EXPORT_DIR/agy" ]]; then
+    log_error "Exported agy shim still present after unexport."
+    exit 1
+fi
+log_success "Exported agy shim removed."
 
 log_success "Integration tests finished successfully!"
