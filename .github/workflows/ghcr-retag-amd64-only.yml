@@ -1,0 +1,212 @@
+---
+name: GHCR re-tag legacy images (amd64-only)
+
+# One-off maintenance workflow (manual trigger only).
+#
+# Before PR #24, CI built "linux/arm64" under QEMU from an amd64-only base
+# image, so tags published by those runs point at an image index whose
+# "arm64" entry is really amd64 userland. This workflow re-points every such
+# tag to an index that contains only the linux/amd64 manifest plus its
+# BuildKit attestation manifest (SBOM/provenance).
+#
+# Nothing is rebuilt: `docker buildx imagetools create --platform linux/amd64`
+# copies the matching descriptors of the existing index verbatim (digest,
+# size, annotations), so the amd64 image manifest, its config and layers keep
+# their exact bytes/digests. The attestation manifest is carried because
+# buildx keeps `vnd.docker.reference.type=attestation-manifest` entries whose
+# subject matches the selected platform. Only the (new) index is pushed.
+#
+# Tags whose index is already amd64-only (e.g. latest/main since PR #24) and
+# sigstore referrer tags (`sha256-*`) are never modified.
+#
+# The old multi-arch indexes become untagged afterwards; the
+# "GHCR cleanup" workflow (ghcr-cleanup.yml) then removes them together with
+# their orphaned fake-arm64 children while keeping the still-referenced amd64
+# manifests. See CONTRIBUTING.md ("Container registry maintenance").
+
+"on":
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run: only print what would change (no pushes)"
+        type: boolean
+        default: true
+      tags:
+        description: "Optional space/comma-separated list of tags to consider (default: every tag in the package)"
+        type: string
+        required: false
+        default: ""
+
+# Never run concurrently with the cleanup workflow.
+concurrency:
+  group: ghcr-maintenance
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  retag:
+    name: Re-tag legacy multi-arch tags to amd64-only
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Re-tag affected tags
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          TAGS_INPUT: ${{ inputs.tags }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          repo="${IMAGE#ghcr.io/}"
+
+          if ! docker buildx imagetools create --help | grep -q -- '--platform'; then
+            echo "::error::'docker buildx imagetools create' lacks --platform; a newer buildx is required"
+            exit 1
+          fi
+
+          # Print one line per index entry: digest + platform, or the subject
+          # of a BuildKit attestation manifest.
+          summarize() {
+            jq -r '
+              if .manifests then
+                .manifests[]
+                | if .annotations["vnd.docker.reference.type"] == "attestation-manifest"
+                  then "    \(.digest)  attestation-manifest -> \(.annotations["vnd.docker.reference.digest"])"
+                  else "    \(.digest)  \(.platform.os // "?")/\(.platform.architecture // "?")\(if .platform.variant then "/" + .platform.variant else "" end)"
+                  end
+              else "    (single-platform manifest)" end'
+          }
+
+          # Unique non-attestation platforms of an index, e.g. "linux/amd64 linux/arm64".
+          platforms_of() {
+            jq -r '[.manifests[]
+                    | select(.annotations["vnd.docker.reference.type"] != "attestation-manifest")
+                    | "\(.platform.os // "?")/\(.platform.architecture // "?")\(if .platform.variant then "/" + .platform.variant else "" end)"]
+                   | unique | join(" ")'
+          }
+
+          # Sanity checks on a (would-be) result index: exactly one non-attestation
+          # entry, it is the original linux/amd64 manifest, and every attestation
+          # manifest that referenced it is still present.
+          verify_result() { # $1=result json, $2=amd64 digest, $3=expected attestation count
+            jq -e --arg d "$2" --argjson n "$3" '
+              ([.manifests[] | select(.annotations["vnd.docker.reference.type"] != "attestation-manifest")]
+                | length == 1 and .[0].digest == $d
+                  and .[0].platform.os == "linux" and .[0].platform.architecture == "amd64")
+              and ([.manifests[] | select(.annotations["vnd.docker.reference.type"] == "attestation-manifest"
+                                         and .annotations["vnd.docker.reference.digest"] == $d)] | length == $n)
+            ' <<<"$1" > /dev/null
+          }
+
+          if [ -n "${TAGS_INPUT//[[:space:],]/}" ]; then
+            read -r -a tags <<< "${TAGS_INPUT//,/ }"
+          else
+            token=$(curl -fsS --retry 3 -u "${GITHUB_ACTOR}:${GH_TOKEN}" \
+              "https://ghcr.io/token?scope=repository:${repo}:pull" | jq -r .token)
+            tag_json=$(curl -fsS --retry 3 -H "Authorization: Bearer ${token}" \
+              "https://ghcr.io/v2/${repo}/tags/list?n=1000")
+            mapfile -t tags < <(jq -r '.tags[]' <<<"$tag_json")
+            if [ "${#tags[@]}" -ge 1000 ]; then
+              echo "::warning::tag list may be truncated (>= 1000 tags)"
+            fi
+          fi
+
+          mode="APPLY"
+          if [ "$DRY_RUN" = "true" ]; then mode="DRY RUN"; fi
+          echo "Mode: ${mode}   Image: ${IMAGE}   Tags considered: ${#tags[@]}"
+          {
+            echo "## GHCR amd64-only re-tag (${mode})"
+            echo
+            echo "| Tag | Index before | Platforms before | Action |"
+            echo "|---|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          affected=0
+          failed=0
+          for tag in "${tags[@]}"; do
+            case "$tag" in
+              sha256-*) continue ;; # sigstore/cosign referrer fallback tags
+            esac
+            ref="${IMAGE}:${tag}"
+            # Resolve the tag once and read everything else by digest, so the
+            # inspected and the re-tagged index are guaranteed to be the same.
+            digest=$(docker buildx imagetools inspect "$ref" --format '{{json .Manifest}}' | jq -r '.digest')
+            raw=$(docker buildx imagetools inspect --raw "${IMAGE}@${digest}")
+
+            if ! jq -e '.manifests' > /dev/null <<<"$raw"; then
+              echo "= ${tag}: single-platform manifest, untouched"
+              continue
+            fi
+            plats=$(platforms_of <<<"$raw")
+            if [ "$plats" = "linux/amd64" ]; then
+              echo "= ${tag}: already amd64-only (${digest}), untouched"
+              continue
+            fi
+
+            mapfile -t amd64 < <(jq -r '.manifests[] | select(.platform.os == "linux" and .platform.architecture == "amd64") | .digest' <<<"$raw")
+            if [ "${#amd64[@]}" -ne 1 ]; then
+              echo "::warning::${tag}: expected exactly one linux/amd64 manifest, found ${#amd64[@]}; skipping"
+              echo "| \`${tag}\` | \`${digest}\` | ${plats} | skipped (no unique amd64 manifest) |" >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+            amd64_digest="${amd64[0]}"
+            n_att=$(jq --arg d "$amd64_digest" '[.manifests[] | select(.annotations["vnd.docker.reference.digest"] == $d)] | length' <<<"$raw")
+
+            affected=$((affected + 1))
+            echo "::group::${tag}"
+            echo "Before: ${ref} -> ${digest}  [${plats}]"
+            summarize <<<"$raw"
+
+            args=(--platform linux/amd64 -t "$ref" "${IMAGE}@${digest}")
+            planned=$(docker buildx imagetools create --dry-run "${args[@]}")
+            echo "Planned index (amd64 manifest ${amd64_digest}, ${n_att} attestation manifest(s) carried):"
+            summarize <<<"$planned"
+            if ! verify_result "$planned" "$amd64_digest" "$n_att"; then
+              echo "::error::${tag}: planned index failed verification; not touching it"
+              echo "$planned"
+              echo "| \`${tag}\` | \`${digest}\` | ${plats} | **verification failed** |" >> "$GITHUB_STEP_SUMMARY"
+              failed=$((failed + 1))
+              echo "::endgroup::"
+              continue
+            fi
+
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "DRY RUN: would run: docker buildx imagetools create ${args[*]}"
+              echo "| \`${tag}\` | \`${digest}\` | ${plats} | would re-tag to amd64-only |" >> "$GITHUB_STEP_SUMMARY"
+            else
+              docker buildx imagetools create "${args[@]}"
+              new_digest=$(docker buildx imagetools inspect "$ref" --format '{{json .Manifest}}' | jq -r '.digest')
+              new_raw=$(docker buildx imagetools inspect --raw "${IMAGE}@${new_digest}")
+              echo "After: ${ref} -> ${new_digest}  [$(platforms_of <<<"$new_raw")]"
+              summarize <<<"$new_raw"
+              if verify_result "$new_raw" "$amd64_digest" "$n_att"; then
+                echo "| \`${tag}\` | \`${digest}\` | ${plats} | re-tagged -> \`${new_digest}\` (amd64-only) |" >> "$GITHUB_STEP_SUMMARY"
+              else
+                echo "::error::${tag}: post-push verification failed (now ${new_digest})"
+                echo "| \`${tag}\` | \`${digest}\` | ${plats} | **post-push verification failed** |" >> "$GITHUB_STEP_SUMMARY"
+                failed=$((failed + 1))
+              fi
+            fi
+            echo "::endgroup::"
+          done
+
+          echo "Affected tags: ${affected}   Failures: ${failed}   Mode: ${mode}"
+          if [ "$affected" -eq 0 ]; then
+            echo "Nothing to do: no tag contains a non-amd64 platform." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          [ "$failed" -eq 0 ]
