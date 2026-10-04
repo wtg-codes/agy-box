@@ -22,6 +22,10 @@ permissions:
 
 env:
   IMAGE: ghcr.io/${{ github.repository }}
+  # docker/build-push-action v6+ exports a build record and writes a job
+  # summary by default; keep the pre-upgrade behaviour (no extra artifacts).
+  DOCKER_BUILD_SUMMARY: "false"
+  DOCKER_BUILD_RECORD_UPLOAD: "false"
 
 jobs:
   lint:
@@ -29,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Lint YAML
         uses: ibiqlik/action-yamllint@v3.1.1
@@ -41,9 +45,13 @@ jobs:
       - name: Run ShellCheck
         run: |
           find . -type f \( -name "*.sh" -o -name "agy-box-manager" \) -print0 | xargs -0 shellcheck
+          # Executable scripts without a .sh extension
+          shellcheck rootfs/usr/local/bin/agy-setup-helper \
+            rootfs/usr/local/bin/agy-vdi \
+            rootfs/etc/X11/icewm/startup
 
       - name: Lint Containerfile
-        uses: hadolint/hadolint-action@v3.1.0
+        uses: hadolint/hadolint-action@v3.5.0
         with:
           dockerfile: Containerfile
 
@@ -52,7 +60,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install Bats
         run: npm install bats
@@ -79,10 +87,10 @@ jobs:
       packages: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
         with:
           # Runners are ephemeral; skip the ~30s builder teardown at job end.
           cleanup: false
@@ -92,7 +100,7 @@ jobs:
       # configs match; labels only touch the image config, so layers stay cached.
       - name: Extract Docker metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE }}
           tags: |
@@ -105,7 +113,7 @@ jobs:
             org.opencontainers.image.description=Declarative Student Workspace for wtgOS Cloud-Native Laboratory
 
       - name: Build and load image into Docker
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Containerfile
@@ -184,7 +192,7 @@ jobs:
           "$GRYPE" sbom:sbom.spdx.json --only-fixed -o table
 
       - name: Upload SBOM Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: sbom
           path: sbom.spdx.json
@@ -193,7 +201,7 @@ jobs:
 
       - name: Log in to the Container registry
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -202,7 +210,7 @@ jobs:
       - name: Push amd64 image by digest
         id: push
         if: github.event_name != 'pull_request'
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Containerfile
@@ -221,7 +229,7 @@ jobs:
 
       - name: Upload digest
         if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: digests-amd64
           path: ${{ runner.temp }}/digests/*
@@ -242,22 +250,22 @@ jobs:
       attestations: write
     steps:
       - name: Download digests
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: ${{ runner.temp }}/digests
           pattern: digests-*
           merge-multiple: true
 
       - name: Download SBOM
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: sbom
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to the Container registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -265,7 +273,7 @@ jobs:
 
       - name: Extract Docker metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.IMAGE }}
           tags: |
@@ -291,15 +299,17 @@ jobs:
           echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
 
       - name: Attest Build Provenance
-        uses: actions/attest-build-provenance@v2.2.0
+        uses: actions/attest-build-provenance@v4
         with:
           subject-name: ${{ env.IMAGE }}
           subject-digest: ${{ steps.manifest.outputs.digest }}
           push-to-registry: true
+          # v4 defaults this to true (needs extra permissions); keep v2 behaviour.
+          create-storage-record: false
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
           files: sbom.spdx.json
