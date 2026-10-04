@@ -7,7 +7,7 @@ This guide details the system prerequisites, installation instructions, and reso
 ## 1. System Requirements & Prerequisites
 
 To run `agy-box`, your host machine requires:
-- **Linux OS** (with systemd and standard user namespaces enabled).
+- **Linux OS on x86_64 (amd64)** (with systemd and standard user namespaces enabled). The `ghcr.io/wtg-codes/agy-box` image is published for `linux/amd64` only because its upstream base image is amd64-only; arm64 hosts are not supported yet.
 - **Distrobox** (version `1.4.0` or newer).
 - **A compatible container engine**:
   - 🍎 **Podman** (Highly Recommended for native rootless user mappings and safety).
@@ -76,13 +76,16 @@ sudo pacman -S distrobox podman
 > [!NOTE]
 > **Why it happens:** Some team environments mandate Docker or have specific proxy and registry rules defined exclusively for Docker.
 
-- **The Fix:** Create a configuration file at `~/.distroboxrc` on your host and manually define the execution runtime:
+- **The Fix (plain Distrobox):** Create a configuration file at `~/.distroboxrc` on your host and manually define the execution runtime:
   ```bash
   # Force Docker engine globally
   DBX_CONTAINER_MANAGER="docker"
   ```
-  Alternatively, you can set this variable in your host environment before calling the manager CLI:
+  Alternatively, you can set this variable in your host environment before calling `distrobox` directly:
   ```bash
   export DBX_CONTAINER_MANAGER="docker"
-  agy-box-manager
+  distrobox create -i ghcr.io/wtg-codes/agy-box:latest -n agy-box
   ```
+
+> [!WARNING]
+> `agy-box-manager` currently does **not** honor `DBX_CONTAINER_MANAGER`: whenever Podman is installed it selects Podman (and exports `DBX_CONTAINER_MANAGER=podman` for the Distrobox calls it makes). To use Docker with `agy-box-manager` today, Podman must not be on your `PATH`; otherwise create the box with plain `distrobox` commands as shown above.

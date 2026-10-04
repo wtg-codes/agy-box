@@ -3,10 +3,10 @@ graph TD
         noVNC["fa:fa-globe noVNC HTML5 Client <br> (http://localhost:6080/vnc.html)"]
     end
 
-    subgraph Sandbox ["agy-box Container (Headless)"]
-        Websockify["fa:fa-network-wired websockify <br> (Port 6080)"]
+    subgraph Sandbox ["agy-box Container (Headless, started by agy-vdi)"]
+        Websockify["fa:fa-network-wired websockify <br> (0.0.0.0:6080)"]
         X11VNC["fa:fa-desktop x11vnc <br> (Port 5900, 127.0.0.1)"]
-        Openbox["fa:fa-window-restore Openbox Window Manager <br> (DISPLAY=:99)"]
+        IceWM["fa:fa-window-restore IceWM Window Manager + PCManFM desktop <br> (DISPLAY=:99)"]
         Xvfb["fa:fa-tv Xvfb virtual display <br> (DISPLAY=:99)"]
         IDE["fa:fa-window-restore Google Antigravity (Agent UI) <br> (renders inside Xvfb)"]
         Chrome["fa:fa-chrome Google Chrome <br> (renders inside Xvfb)"]
@@ -15,7 +15,7 @@ graph TD
     noVNC <-->|"WebSocket Stream"| Websockify
     Websockify <-->|"RFB Loop"| X11VNC
     X11VNC -->|"Inspect frame buffer"| Xvfb
-    Openbox -->|"Manage Windows"| Xvfb
+    IceWM -->|"Manage Windows"| Xvfb
     IDE -->|"Draw GUI"| Xvfb
     Chrome -->|"Draw GUI"| Xvfb
 
@@ -24,4 +24,4 @@ graph TD
     classDef server sandbox;
 
     class noVNC client;
-    class Websockify,X11VNC,Openbox,Xvfb,IDE,Chrome server;
+    class Websockify,X11VNC,IceWM,Xvfb,IDE,Chrome server;

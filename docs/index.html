@@ -63,12 +63,13 @@
                 </h1>
                 <p class="text-slate-400 mt-2 text-lg">agy and friends in a box of your choice!</p>
                 <p class="text-slate-500 text-sm mt-2">
-                    v0.5.0 · by <a href="https://github.com/wtg-codes" class="text-indigo-400 hover:text-indigo-300 transition-colors">wtg-codes</a>
+                    v0.6.0 · by <a href="https://github.com/wtg-codes" class="text-indigo-400 hover:text-indigo-300 transition-colors">wtg-codes</a>
                 </p>
                 <div class="flex flex-wrap justify-center gap-2 mt-4 no-print">
                     <img src="https://img.shields.io/github/actions/workflow/status/wtg-codes/agy-box/ci.yml?branch=main&label=CI&logo=github&style=flat-square" alt="CI Status" class="h-5">
                     <img src="https://img.shields.io/github/v/release/wtg-codes/agy-box?style=flat-square&color=6366f1&label=Release" alt="Release" class="h-5">
-                    <img src="https://img.shields.io/badge/Base-Ubuntu%2022.04%20LTS-E95420?style=flat-square&logo=ubuntu" alt="Container Base" class="h-5">
+                    <img src="https://img.shields.io/badge/Base-Ubuntu%2026.04%20LTS-E95420?style=flat-square&logo=ubuntu" alt="Container Base" class="h-5">
+                    <img src="https://img.shields.io/badge/Platform-linux%2Famd64-64748b?style=flat-square" alt="Platform linux/amd64" class="h-5">
                     <img src="https://img.shields.io/github/license/wtg-codes/agy-box?style=flat-square&color=22c55e" alt="License" class="h-5">
                 </div>
                 <div class="mt-8">
@@ -108,6 +109,10 @@
                     <h2 class="text-xl font-bold text-white">Before You Start</h2>
                 </div>
                 <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 space-y-3">
+                    <div class="flex items-start gap-3">
+                        <i data-lucide="cpu" class="w-5 h-5 text-indigo-400 mt-0.5 flex-shrink-0"></i>
+                        <div><span class="text-white font-medium">Host:</span> <span class="text-slate-400">x86_64 (amd64) Linux — the image is published for linux/amd64 only</span></div>
+                    </div>
                     <div class="flex items-start gap-3">
                         <i data-lucide="box" class="w-5 h-5 text-indigo-400 mt-0.5 flex-shrink-0"></i>
                         <div><span class="text-white font-medium">Container Runtime:</span> <span class="text-slate-400">Podman (recommended) or Docker</span></div>
@@ -186,6 +191,20 @@
                         </div>
                         <p class="text-slate-400 text-sm">One-time copy of Chrome, Antigravity, and IDE settings from your host. Seed once, diverge forever.</p>
                     </div>
+                    <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 hover:border-indigo-500/40 transition-colors">
+                        <div class="flex items-center gap-2.5 mb-2">
+                            <i data-lucide="message-square" class="w-5 h-5 text-indigo-400"></i>
+                            <h3 class="text-white font-semibold">Local Web Dashboard</h3>
+                        </div>
+                        <p class="text-slate-400 text-sm">Open WebUI (CPU-only PyTorch) for your local Ollama models. Launch with <code class="text-emerald-400 font-mono text-xs bg-slate-900 px-1 py-0.5 rounded">just agy-local-ui</code>.</p>
+                    </div>
+                    <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 hover:border-indigo-500/40 transition-colors">
+                        <div class="flex items-center gap-2.5 mb-2">
+                            <i data-lucide="server" class="w-5 h-5 text-indigo-400"></i>
+                            <h3 class="text-white font-semibold">Cloud-Native Tooling</h3>
+                        </div>
+                        <p class="text-slate-400 text-sm">Pinned, checksum-verified <code class="text-emerald-400 font-mono text-xs bg-slate-900 px-1 py-0.5 rounded">kubectl</code>, <code class="text-emerald-400 font-mono text-xs bg-slate-900 px-1 py-0.5 rounded">helm</code>, and <code class="text-emerald-400 font-mono text-xs bg-slate-900 px-1 py-0.5 rounded">k9s</code>, plus Google ADK and Gemini CLI.</p>
+                    </div>
                 </div>
             </section>
 
@@ -199,7 +218,7 @@
                     </div>
                     <h2 class="text-xl font-bold text-white">The Antigravity Suite</h2>
                 </div>
-                <p class="text-slate-400 mb-5 text-sm">Four integrated products, one container — the complete AI agent development environment:</p>
+                <p class="text-slate-400 mb-5 text-sm">Four integrated products, one container — the complete AI agent development environment. They are installed per user into <code class="text-emerald-400 font-mono text-xs bg-slate-900 px-1 py-0.5 rounded">~/.local</code> by <code class="text-emerald-400 font-mono text-xs bg-slate-900 px-1 py-0.5 rounded">agy-box-manager install</code>:</p>
                 <div class="space-y-4">
                     <!-- Agent UI -->
                     <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 border-l-4 border-l-indigo-500">
@@ -246,7 +265,7 @@
                         </div>
                         <p class="text-slate-400 text-sm mb-3">Python package for programmatic agent orchestration. API calls to local Agent UI on Port 8080 with Google Cloud auth via ADC.</p>
                         <div class="flex flex-wrap gap-3 text-xs">
-                            <span class="bg-slate-900 text-slate-400 px-2 py-1 rounded font-mono">pip3 install google-antigravity</span>
+                            <span class="bg-slate-900 text-slate-400 px-2 py-1 rounded font-mono">pip3 install --user google-antigravity</span>
                             <span class="bg-slate-900 text-slate-400 px-2 py-1 rounded font-mono">PyPI · v0.1.0</span>
                         </div>
                     </div>
@@ -390,48 +409,53 @@
                         <tbody class="divide-y divide-slate-700">
                             <tr class="hover:bg-slate-800/40 transition-colors">
                                 <td class="px-4 py-2.5 text-slate-300">Interactive Menu</td>
-                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">./agy-box-manager</code></td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">agy-box-manager</code></td>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy</code></td>
                             </tr>
                             <tr class="hover:bg-slate-800/40 transition-colors">
                                 <td class="px-4 py-2.5 text-slate-300">Install Official</td>
-                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">./agy-box-manager install</code></td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">agy-box-manager install</code></td>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-install</code></td>
                             </tr>
                             <tr class="hover:bg-slate-800/40 transition-colors">
                                 <td class="px-4 py-2.5 text-slate-300">Build Dev</td>
-                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">./agy-box-manager dev</code></td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">agy-box-manager dev</code></td>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-box-dev</code></td>
                             </tr>
                             <tr class="hover:bg-slate-800/40 transition-colors">
                                 <td class="px-4 py-2.5 text-slate-300">Enter Official</td>
-                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">./agy-box-manager enter</code></td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">agy-box-manager enter</code></td>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-enter</code></td>
                             </tr>
                             <tr class="hover:bg-slate-800/40 transition-colors">
                                 <td class="px-4 py-2.5 text-slate-300">Enter Dev</td>
-                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">./agy-box-manager enter dev</code></td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">agy-box-manager enter dev</code></td>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-enter-dev</code></td>
                             </tr>
                             <tr class="hover:bg-slate-800/40 transition-colors">
                                 <td class="px-4 py-2.5 text-slate-300">VDI Desktop</td>
-                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">./agy-box-manager desktop</code></td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">agy-box-manager desktop</code></td>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-desktop</code></td>
                             </tr>
                             <tr class="hover:bg-slate-800/40 transition-colors">
                                 <td class="px-4 py-2.5 text-slate-300">Clean Official</td>
-                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">./agy-box-manager clean</code></td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">agy-box-manager clean</code></td>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-clean</code></td>
                             </tr>
                             <tr class="hover:bg-slate-800/40 transition-colors">
                                 <td class="px-4 py-2.5 text-slate-300">Run Tests</td>
-                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">./scripts/test-box.sh</code></td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">agy-box-manager test</code></td>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-test</code></td>
                             </tr>
                             <tr class="hover:bg-slate-800/40 transition-colors">
                                 <td class="px-4 py-2.5 text-slate-300">Install Globally</td>
-                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">./agy-box-manager install-global</code></td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">agy-box-manager install-global</code></td>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-install-global</code></td>
+                            </tr>
+                            <tr class="hover:bg-slate-800/40 transition-colors">
+                                <td class="px-4 py-2.5 text-slate-300">Local Web Dashboard</td>
+                                <td class="px-4 py-2.5"><span class="text-slate-500 text-xs">justfile only</span></td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-local-ui</code></td>
                             </tr>
                         </tbody>
                     </table>
@@ -451,19 +475,15 @@
                 <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 space-y-3">
                     <div class="flex items-start gap-3">
                         <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0"></i>
-                        <span class="text-slate-400 text-sm">Automated linting — ShellCheck + YAML lint on every push</span>
+                        <span class="text-slate-400 text-sm">Automated linting — yamllint, ShellCheck, and hadolint on every PR and push</span>
                     </div>
                     <div class="flex items-start gap-3">
                         <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0"></i>
-                        <span class="text-slate-400 text-sm">Docker Buildx with GitHub Actions layer caching</span>
+                        <span class="text-slate-400 text-sm">Bats unit tests for every installation script</span>
                     </div>
                     <div class="flex items-start gap-3">
                         <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0"></i>
-                        <span class="text-slate-400 text-sm">SBOM generation in SPDX JSON format via Anchore</span>
-                    </div>
-                    <div class="flex items-start gap-3">
-                        <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0"></i>
-                        <span class="text-slate-400 text-sm">SLSA build provenance attestations on container images</span>
+                        <span class="text-slate-400 text-sm">Single linux/amd64 Docker Buildx build with GitHub Actions layer caching — the exact image that is tested is the one that gets published</span>
                     </div>
                     <div class="flex items-start gap-3">
                         <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0"></i>
@@ -471,7 +491,19 @@
                     </div>
                     <div class="flex items-start gap-3">
                         <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0"></i>
-                        <span class="text-slate-400 text-sm">Auto-release on version tags with SBOM attachments</span>
+                        <span class="text-slate-400 text-sm">SBOM generation in SPDX JSON format via Syft, plus a Grype vulnerability scan</span>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0"></i>
+                        <span class="text-slate-400 text-sm">Images published to GHCR by digest and tagged only after every check passes</span>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0"></i>
+                        <span class="text-slate-400 text-sm">SLSA build provenance attestations on container images</span>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0"></i>
+                        <span class="text-slate-400 text-sm">Auto-release on version tags with the SBOM attached</span>
                     </div>
                 </div>
             </section>
@@ -503,6 +535,9 @@
                 <p>
                     📦 <span class="text-slate-400 font-medium">agy-box</span> · 
                     <a href="https://github.com/wtg-codes/agy-box" class="text-indigo-400 hover:text-indigo-300 transition-colors">GitHub</a> · 
+                    <a href="https://github.com/wtg-codes/agy-box#readme" class="text-indigo-400 hover:text-indigo-300 transition-colors">README</a> · 
+                    <a href="https://github.com/wtg-codes/agy-box/blob/main/docs/architecture.md" class="text-indigo-400 hover:text-indigo-300 transition-colors">Architecture</a> · 
+                    <a href="https://github.com/wtg-codes/agy-box/releases" class="text-indigo-400 hover:text-indigo-300 transition-colors">Releases</a> · 
                     <a href="https://github.com/wtg-codes/agy-box/blob/main/LICENSE" class="text-indigo-400 hover:text-indigo-300 transition-colors">MIT License</a> · 
                     <a href="https://github.com/wtg-codes" class="text-indigo-400 hover:text-indigo-300 transition-colors">wtg-codes</a>
                 </p>
