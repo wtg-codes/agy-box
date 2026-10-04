@@ -178,6 +178,120 @@ check_container_exists() {
     if "$runtime" ps -a --format '{{.Names}}' 2>/dev/null | grep -qw "$name"; then return 0; else return 1; fi
 }
 
+# --- Antigravity toolchain (per-user, installed inside the box) ---
+# The toolchain (Agent UI, IDE, agy CLI, SDK, ADK, Gemini CLI) is not baked into
+# the image. The image ships the installer `agy-install-toolchain`, which installs
+# into the box user's ~/.local. Boxes are created with an isolated --home, so the
+# box's ~/.local/bin/agy lives under that isolated home dir, which distrobox mounts
+# at the same absolute path on the host and in the box. Paths below are therefore
+# always computed from the box home passed in, never from the host's $HOME.
+# scripts/test-box.sh sources this file and calls these same functions in CI.
+TOOLCHAIN_INSTALLER="agy-install-toolchain"
+
+# ui_error/ui_warn/ui_ok: gum styling when available (tests run without gum).
+ui_error() {
+    if command -v gum &>/dev/null; then gum style --foreground 196 "$@" >&2; else printf '%s\n' "$@" >&2; fi
+}
+ui_warn() {
+    if command -v gum &>/dev/null; then gum style --foreground 214 "$@"; else printf '%s\n' "$@"; fi
+}
+ui_ok() {
+    if command -v gum &>/dev/null; then gum style --foreground 46 "$@"; else printf '%s\n' "$@"; fi
+}
+
+# run_step <title> <cmd...>: interactive -> gum spinner, output shown only on
+# failure (existing install UX). Non-interactive (CI/tests) -> stream output.
+run_step() {
+    local title=$1
+    shift
+    local rc=0
+    if command -v gum &>/dev/null && [ -t 1 ]; then
+        local log_file
+        log_file=$(mktemp)
+        gum spin --spinner dot --title "$title" -- "$@" >"$log_file" 2>&1 || rc=$?
+        if [ "$rc" -ne 0 ]; then cat "$log_file"; fi
+        rm -f "$log_file"
+    else
+        echo "==> $title"
+        "$@" || rc=$?
+    fi
+    return "$rc"
+}
+
+# update_toolchain_hint <container>: the command a user should run to retry.
+update_toolchain_hint() {
+    if [ "$1" = "$DEV_CONTAINER_NAME" ]; then
+        echo "agy-box-manager update-toolchain dev"
+    elif [ "$1" = "$CONTAINER_NAME" ]; then
+        echo "agy-box-manager update-toolchain"
+    else
+        echo "distrobox enter $1 -- $TOOLCHAIN_INSTALLER"
+    fi
+}
+
+# export_agy_cli <container> <box_home> [export_dir]
+# Exports the box's ~/.local/bin/agy as a host shim in export_dir (default: the
+# host's ~/.local/bin). Never overwrites a host `agy` that is not a distrobox shim.
+export_agy_cli() {
+    local name=$1
+    local box_home=$2
+    local export_dir=${3:-"$HOME/.local/bin"}
+    local src="$box_home/.local/bin/agy"
+    local dest="$export_dir/agy"
+
+    if [ "$src" = "$dest" ]; then
+        # Box shares the host home: agy is already at the host path; exporting
+        # would replace the real binary with a shim that calls itself.
+        ui_warn "⚠️  Box home equals host home; '$src' is already on the host. Skipping export."
+        return 0
+    fi
+    if [ -e "$dest" ] && ! grep -qs "distrobox_binary" "$dest"; then
+        ui_warn "⚠️  '$dest' already exists and is not a distrobox export (host-native agy?). Leaving it untouched." \
+            "   The box's CLI is still available inside the box, or via: distrobox enter $name -- $src"
+        return 0
+    fi
+    if ! distrobox enter "$name" -- sh -c 'command -v distrobox-export' >/dev/null 2>&1; then
+        ui_error "❌ Error: distrobox-export is not available inside '$name'; cannot export the agy CLI."
+        return 1
+    fi
+    if ! run_step "Exporting toolchain CLI 'agy' to host ($export_dir)..." \
+        distrobox enter "$name" -- distrobox-export --bin "$src" --export-path "$export_dir"; then
+        ui_error "❌ Error: Failed to export toolchain CLI."
+        return 1
+    fi
+}
+
+# unexport_agy_cli <container> [export_dir]
+# Removes the host agy shim if (and only if) it was exported from <container>.
+# Done host-side so it works even if the box is broken or the toolchain missing.
+unexport_agy_cli() {
+    local name=$1
+    local export_dir=${2:-"$HOME/.local/bin"}
+    local dest="$export_dir/agy"
+    if [ -f "$dest" ] && grep -qs "distrobox_binary" "$dest" && grep -qsxF "# name: ${name}" "$dest"; then
+        rm -f "$dest"
+        echo "Removed exported agy CLI shim ($dest)."
+    fi
+}
+
+# install_toolchain_in_box <container> <box_home> [export_dir]
+# Runs the in-image installer as the box user, then exports the agy CLI.
+install_toolchain_in_box() {
+    local name=$1
+    local box_home=$2
+    local export_dir=${3:-"$HOME/.local/bin"}
+    if ! run_step "Installing Antigravity toolchain into '$name' (~/.local; this can take a few minutes)..." \
+        distrobox enter "$name" -- "$TOOLCHAIN_INSTALLER"; then
+        ui_error "❌ Error: Failed to install the Antigravity toolchain inside '$name'." \
+            "Retry with: $(update_toolchain_hint "$name")"
+        return 1
+    fi
+    if ! export_agy_cli "$name" "$box_home" "$export_dir"; then
+        ui_error "Retry with: $(update_toolchain_hint "$name")"
+        return 1
+    fi
+}
+
 cmd_autocomplete() {
     local shell=${1:-bash}
     case "$shell" in
@@ -188,10 +302,10 @@ _agy_box_manager() {
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    opts="install dev enter desktop clean status install-global uninstall-global test autocomplete ports doctor"
+    opts="install dev enter desktop clean update-toolchain status install-global uninstall-global test autocomplete ports doctor"
     
     case "$prev" in
-        enter|desktop|clean)
+        enter|desktop|clean|update-toolchain)
             COMPREPLY=( $(compgen -W "dev prod" -- "$cur") )
             return 0
             ;;
@@ -238,6 +352,7 @@ _agy_box_manager() {
         'enter:Enter workspace'
         'desktop:Launch VDI Web Desktop'
         'clean:Remove workspace'
+        'update-toolchain:Install/update the Antigravity toolchain in a workspace'
         'status:Show status'
         'install-global:Install globally'
         'uninstall-global:Remove global install'
@@ -272,7 +387,7 @@ EOF
         fish)
             cat << 'EOF'
 complete -c agy-box-manager -f
-complete -c agy-box-manager -a "install dev enter desktop clean status install-global uninstall-global test autocomplete ports doctor"
+complete -c agy-box-manager -a "install dev enter desktop clean update-toolchain status install-global uninstall-global test autocomplete ports doctor"
 complete -c agy -f
 complete -c agy -a "changelog help install plugin plugins update"
 EOF
@@ -584,17 +699,10 @@ cmd_install_official() {
         podman unshare chown -R 0:0 "$isolated_home" 2>/dev/null || true
     fi
 
-    # Export CLI tools to host ~/.local/bin
-    if distrobox enter "$CONTAINER_NAME" -- command -v distrobox-export &>/dev/null; then
-        local log_file_export
-        log_file_export=$(mktemp)
-        if ! gum spin --spinner dot --title "Exporting toolchain CLI 'agy' to host (~/.local/bin)..." -- distrobox enter "$CONTAINER_NAME" -- distrobox-export --bin /usr/bin/agy --export-path "$HOME/.local/bin" >"$log_file_export" 2>&1; then
-            cat "$log_file_export"
-            rm -f "$log_file_export"
-            gum style --foreground 196 "❌ Error: Failed to export toolchain CLI."
-            exit 1
-        fi
-        rm -f "$log_file_export"
+    # Install the Antigravity toolchain into the box user's ~/.local (it is not
+    # baked into the image), then export the agy CLI to the host ~/.local/bin.
+    if ! install_toolchain_in_box "$CONTAINER_NAME" "$isolated_home"; then
+        exit 1
     fi
 
     # Clear setup_done flag so the setup helper runs on first interactive entry
@@ -721,17 +829,10 @@ cmd_build_dev() {
         podman unshare chown -R 0:0 "$isolated_home" 2>/dev/null || true
     fi
 
-    # Export CLI tools to host ~/.local/bin
-    if distrobox enter "$DEV_CONTAINER_NAME" -- command -v distrobox-export &>/dev/null; then
-        local log_file_export
-        log_file_export=$(mktemp)
-        if ! gum spin --spinner dot --title "Exporting toolchain CLI 'agy' to host (~/.local/bin)..." -- distrobox enter "$DEV_CONTAINER_NAME" -- distrobox-export --bin /usr/bin/agy --export-path "$HOME/.local/bin" >"$log_file_export" 2>&1; then
-            cat "$log_file_export"
-            rm -f "$log_file_export"
-            gum style --foreground 196 "❌ Error: Failed to export toolchain CLI."
-            exit 1
-        fi
-        rm -f "$log_file_export"
+    # Install the Antigravity toolchain into the box user's ~/.local (it is not
+    # baked into the image), then export the agy CLI to the host ~/.local/bin.
+    if ! install_toolchain_in_box "$DEV_CONTAINER_NAME" "$isolated_home"; then
+        exit 1
     fi
 
     # Clear setup_done flag so the setup helper runs on first interactive entry
@@ -791,14 +892,35 @@ cmd_enter() {
     distrobox enter "$target_name"
 }
 
+cmd_update_toolchain() {
+    local env_type=${1:-prod}
+    local target_name=$CONTAINER_NAME
+    [ "$env_type" = "dev" ] && target_name=$DEV_CONTAINER_NAME
+
+    if ! check_container_exists "$target_name"; then
+        gum style --foreground 196 "Environment '$target_name' does not exist. Please install or build it first."
+        exit 1
+    fi
+
+    local isolated_home="$HOME/.config/agy-box/home"
+    local runtime
+    runtime=$(get_runtime)
+    if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
+        podman unshare chown -R 0:0 "$isolated_home" 2>/dev/null || true
+    fi
+
+    # Re-runs the pinned, checksum-verified installer (idempotent) and refreshes the agy export
+    if ! install_toolchain_in_box "$target_name" "$isolated_home"; then
+        exit 1
+    fi
+    ui_ok "✓ Antigravity toolchain installed/updated in '$target_name'."
+}
+
 cmd_clean() {
     local target_name=${1:-$CONTAINER_NAME}
     if check_container_exists "$target_name"; then
-        # Clean up exported host wrapper scripts if they exist
-        if distrobox enter "$target_name" -- command -v distrobox-export &>/dev/null; then
-            gum style --foreground 214 "Cleaning up exported binaries..."
-            distrobox enter "$target_name" -- distrobox-export --delete --bin /usr/bin/agy || true
-        fi
+        # Clean up the exported host agy shim if it belongs to this box
+        unexport_agy_cli "$target_name"
         gum spin --spinner dot --title "Removing environment: $target_name..." -- distrobox rm --yes "$target_name"
         gum style --foreground 46 "✓ Removed $target_name"
     else
@@ -1275,6 +1397,7 @@ cmd_interactive() {
                 # Official workspace options — always visible
                 if check_container_exists "$CONTAINER_NAME"; then
                     manage_options+=("♻️  Update/Recreate Official Workspace")
+                    manage_options+=("🔄 Update Antigravity Toolchain (Official)")
                     manage_options+=("🗑️  Remove Official Workspace")
                 else
                     manage_options+=("🚀 Install Official Workspace (Pull from GHCR)")
@@ -1283,6 +1406,7 @@ cmd_interactive() {
                 # Dev workspace options — always visible
                 if check_container_exists "$DEV_CONTAINER_NAME"; then
                     manage_options+=("♻️  Rebuild Dev Workspace")
+                    manage_options+=("🔄 Update Antigravity Toolchain (Dev)")
                     manage_options+=("🗑️  Remove Dev Workspace")
                 elif [ -f "Containerfile" ]; then
                     manage_options+=("🛠️  Build Dev Workspace (From local source)")
@@ -1307,6 +1431,16 @@ cmd_interactive() {
                         echo ""
                         read -n 1 -s -r -p "Press any key to continue..."
                         menu_state="workspaces"
+                        ;;
+                    "🔄 Update Antigravity Toolchain (Official)")
+                        cmd_update_toolchain prod
+                        echo ""
+                        read -n 1 -s -r -p "Press any key to continue..."
+                        ;;
+                    "🔄 Update Antigravity Toolchain (Dev)")
+                        cmd_update_toolchain dev
+                        echo ""
+                        read -n 1 -s -r -p "Press any key to continue..."
                         ;;
                     "🗑️  Remove Official Workspace")
                         cmd_clean "$CONTAINER_NAME"
@@ -1409,12 +1543,22 @@ show_help() {
     echo "  doctor              Run system diagnostics health check"
     echo "  clean               Remove the official environment"
     echo "  clean dev           Remove the development environment"
+    echo "  update-toolchain    Install/update the Antigravity toolchain (agy, IDE, SDK, ADK,"
+    echo "                      Gemini CLI) in the official environment and re-export 'agy'"
+    echo "  update-toolchain dev  Same, for the development environment"
     echo "  install-global      Copy the CLI to ~/.local/bin for system-wide access"
     echo "  uninstall-global    Remove the globally installed CLI and auto-completions"
     echo "  autocomplete [sh]   Generate shell autocompletions (bash, zsh, fish)"
     echo "  test                Run the local integration test suite"
     echo ""
 }
+
+# Allow scripts/test-box.sh to source this file and reuse the functions above
+# (same code path as the real install) without running the CLI. `return` only
+# succeeds when sourced; direct execution and `curl ... | bash` fall through.
+if (return 0 2>/dev/null); then
+    return 0
+fi
 
 # --- Main Logic ---
 setup_completions
@@ -1425,6 +1569,7 @@ case "${1:-}" in
     enter)            check_deps "quiet"; if [ "${2:-}" = "dev" ]; then cmd_enter dev; else cmd_enter prod; fi ;;
     desktop)          check_deps "quiet"; if [ "${2:-}" = "dev" ]; then cmd_desktop dev; else cmd_desktop prod; fi ;;
     clean)            check_deps "quiet"; if [ "${2:-}" = "dev" ]; then cmd_clean "$DEV_CONTAINER_NAME"; else cmd_clean "$CONTAINER_NAME"; fi ;;
+    update-toolchain) check_deps "quiet"; if [ "${2:-}" = "dev" ]; then cmd_update_toolchain dev; else cmd_update_toolchain prod; fi ;;
     status)           check_deps "quiet"; cmd_status ;;
     ports)            check_deps "quiet"; cmd_ports ;;
     doctor)           check_deps "quiet"; cmd_doctor ;;

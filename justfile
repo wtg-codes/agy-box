@@ -44,6 +44,14 @@ agy-clean:
 agy-clean-dev:
     @{{manager}} clean dev
 
+# Install/update the Antigravity toolchain in the official workspace
+agy-update-toolchain:
+    @{{manager}} update-toolchain
+
+# Install/update the Antigravity toolchain in the development workspace
+agy-update-toolchain-dev:
+    @{{manager}} update-toolchain dev
+
 # Install the CLI tool globally to ~/.local/bin
 agy-install-global:
     @{{manager}} install-global

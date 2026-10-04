@@ -14,7 +14,7 @@ The repository is structured as a Distrobox overlay template:
   - 📂 **[rootfs/usr/local/bin/entrypoint.sh](file:///var/home/wtg/Repos/agy-box/rootfs/usr/local/bin/entrypoint.sh)**: Custom entrypoint running inside the container to align sandbox user permissions.
 - 📂 **[scripts/](file:///var/home/wtg/Repos/agy-box/scripts)**: Package dependency configuration and helper scripts.
   - 📄 **[scripts/install-agent-deps.sh](file:///var/home/wtg/Repos/agy-box/scripts/install-agent-deps.sh)**: Installs basic dependencies and system-level requirements (like `libsecret-1-0` for keyring mapping).
-  - 📄 **[scripts/install-antigravity.sh](file:///var/home/wtg/Repos/agy-box/scripts/install-antigravity.sh)**: Installs and extracts the Antigravity Agent UI.
+  - 📄 **[scripts/install-agent-toolchain.sh](file:///var/home/wtg/Repos/agy-box/scripts/install-agent-toolchain.sh)**: Per-user Antigravity toolchain installer (Agent UI, IDE, `agy` CLI, SDK, ADK, Gemini CLI → `~/.local`). Shipped in the image as `/usr/local/bin/agy-install-toolchain` and run inside the box by `agy-box-manager install|dev|update-toolchain`; the toolchain itself is not baked into the image.
   - 📄 **[scripts/test-box.sh](file:///var/home/wtg/Repos/agy-box/scripts/test-box.sh)**: Integration test harness asserting that all commands are functional inside the sandbox.
 - 📄 **[agy-box-manager](file:///var/home/wtg/Repos/agy-box/agy-box-manager)**: The central interactive terminal menu tool to install, run, or remove container environments.
 - 📄 **[justfile](file:///var/home/wtg/Repos/agy-box/justfile)**: Standard automation recipes.

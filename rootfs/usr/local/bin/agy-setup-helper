@@ -420,6 +420,21 @@ run_audit_checks() {
 
         # D. Developer Skills Pack Checks
         echo "Skills Check:"
+
+        # Antigravity toolchain (per-user install in ~/.local/bin, not baked into the image)
+        local missing_toolchain=0
+        local tool
+        for tool in agy antigravity antigravity-ide gemini adk; do
+            if [[ -x "$HOME/.local/bin/$tool" ]]; then
+                echo "OK:Antigravity toolchain component '$tool' is installed."
+            else
+                echo "WARN:Antigravity toolchain component '$tool' not found in ~/.local/bin."
+                missing_toolchain=$((missing_toolchain + 1))
+            fi
+        done
+        if [[ "$missing_toolchain" -gt 0 ]]; then
+            echo "WARN:Run 'agy-install-toolchain' (or 'agy-box-manager update-toolchain' on the host) to install the Antigravity toolchain."
+        fi
         
         # Android Pack
         if command -v adb &>/dev/null; then
@@ -552,7 +567,8 @@ setup_gws_mcp_stitch() {
                 --arg cid "$input_cid" \
                 --arg sec "$input_sec" \
                 --arg skey "$input_stitch" \
-                '.mcpServers.filesystem = {command: "npx", args: ["-y", "@modelcontextprotocol/server-filesystem", "/var/home/wtg/Repos"]} |
+                --arg repos "${DISTROBOX_HOST_HOME:-$HOME}/Repos" \
+                '.mcpServers.filesystem = {command: "npx", args: ["-y", "@modelcontextprotocol/server-filesystem", $repos]} |
                  .mcpServers.github = {command: "npx", args: ["-y", "--package", "github-mcp-server", "github-mcp-server-mcp"]} |
                  .mcpServers["sequential-thinking"] = {command: "npx", args: ["-y", "@modelcontextprotocol/server-sequential-thinking"]} |
                  (if $skey != "" then .mcpServers.stitch = {serverUrl: "https://stitch.googleapis.com/mcp", headers: {"X-Goog-Api-Key": $skey}} else del(.mcpServers.stitch) end) |

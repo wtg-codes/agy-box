@@ -118,22 +118,6 @@ teardown() {
   grep -F 'curl -sSLO --http1.1 --connect-timeout 5 --retry 5 --retry-delay 2 https://get.helm.sh/helm-v3.21.0-linux-amd64.tar.gz' "$TEST_LOG"
 }
 
-@test "install-google-adk.sh pins and installs correct version of google-adk" {
-  run ./scripts/install-google-adk.sh
-  [ "$status" -eq 0 ]
-  
-  # Verify pipx install command pins google-adk to 2.1.0
-  grep -E 'pipx install google-adk==2.1.0' "$TEST_LOG"
-}
-
-@test "install-gemini-cli.sh pins and installs correct version of gemini-cli" {
-  run ./scripts/install-gemini-cli.sh
-  [ "$status" -eq 0 ]
-  
-  # Verify npm install command pins @google/gemini-cli@0.43.0
-  grep -E 'npm install -g --omit=dev --no-audit --no-fund @google/gemini-cli@0.43.0' "$TEST_LOG"
-}
-
 @test "install-agent-deps.sh pins and installs correct versions of gum and google-chrome-stable" {
   # Mock system commands to prevent actual wrapper modification or errors
   # (e.g. mv, printf, chmod, mkdir) since we don't want them to execute/fail

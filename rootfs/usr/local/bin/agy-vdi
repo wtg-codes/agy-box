@@ -17,6 +17,15 @@ export GALLIUM_DRIVER=llvmpipe
 unset WAYLAND_DISPLAY
 unset XDG_SESSION_TYPE
 
+# The Antigravity toolchain (antigravity, antigravity-ide, agy, gemini, adk) is
+# installed per user into ~/.local/bin by agy-install-toolchain. agy-vdi is
+# started via `distrobox enter -- agy-vdi` (non-login shell, host PATH), so add
+# it here; IceWM, its menu/toolbar, desktop icons and xterms inherit this PATH.
+case ":${PATH}:" in
+    *":${HOME}/.local/bin:"*) ;;
+    *) export PATH="${HOME}/.local/bin:${PATH}" ;;
+esac
+
 # Load and export environment variables defined in environment.d
 # Helper to source all .conf files from a directory
 _load_env_dir() {

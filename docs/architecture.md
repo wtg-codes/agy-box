@@ -64,7 +64,7 @@ When running on standard Cloud VMs (Compute Engine, EC2):
 When used as a devcontainer:
 1. **Workspace Mounting:** The cloud provider automatically mounts the active repository workspace folder to `/workspaces/<repo-name>` inside the container.
 2. **Port Forwarding:** The provider forwards the standard communication ports (e.g., `8080` for the Antigravity API and `9222` for the Chrome DevTools Protocol), exposing them securely over HTTPS via OAuth proxy loops.
-3. **Toolchain Pre-installation:** The container loads with all necessary CLI (`agy`), SDK, and editor extensions pre-cached, meaning zero startup lag for new developers.
+3. **Toolchain Installation:** The Antigravity toolchain (`agy` CLI, Agent UI, IDE, SDK, ADK, Gemini CLI) is not baked into the image; run the bundled per-user installer `agy-install-toolchain` once (e.g. as the devcontainer `postCreateCommand`) to install it into `~/.local`.
 
 ### C. Jules VM Execution Parity
 When executed by the autonomous agent orchestration runtime (Jules):
