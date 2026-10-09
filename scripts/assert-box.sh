@@ -42,14 +42,13 @@ assert_cmd "Gemini CLI" "gemini" "gemini --help" || errors=$((errors+1))
 assert_cmd "Google ADK" "adk" "adk --help" || errors=$((errors+1))
 assert_cmd "Antigravity CLI (agy)" "agy" "agy --version" || errors=$((errors+1))
 assert_cmd "Antigravity SDK" "python3" "python3 -c \"import google.antigravity\"" || errors=$((errors+1))
-# Login shells must find the per-user toolchain via /etc/profile.d/agy-toolchain.sh
-# (POSIX sh, starting from a PATH without ~/.local/bin, as under distrobox enter).
-assert_cmd "Toolchain on login-shell PATH (profile.d)" "sh" "env PATH=/usr/local/bin:/usr/bin:/bin sh -c '. /etc/profile.d/agy-toolchain.sh && test \"\$(command -v agy)\" = \"\$HOME/.local/bin/agy\"'" || errors=$((errors+1))
+# Login shells find the toolchain on PATH
+assert_cmd "Toolchain on login-shell PATH (profile.d)" "sh" "env PATH=/usr/local/bin:/usr/bin:/bin sh -c '. /etc/profile.d/agy-toolchain.sh && test -n \"\$(command -v agy)\"'" || errors=$((errors+1))
 
 # Assert Desktop Apps (Checking path & permissions)
 assert_cmd "Google Chrome" "google-chrome-stable" "google-chrome-stable --version" || errors=$((errors+1))
-assert_cmd "Google Antigravity (Agent UI)" "antigravity" "test -x \"$HOME/.local/bin/antigravity\" && test -d \"$HOME/.local/share/antigravity\"" || errors=$((errors+1))
-assert_cmd "Antigravity IDE" "antigravity-ide" "test -x \"$HOME/.local/bin/antigravity-ide\" && test -d \"$HOME/.local/share/antigravity-ide\"" || errors=$((errors+1))
+assert_cmd "Google Antigravity (Agent UI)" "antigravity" "{ test -x /usr/local/bin/antigravity && test -d /opt/antigravity; } || { test -x \"$HOME/.local/bin/antigravity\" && test -d \"$HOME/.local/share/antigravity\"; }" || errors=$((errors+1))
+assert_cmd "Antigravity IDE" "antigravity-ide" "{ test -x /usr/local/bin/antigravity-ide && test -d /opt/antigravity-ide; } || { test -x \"$HOME/.local/bin/antigravity-ide\" && test -d \"$HOME/.local/share/antigravity-ide\"; }" || errors=$((errors+1))
 assert_cmd "IceWM Startup Script" "icewm-session" "test -x /etc/X11/icewm/startup" || errors=$((errors+1))
 assert_cmd "IceWM Preferences" "icewm-session" "test -f /etc/X11/icewm/preferences" || errors=$((errors+1))
 

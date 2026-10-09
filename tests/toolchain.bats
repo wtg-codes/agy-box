@@ -123,7 +123,7 @@ mock_installer_env() {
   [ ! -e "$HOME/.local/bin/agy" ]
 }
 
-@test "install-agent-toolchain.sh refuses to run as root" {
+@test "install-agent-toolchain.sh refuses to run as root without --system" {
   mock_installer_env
   create_mock "id" 'echo 0'
   TMPDIR="$TEST_DIR" run ./scripts/install-agent-toolchain.sh
@@ -131,7 +131,8 @@ mock_installer_env() {
   [[ "$output" == *"do not run as root"* ]]
 }
 
-@test "Containerfile ships the installer as /usr/local/bin/agy-install-toolchain" {
+@test "Containerfile bakes toolchain with --system and ships the installer" {
+  grep -E 'install-agent-toolchain.sh --system' Containerfile
   grep -E '^COPY scripts/install-agent-toolchain.sh /usr/local/bin/agy-install-toolchain$' Containerfile
   grep -F '/usr/local/bin/agy-install-toolchain' Containerfile | grep -v '^COPY'
 }
@@ -147,6 +148,7 @@ mock_distrobox() {
       prev="$a"
     done
     case "$*" in
+      *test\ -x\ /usr/local/bin/agy*) exit "${MOCK_HAS_AGY:-0}" ;;
       *agy-install-toolchain*) exit "${MOCK_INSTALL_RC:-0}" ;;
     esac
     if [ -n "$bin" ] && [ -n "$dest" ]; then
@@ -155,18 +157,15 @@ mock_distrobox() {
     exit 0'
 }
 
-@test "agy-box-manager: install_toolchain_in_box runs the in-image installer, then exports the box's ~/.local/bin/agy" {
+@test "agy-box-manager: install_toolchain_in_box exports the pre-baked /usr/local/bin/agy" {
   mock_distrobox
   mkdir -p "$TEST_DIR/export"
   run bash -c 'source ./agy-box-manager && install_toolchain_in_box agy-box "$1/boxhome" "$1/export"' _ "$TEST_DIR"
   echo "$output"
   [ "$status" -eq 0 ]
 
-  install_line=$(grep -n -F 'distrobox enter agy-box -- agy-install-toolchain' "$TEST_LOG" | cut -d: -f1)
-  export_line=$(grep -n -F "distrobox enter agy-box -- distrobox-export --bin $TEST_DIR/boxhome/.local/bin/agy --export-path $TEST_DIR/export" "$TEST_LOG" | cut -d: -f1)
-  [ -n "$install_line" ]
+  export_line=$(grep -n -F "distrobox enter agy-box -- distrobox-export --bin /usr/local/bin/agy --export-path $TEST_DIR/export" "$TEST_LOG" | cut -d: -f1)
   [ -n "$export_line" ]
-  [ "$install_line" -lt "$export_line" ]
   grep -F "# name: agy-box" "$TEST_DIR/export/agy"
   refute_grep -F '/usr/bin/agy' "$TEST_LOG"
 }
@@ -174,7 +173,7 @@ mock_distrobox() {
 @test "agy-box-manager: installer failure aborts before export and prints the retry command" {
   mock_distrobox
   mkdir -p "$TEST_DIR/export"
-  MOCK_INSTALL_RC=1 run bash -c 'source ./agy-box-manager && install_toolchain_in_box agy-box-dev "$1/boxhome" "$1/export"' _ "$TEST_DIR"
+  MOCK_HAS_AGY=1 MOCK_INSTALL_RC=1 run bash -c 'source ./agy-box-manager && install_toolchain_in_box agy-box-dev "$1/boxhome" "$1/export"' _ "$TEST_DIR"
   echo "$output"
   [ "$status" -ne 0 ]
   [[ "$output" == *"agy-box-manager update-toolchain dev"* ]]
@@ -193,9 +192,11 @@ mock_distrobox() {
   refute_grep -F 'distrobox-export --bin' "$TEST_LOG"
 }
 
-@test "agy-box-manager: export is skipped when the box shares the host home" {
+@test "agy-box-manager: export is skipped when the box shares the host home and user binary exists" {
   mock_distrobox
   mkdir -p "$TEST_DIR/home/.local/bin"
+  touch "$TEST_DIR/home/.local/bin/agy"
+  chmod +x "$TEST_DIR/home/.local/bin/agy"
   run bash -c 'source ./agy-box-manager && export_agy_cli agy-box "$1/home" "$1/home/.local/bin"' _ "$TEST_DIR"
   [ "$status" -eq 0 ]
   refute_grep -F 'distrobox-export --bin' "$TEST_LOG"

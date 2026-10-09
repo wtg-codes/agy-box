@@ -23,17 +23,22 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 COPY scripts/install-tools.sh /tmp/
 RUN /tmp/install-tools.sh "${TARGETARCH}" && rm /tmp/install-tools.sh
 
+# 4. Install Antigravity Toolchain (Option A: Batteries-Included Image for authentic SBOM)
+COPY scripts/install-agent-toolchain.sh /tmp/
+RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    --mount=type=cache,target=/root/.npm,sharing=locked \
+    /tmp/install-agent-toolchain.sh --system && rm /tmp/install-agent-toolchain.sh
+
 # 8. Copy rootfs and configure entrypoint
 COPY rootfs/ /
-# The Antigravity toolchain is NOT baked into the image. Ship its per-user
-# installer instead; agy-box-manager runs it inside the box after creation
-# (`distrobox enter <box> -- agy-install-toolchain`), installing into ~/.local.
+# Ship the toolchain script as a user utility for runtime updates/customization
 COPY scripts/install-agent-toolchain.sh /usr/local/bin/agy-install-toolchain
 RUN chmod +x /usr/local/bin/entrypoint.sh \
              /usr/local/bin/agy-setup-helper \
              /usr/local/bin/agy-vdi \
              /usr/local/bin/agy-install-toolchain \
              /etc/profile.d/agy-setup-check.sh \
+             /etc/profile.d/agy-toolchain.sh \
              /etc/X11/icewm/startup \
              /etc/skel/Desktop/*.desktop && \
     chmod -R ugo+rwX /etc/skel
