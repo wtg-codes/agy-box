@@ -1,10 +1,8 @@
 # Future Improvements
 
 ## Architectural Goals
-- **Multi-Architecture Support**: Update the CI pipeline and Docker build configuration to support generating multi-arch images (e.g., `amd64`, `arm64`) using `docker buildx`.
-  - *Blocked by base image*: `ghcr.io/ublue-os/ubuntu-toolbox` is published for `linux/amd64` only (single `latest` tag, no manifest list), so CI currently builds and publishes amd64 only. Earlier "arm64" images built under QEMU were actually amd64 userland. Enabling arm64 requires a multi-arch base and re-adding a native `ubuntu-24.04-arm` build job — see [Possible future work](#possible-future-work).
-- **Authentic Supply Chain Security (Option A: Batteries-Included Image)**:
-  - *Resolution*: Moving the developer toolchain to a post-image user script led to an incomplete Syft SBOM. Under Option A, the complete Antigravity toolchain (Agent UI, IDE, CLI, SDK, ADK, Gemini CLI) is pre-baked into `/opt` and `/usr/local/bin` at build time so Syft generates a 100% genuine SBOM that Grype scans prior to release. The user installer `agy-install-toolchain` is retained in the image for runtime updates.
+- ~~**Multi-Architecture Support**: Update the CI pipeline and Docker build configuration to support generating multi-arch images (`amd64`, `arm64`) using native parallel GitHub Actions runners and Docker Buildx.~~ ✅ Done (`feat/nvidia-dgx-spark-arm64`): Switched base to `quay.io/toolbx/ubuntu-toolbox:24.04`, added native `ubuntu-24.04-arm` runner job, and auto-detects NVIDIA GPUs (including DGX Spark Grace Blackwell) via `--nvidia`.
+- ~~**Authentic Supply Chain Security (Option A: Batteries-Included Image)**:~~ ✅ Done (PR #29): The complete Antigravity toolchain is pre-baked into `/opt` and `/usr/local/bin` at build time so Syft generates a 100% genuine SBOM that Grype scans prior to release, with `agy-install-toolchain` retained for runtime updates.
 
 ## Technical Debt
 - ~~**Containerfile Linting**: Implement `hadolint` in the GitHub Actions workflow to ensure `Containerfile` adheres to best practices.~~ ✅ Done (v0.6.0, `Lint Codebase` job).
