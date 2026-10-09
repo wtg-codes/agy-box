@@ -174,7 +174,7 @@ VDI_PID=$!
 log_info "Waiting for noVNC web gateway to listen on port 6080..."
 
 vdi_ready=false
-for i in {1..30}; do
+for _ in {1..30}; do
     if curl -s -f http://127.0.0.1:6080/vnc.html >/dev/null 2>&1; then
         vdi_ready=true
         break
