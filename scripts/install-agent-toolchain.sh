@@ -2,22 +2,23 @@
 # ==============================================================================
 # agy-install-toolchain  (source: scripts/install-agent-toolchain.sh)
 #
-# Installs or updates the Antigravity agent toolchain for the CURRENT user into
-# $HOME/.local. The toolchain is intentionally NOT baked into the image
-# (component separation, #19); this installer is shipped in the image as
-# /usr/local/bin/agy-install-toolchain and is run inside the box by
-# `agy-box-manager install`, `agy-box-manager dev` and
-# `agy-box-manager update-toolchain`:
+# Installs or updates the Antigravity agent toolchain (Agent UI, IDE, agy CLI,
+# SDK, ADK, Gemini CLI).
 #
-#     distrobox enter <box> -- agy-install-toolchain
+# Modes:
+#   --system   Installs system-wide into /opt and /usr/local/bin (requires root).
+#              Used during container image build so Syft produces a 100% genuine
+#              SBOM that Grype scans prior to release (Option A: Batteries-Included).
+#   (default)  Installs or updates for the CURRENT user into $HOME/.local.
+#              Run as normal non-root user inside the box.
 #
 # It installs (all versions pinned, downloads verified by checksum):
-#   - Google Antigravity (Agent UI)  ~/.local/bin/antigravity     (+ ~/.local/share/antigravity)
-#   - Antigravity IDE                ~/.local/bin/antigravity-ide (+ ~/.local/share/antigravity-ide)
-#   - Antigravity CLI                ~/.local/bin/agy
-#   - Antigravity SDK                pip --user google-antigravity
-#   - Google ADK                     pip --user google-adk        (~/.local/bin/adk)
-#   - Gemini CLI                     npm --prefix ~/.local        (~/.local/bin/gemini)
+#   - Google Antigravity (Agent UI)  /opt/antigravity     -> /usr/local/bin/antigravity
+#   - Antigravity IDE                /opt/antigravity-ide -> /usr/local/bin/antigravity-ide
+#   - Antigravity CLI                /usr/local/bin/agy
+#   - Antigravity SDK                google-antigravity==0.1.0
+#   - Google ADK                     google-adk==2.1.0    -> /usr/local/bin/adk
+#   - Gemini CLI                     @google/gemini-cli   -> /usr/local/bin/gemini
 #
 # Safe to re-run (idempotent): every component is re-installed at its pinned
 # version, existing user settings are preserved, and binaries are replaced
@@ -30,19 +31,25 @@ CURRENT_STEP="initialisation"
 
 usage() {
     cat <<EOF
-Usage: ${PROG} [-h|--help]
+Usage: ${PROG} [--system] [-h|--help]
 
 Install or update the Antigravity agent toolchain (Agent UI, IDE, agy CLI,
-SDK, ADK, Gemini CLI) for the current user into \$HOME/.local.
-Run it as your normal (non-root) user inside the agy-box. Safe to re-run.
+SDK, ADK, Gemini CLI).
+  --system   Install system-wide into /opt and /usr/local/bin (requires root).
+             Used during image build so Syft produces an authentic SBOM.
+  (no flag)  Install into \$HOME/.local for the current user. Safe to re-run.
 EOF
 }
 
-case "${1:-}" in
-    -h|--help) usage; exit 0 ;;
-    "") ;;
-    *) echo "${PROG}: unknown argument: $1" >&2; usage >&2; exit 2 ;;
-esac
+MODE="user"
+for arg in "$@"; do
+    case "$arg" in
+        --system) MODE="system" ;;
+        -h|--help) usage; exit 0 ;;
+        "") ;;
+        *) echo "${PROG}: unknown argument: $arg" >&2; usage >&2; exit 2 ;;
+    esac
+done
 
 die() {
     echo "${PROG}: ERROR: $*" >&2
@@ -63,34 +70,49 @@ step() {
 }
 
 # --- Pre-flight checks --------------------------------------------------------
-if [ "$(id -u)" -eq 0 ]; then
-    die "do not run as root; run as your normal user inside the box (installs into \$HOME/.local)."
+if [ "$MODE" = "system" ]; then
+    if [ "$(id -u)" -ne 0 ]; then
+        die "system installation requires root."
+    fi
+    BIN_DIR="/usr/local/bin"
+    SHARE_DIR="/opt"
+else
+    if [ "$(id -u)" -eq 0 ]; then
+        die "do not run as root; run as your normal user inside the box (installs into \$HOME/.local), or pass --system for system-wide install."
+    fi
+    if [ -z "${HOME:-}" ] || [ ! -d "$HOME" ] || [ ! -w "$HOME" ]; then
+        die "HOME ('${HOME:-}') is not set or not a writable directory."
+    fi
+    BIN_DIR="$HOME/.local/bin"
+    SHARE_DIR="$HOME/.local/share"
 fi
-if [ -z "${HOME:-}" ] || [ ! -d "$HOME" ] || [ ! -w "$HOME" ]; then
-    die "HOME ('${HOME:-}') is not set or not a writable directory."
-fi
+
 arch="$(uname -m)"
 if [ "$arch" != "x86_64" ]; then
     die "unsupported architecture '${arch}': the Antigravity downloads are linux-x64 only."
 fi
-for cmd in curl tar sha256sum sha512sum python3 pip3 npm; do
+
+for cmd in curl tar sha256sum sha512sum python3 npm; do
     command -v "$cmd" >/dev/null 2>&1 || die "required command '${cmd}' not found in PATH."
 done
 
-# Ensure user directories in HOME are writable. When distrobox initializes,
-# files from /etc/skel may be copied with root ownership if the container was
-# started by root/distrobox-init. Fix ownership using passwordless sudo.
-for d in "$HOME/.config" "$HOME/.gemini" "$HOME/.local" "$HOME/Desktop"; do
-    if [ -e "$d" ] && [ ! -w "$d" ]; then
-        if command -v sudo &>/dev/null && sudo -n true 2>/dev/null; then
-            sudo chown -R "$(id -u):$(id -g)" "$d" 2>/dev/null || true
-            chmod -R u+rwX "$d" 2>/dev/null || true
+if [ "$MODE" = "system" ]; then
+    command -v pipx >/dev/null 2>&1 || die "required command 'pipx' not found in PATH for system install."
+else
+    command -v pip3 >/dev/null 2>&1 || die "required command 'pip3' not found in PATH for user install."
+    # Ensure user directories in HOME are writable. When distrobox initializes,
+    # files from /etc/skel may be copied with root ownership if the container was
+    # started by root/distrobox-init. Fix ownership using passwordless sudo.
+    for d in "$HOME/.config" "$HOME/.gemini" "$HOME/.local" "$HOME/Desktop"; do
+        if [ -e "$d" ] && [ ! -w "$d" ]; then
+            if command -v sudo &>/dev/null && sudo -n true 2>/dev/null; then
+                sudo chown -R "$(id -u):$(id -g)" "$d" 2>/dev/null || true
+                chmod -R u+rwX "$d" 2>/dev/null || true
+            fi
         fi
-    fi
-done
+    done
+fi
 
-BIN_DIR="$HOME/.local/bin"
-SHARE_DIR="$HOME/.local/share"
 mkdir -p "$BIN_DIR" "$SHARE_DIR"
 
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/agy-toolchain.XXXXXX")"
@@ -114,6 +136,9 @@ install_app_tarball() {
     rm -rf "${dest}.new"
     mkdir -p "${dest}.new"
     tar -xzf "$tarball" -C "${dest}.new" --strip-components=1
+    if [ "$MODE" = "system" ]; then
+        chmod -R ugo+rX "${dest}.new"
+    fi
     rm -rf "$dest"
     mv "${dest}.new" "$dest"
     rm -f "$tarball"
@@ -156,23 +181,29 @@ IDE_URL="https://storage.googleapis.com/antigravity-public/antigravity-hub/${IDE
 IDE_SHA256="0727e1f56961b6d2347941f278da69cc6c17de3befe988524848cd167380e9ab"
 install_app_tarball "$IDE_URL" "$IDE_SHA256" "$SHARE_DIR/antigravity"
 
-write_file_atomic "$BIN_DIR/antigravity" 0755 << 'EOF'
+app_exec="$SHARE_DIR/antigravity/antigravity"
+write_file_atomic "$BIN_DIR/antigravity" 0755 << EOF
 #!/bin/bash
 if [ -e /run/.containerenv ] || [ -e /run/.toolboxenv ]; then
-    mkdir -p "$HOME/.config/Antigravity-box/User"
-    if [ ! -f "$HOME/.config/Antigravity-box/User/settings.json" ]; then
-        echo '{"antigravity.account.enableTelemetry": false, "antigravity.browser.chromeBinaryPath": "/usr/bin/google-chrome-stable", "window.titleBarStyle": "native"}' > "$HOME/.config/Antigravity-box/User/settings.json"
+    mkdir -p "\$HOME/.config/Antigravity-box/User"
+    if [ ! -f "\$HOME/.config/Antigravity-box/User/settings.json" ]; then
+        echo '{"antigravity.account.enableTelemetry": false, "antigravity.browser.chromeBinaryPath": "/usr/bin/google-chrome-stable", "window.titleBarStyle": "native"}' > "\$HOME/.config/Antigravity-box/User/settings.json"
     elif command -v jq &>/dev/null; then
-        jq '.["antigravity.browser.chromeBinaryPath"] = "/usr/bin/google-chrome-stable" | .["window.titleBarStyle"] = "native"' "$HOME/.config/Antigravity-box/User/settings.json" > "$HOME/.config/Antigravity-box/User/settings.json.tmp" && mv "$HOME/.config/Antigravity-box/User/settings.json.tmp" "$HOME/.config/Antigravity-box/User/settings.json"
+        jq '.["antigravity.browser.chromeBinaryPath"] = "/usr/bin/google-chrome-stable" | .["window.titleBarStyle"] = "native"' "\$HOME/.config/Antigravity-box/User/settings.json" > "\$HOME/.config/Antigravity-box/User/settings.json.tmp" && mv "\$HOME/.config/Antigravity-box/User/settings.json.tmp" "\$HOME/.config/Antigravity-box/User/settings.json"
     fi
-    exec "$HOME/.local/share/antigravity/antigravity" --user-data-dir "$HOME/.config/Antigravity-box" --disable-dev-shm-usage --disable-gpu --disable-crash-reporter --no-sandbox "$@"
+    exec "$app_exec" --user-data-dir "\$HOME/.config/Antigravity-box" --disable-dev-shm-usage --disable-gpu --disable-crash-reporter --no-sandbox "\$@"
 else
-    exec "$HOME/.local/share/antigravity/antigravity" --disable-dev-shm-usage --disable-gpu --disable-crash-reporter --no-sandbox "$@"
+    exec "$app_exec" --disable-dev-shm-usage --disable-gpu --disable-crash-reporter --no-sandbox "\$@"
 fi
 EOF
 
 # Disable Antigravity telemetry (only when no settings exist yet)
-ensure_default_settings "$HOME/.config/Antigravity/User/settings.json"
+if [ "$MODE" = "system" ]; then
+    ensure_default_settings "/etc/skel/.config/Antigravity/User/settings.json"
+    ensure_default_settings "/etc/skel/.config/Antigravity-box/User/settings.json"
+else
+    ensure_default_settings "$HOME/.config/Antigravity/User/settings.json"
+fi
 
 
 # --- 2. Antigravity IDE (Stable 1.23.2 Tarball) -------------------------------
@@ -182,23 +213,29 @@ IDE_URL="https://edgedl.me.gvt1.com/edgedl/release2/j0qc3/antigravity/stable/${I
 IDE_SHA256="5232a4048ff4fa15685d9a981ba4fba573e297f3efc9b76f638e794baf775725"
 install_app_tarball "$IDE_URL" "$IDE_SHA256" "$SHARE_DIR/antigravity-ide"
 
-write_file_atomic "$BIN_DIR/antigravity-ide" 0755 << 'EOF'
+ide_exec="$SHARE_DIR/antigravity-ide/antigravity"
+write_file_atomic "$BIN_DIR/antigravity-ide" 0755 << EOF
 #!/bin/bash
 if [ -e /run/.containerenv ] || [ -e /run/.toolboxenv ]; then
-    mkdir -p "$HOME/.config/Antigravity-ide-box/User"
-    if [ ! -f "$HOME/.config/Antigravity-ide-box/User/settings.json" ]; then
-        echo '{"antigravity.account.enableTelemetry": false, "antigravity.browser.chromeBinaryPath": "/usr/bin/google-chrome-stable", "window.titleBarStyle": "native"}' > "$HOME/.config/Antigravity-ide-box/User/settings.json"
+    mkdir -p "\$HOME/.config/Antigravity-ide-box/User"
+    if [ ! -f "\$HOME/.config/Antigravity-ide-box/User/settings.json" ]; then
+        echo '{"antigravity.account.enableTelemetry": false, "antigravity.browser.chromeBinaryPath": "/usr/bin/google-chrome-stable", "window.titleBarStyle": "native"}' > "\$HOME/.config/Antigravity-ide-box/User/settings.json"
     elif command -v jq &>/dev/null; then
-        jq '.["antigravity.browser.chromeBinaryPath"] = "/usr/bin/google-chrome-stable" | .["window.titleBarStyle"] = "native"' "$HOME/.config/Antigravity-ide-box/User/settings.json" > "$HOME/.config/Antigravity-ide-box/User/settings.json.tmp" && mv "$HOME/.config/Antigravity-ide-box/User/settings.json.tmp" "$HOME/.config/Antigravity-ide-box/User/settings.json"
+        jq '.["antigravity.browser.chromeBinaryPath"] = "/usr/bin/google-chrome-stable" | .["window.titleBarStyle"] = "native"' "\$HOME/.config/Antigravity-ide-box/User/settings.json" > "\$HOME/.config/Antigravity-ide-box/User/settings.json.tmp" && mv "\$HOME/.config/Antigravity-ide-box/User/settings.json.tmp" "\$HOME/.config/Antigravity-ide-box/User/settings.json"
     fi
-    exec "$HOME/.local/share/antigravity-ide/antigravity" --user-data-dir "$HOME/.config/Antigravity-ide-box" --disable-dev-shm-usage --disable-gpu --disable-crash-reporter --no-sandbox "$@"
+    exec "$ide_exec" --user-data-dir "\$HOME/.config/Antigravity-ide-box" --disable-dev-shm-usage --disable-gpu --disable-crash-reporter --no-sandbox "\$@"
 else
-    exec "$HOME/.local/share/antigravity-ide/antigravity" --disable-dev-shm-usage --disable-gpu --disable-crash-reporter --no-sandbox "$@"
+    exec "$ide_exec" --disable-dev-shm-usage --disable-gpu --disable-crash-reporter --no-sandbox "\$@"
 fi
 EOF
 
 # Disable telemetry for IDE (only when no settings exist yet)
-ensure_default_settings "$HOME/.config/Antigravity-ide/User/settings.json"
+if [ "$MODE" = "system" ]; then
+    ensure_default_settings "/etc/skel/.config/Antigravity-ide/User/settings.json"
+    ensure_default_settings "/etc/skel/.config/Antigravity-ide-box/User/settings.json"
+else
+    ensure_default_settings "$HOME/.config/Antigravity-ide/User/settings.json"
+fi
 
 
 # --- 3. Antigravity CLI (1.0.0 Tarball) ---------------------------------------
@@ -216,19 +253,37 @@ chmod 0755 "$BIN_DIR/agy.new"
 mv -f "$BIN_DIR/agy.new" "$BIN_DIR/agy"
 
 
-# --- 4. Antigravity SDK (google-antigravity) ----------------------------------
-step "Installing Antigravity SDK"
-pip3 install --user --break-system-packages --no-cache-dir --retries 10 google-antigravity==0.1.0
+# --- 4 & 5. Antigravity SDK & Google ADK --------------------------------------
+if [ "$MODE" = "system" ]; then
+    step "Installing Google ADK and Antigravity SDK (system-wide)"
+    PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install --force google-adk==2.1.0
+    PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx inject google-adk google-antigravity==0.1.0
+    # Enable system python3 to find the packages via .pth file
+    for pydir in /usr/local/lib/python*/dist-packages /usr/lib/python*/dist-packages; do
+        if [ -d "$pydir" ]; then
+            for site in /opt/pipx/venvs/google-adk/lib/python*/site-packages; do
+                if [ -d "$site" ]; then
+                    echo "$site" > "$pydir/agy-toolchain.pth"
+                fi
+            done
+        fi
+    done
+else
+    step "Installing Antigravity SDK"
+    pip3 install --user --break-system-packages --no-cache-dir --retries 10 google-antigravity==0.1.0
 
-
-# --- 5. Google ADK ------------------------------------------------------------
-step "Installing Google ADK"
-pip3 install --user --break-system-packages --no-cache-dir --retries 10 google-adk==2.1.0
+    step "Installing Google ADK"
+    pip3 install --user --break-system-packages --no-cache-dir --retries 10 google-adk==2.1.0
+fi
 
 
 # --- 6. Gemini CLI ------------------------------------------------------------
 step "Installing Gemini CLI"
-npm install -g --prefix "$HOME/.local" --omit=dev --no-audit --no-fund @google/gemini-cli@0.43.0
+if [ "$MODE" = "system" ]; then
+    npm install -g --prefix /usr/local --omit=dev --no-audit --no-fund @google/gemini-cli@0.43.0
+else
+    npm install -g --prefix "$HOME/.local" --omit=dev --no-audit --no-fund @google/gemini-cli@0.43.0
+fi
 
 
 # --- Verify -------------------------------------------------------------------
@@ -244,8 +299,12 @@ if [ "$missing" -ne 0 ]; then
     die "${missing} toolchain component(s) missing after install."
 fi
 
-echo "Agent toolchain installed successfully at user level ($BIN_DIR)."
-case ":${PATH}:" in
-    *":$BIN_DIR:"*) ;;
-    *) echo "Note: $BIN_DIR is not on your PATH in this shell; open a new login shell (or run: export PATH=\"$BIN_DIR:\$PATH\")." ;;
-esac
+if [ "$MODE" = "system" ]; then
+    echo "Agent toolchain installed successfully at system level ($BIN_DIR, $SHARE_DIR)."
+else
+    echo "Agent toolchain installed successfully at user level ($BIN_DIR)."
+    case ":${PATH}:" in
+        *":$BIN_DIR:"*) ;;
+        *) echo "Note: $BIN_DIR is not on your PATH in this shell; open a new login shell (or run: export PATH=\"$BIN_DIR:\$PATH\")." ;;
+    esac
+fi

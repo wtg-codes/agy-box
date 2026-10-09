@@ -169,8 +169,8 @@ verify_host_shim() {
         log_error "Exported agy shim missing or not a distrobox export: $shim"
         exit 1
     fi
-    if ! grep -qF "'$TEST_HOME/.local/bin/agy'" "$shim"; then
-        log_error "Exported agy shim does not point at the box's ~/.local/bin/agy:"
+    if ! grep -qF "'/usr/local/bin/agy'" "$shim" && ! grep -qF "'$TEST_HOME/.local/bin/agy'" "$shim"; then
+        log_error "Exported agy shim does not point at the box's /usr/local/bin/agy or ~/.local/bin/agy:"
         cat "$shim" >&2
         exit 1
     fi

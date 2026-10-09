@@ -230,13 +230,17 @@ update_toolchain_hint() {
 }
 
 # export_agy_cli <container> <box_home> [export_dir]
-# Exports the box's ~/.local/bin/agy as a host shim in export_dir (default: the
-# host's ~/.local/bin). Never overwrites a host `agy` that is not a distrobox shim.
+# Exports the box's /usr/local/bin/agy (or ~/.local/bin/agy) as a host shim in
+# export_dir (default: the host's ~/.local/bin). Never overwrites a host `agy`
+# that is not a distrobox shim.
 export_agy_cli() {
     local name=$1
     local box_home=$2
     local export_dir=${3:-"$HOME/.local/bin"}
-    local src="$box_home/.local/bin/agy"
+    local src="/usr/local/bin/agy"
+    if [ -n "$box_home" ] && [ -x "$box_home/.local/bin/agy" ]; then
+        src="$box_home/.local/bin/agy"
+    fi
     local dest="$export_dir/agy"
 
     if [ "$src" = "$dest" ]; then
@@ -275,16 +279,20 @@ unexport_agy_cli() {
 }
 
 # install_toolchain_in_box <container> <box_home> [export_dir]
-# Runs the in-image installer as the box user, then exports the agy CLI.
+# Ensures the agy CLI is exported to the host. If the toolchain is pre-baked
+# (/usr/local/bin/agy exists), exports immediately. Otherwise falls back to running
+# the in-image installer.
 install_toolchain_in_box() {
     local name=$1
     local box_home=$2
     local export_dir=${3:-"$HOME/.local/bin"}
-    if ! run_step "Installing Antigravity toolchain into '$name' (~/.local; this can take a few minutes)..." \
-        distrobox enter "$name" -- "$TOOLCHAIN_INSTALLER"; then
-        ui_error "❌ Error: Failed to install the Antigravity toolchain inside '$name'." \
-            "Retry with: $(update_toolchain_hint "$name")"
-        return 1
+    if ! distrobox enter "$name" -- test -x /usr/local/bin/agy 2>/dev/null; then
+        if ! run_step "Installing Antigravity toolchain into '$name' (~/.local; this can take a few minutes)..." \
+            distrobox enter "$name" -- "$TOOLCHAIN_INSTALLER"; then
+            ui_error "❌ Error: Failed to install the Antigravity toolchain inside '$name'." \
+                "Retry with: $(update_toolchain_hint "$name")"
+            return 1
+        fi
     fi
     if ! export_agy_cli "$name" "$box_home" "$export_dir"; then
         ui_error "Retry with: $(update_toolchain_hint "$name")"
