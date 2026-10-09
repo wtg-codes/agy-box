@@ -72,6 +72,10 @@ agy-prune:
 agy-test:
     @./scripts/test-box.sh
 
+# Run full host E2E test against the official published GHCR image
+agy-e2e *tag="0.6.0":
+    @./scripts/test-e2e.sh {{tag}}
+
 # Run health checks directly inside the active running container
 agy-assert *args="":
     @target_name="agy-box"; \
