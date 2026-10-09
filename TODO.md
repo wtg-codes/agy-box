@@ -35,7 +35,7 @@
 Ideas that are not scheduled yet. Each needs a decision before implementation.
 
 ### Images & platforms
-- **Batteries-Included Toolchain & Honest SBOM (Option A)**: Bake the developer toolchain (Google Antigravity Agent UI, IDE/VS Code extension, CLI `agy`, Python SDK, and Google ADK) directly into system paths (`/usr/local/bin`, `/opt`) at container build time. This ensures Syft generates a 100% authentic, comprehensive `sbom.spdx.json` that Grype scans in CI, while eliminating slow and error-prone user-space downloads on first boot.
+- ~~**Batteries-Included Toolchain & Honest SBOM (Option A)**: Bake the developer toolchain (Google Antigravity Agent UI, IDE/VS Code extension, CLI `agy`, Python SDK, and Google ADK) directly into system paths (`/usr/local/bin`, `/opt`) at container build time. This ensures Syft generates a 100% authentic, comprehensive `sbom.spdx.json` that Grype scans in CI, while eliminating slow and error-prone user-space downloads on first boot.~~ ✅ Done (PR #29).
 - **Upstream Version Sync via `agy-easy-install`**: Source upstream release URLs, versions, and verified SHA256 checksums from `wtg-codes/agy-easy-install`'s `versions.json` (scraped nightly) as build arguments in GitHub Actions CI.
 - **Googlebook (ChromeOS / Crostini) Support**: Validate and document running `agy-box` / `agy-box-manager` inside ChromeOS Crostini Linux container (both x86_64 and ARM64 Googlebook devices), including localhost port forwarding for noVNC VDI (`6080`) and Open WebUI (`8080`).
 - **Antigravity IDE Extension Transition**: With Google deprecating the Standalone Antigravity IDE in favor of editor extensions, package VS Code / VSCodium with the official `Google Antigravity` extension pre-configured inside the VDI desktop, keeping the standalone IDE as a legacy option.
@@ -44,7 +44,7 @@ Ideas that are not scheduled yet. Each needs a decision before implementation.
 - **v0.6.0 wallpaper asset**: Add `rootfs/usr/share/agy-box/wallpaper-v0.6.0.png`. Until then the `Containerfile` falls back to the newest existing wallpaper (`wallpaper-v0.5.0.png`).
 
 ### Toolchain
-- **`agy-box-manager update-toolchain` command**: Re-run the per-user toolchain installer (`agy-install-toolchain`) inside an existing box to pick up new Antigravity/SDK/ADK/Gemini CLI versions without recreating the container (unless the toolchain fix PR already adds an equivalent).
+- ~~**`agy-box-manager update-toolchain` command**: Re-run the per-user toolchain installer (`agy-install-toolchain`) inside an existing box to pick up new Antigravity/SDK/ADK/Gemini CLI versions without recreating the container.~~ ✅ Done (PR #29).
 - **Update notes**: Show what changed (image tag, toolchain versions) when `agy-box-manager install` recreates an existing box, e.g. by linking the GitHub Release notes for the pulled tag.
 
 ### CI/CD & supply chain

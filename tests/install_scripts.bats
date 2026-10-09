@@ -98,7 +98,7 @@ teardown() {
   # Restore PATH and clean up temp directory
   export PATH="$ORIGINAL_PATH"
   rm -rf "$TEST_DIR"
-  rm -rf k9s* helm* kubectl* checksums.sha256* gpg.key linux-*
+  rm -rf k9s* helm* kubectl* checksums.sha256* gpg.key linux-* nodesource* lookup*
 }
 
 @test "install-tools.sh pins and installs correct versions of kubectl, k9s, and helm" {

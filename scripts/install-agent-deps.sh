@@ -22,9 +22,8 @@ apt-get update && apt-get install -y --no-install-recommends \
     pipx \
     python3-keyring \
     python3-keyrings.alt \
-    nodejs \
-    npm \
     apt-transport-https \
+    ca-certificates \
     libsecret-1-0 \
     tini \
     gosu \
@@ -38,18 +37,27 @@ apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# 2. Install Charm Gum
+# 2. Install Node.js (v22 LTS) via NodeSource (for Gemini CLI and modern tooling)
+echo "Installing Node.js 22 LTS via NodeSource..."
+mkdir -p /etc/apt/keyrings
+curl -fsSL --retry 5 --retry-delay 2 --connect-timeout 5 https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
+echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" > /etc/apt/sources.list.d/nodesource.list
+apt-get update && apt-get install -y --no-install-recommends nodejs && rm -rf /var/lib/apt/lists/*
+
+# 3. Install Charm Gum
 echo "Installing Charm Gum..."
 mkdir -p /etc/apt/keyrings
-curl -fsSL https://repo.charm.sh/apt/gpg.key | gpg --dearmor -o /etc/apt/keyrings/charm.gpg
+curl -fsSL --retry 5 --retry-delay 2 --connect-timeout 5 https://repo.charm.sh/apt/gpg.key | gpg --dearmor -o /etc/apt/keyrings/charm.gpg
 echo "deb [signed-by=/etc/apt/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *" > /etc/apt/sources.list.d/charm.list
 apt-get update && apt-get install -y --no-install-recommends gum=0.17.0 && rm -rf /var/lib/apt/lists/*
 
-# 3. Install Google Chrome (amd64) or Chromium (arm64) for agent-based browsing
+# 4. Install Google Chrome (amd64) or Chromium (arm64) for agent-based browsing
 if [[ "$TARGETARCH" = "arm64" ]]; then
-    echo "Installing Chromium for arm64..."
-    apt-get update && apt-get install -y --no-install-recommends chromium || apt-get install -y --no-install-recommends chromium-browser || true
-    rm -rf /var/lib/apt/lists/*
+    echo "Installing Chromium for arm64 via xtradeb PPA..."
+    mkdir -p /etc/apt/keyrings
+    curl -fsSL --retry 5 --retry-delay 2 --connect-timeout 5 "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x5301FA4FD93244FBC6F6149982BB6851C64F6880" | gpg --dearmor -o /etc/apt/keyrings/xtradeb.gpg
+    echo "deb [arch=arm64 signed-by=/etc/apt/keyrings/xtradeb.gpg] http://ppa.launchpad.net/xtradeb/apps/ubuntu noble main" > /etc/apt/sources.list.d/xtradeb.list
+    apt-get update && apt-get install -y --no-install-recommends chromium && rm -rf /var/lib/apt/lists/*
     
     # Locate chromium binary
     if command -v chromium &>/dev/null; then
@@ -69,6 +77,6 @@ else
     
     # Apply wrappers for Electron/Chrome stability in containers
     mv /usr/bin/google-chrome-stable /usr/bin/google-chrome-stable.orig
-    printf '#!/bin/bash\nexec /usr/bin/google-chrome-stable.orig --disable-dev-shm-usage --disable-gpu --disable-crash-reporter --no-sandbox "$@"' > /usr/bin/google-chrome-stable
+    printf '#!/bin/bash\nexec /usr/bin/google-chrome-stable.orig --disable-dev-shm-usage --disable-gpu --disable-crash-reporter --no-sandbox "$@"\n' > /usr/bin/google-chrome-stable
     chmod +x /usr/bin/google-chrome-stable
 fi

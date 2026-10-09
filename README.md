@@ -68,22 +68,23 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/wtg-codes/agy-box/main/a
 ## Prerequisites
 
 If you plan to use this container locally or build from source, your host system requires the following dependencies:
-- **An x86_64 (amd64) Linux host**: The image is currently published for `linux/amd64` only (see [Known Limitations](#known-limitations)).
+- **An x86_64 (amd64) or aarch64 (arm64) Linux host**: Native multi-arch support for standard PCs/servers, Apple Silicon (via Asahi Linux), ChromeOS Crostini, and NVIDIA DGX Spark workstations.
 - **A Container Runtime**: Either **Podman** (recommended) or **Docker**.
 - **Distrobox**: To seamlessly integrate the container into your host OS environment.
 - **Gum**: A highly glamorous tool for shell scripts (used for our interactive CLI).
 
 *(Note for **Universal Blue (Bluefin/Bazzite/Aurora)** and other immutable OS users: Podman, Distrobox, and Homebrew are usually pre-configured. If `gum` is missing, the manager script will automatically offer to install it using your system's package manager!)*
 
-## Known Limitations
+## Known Limitations & Hardware Support
 
-- **amd64 only**: The upstream base image `ghcr.io/ublue-os/ubuntu-toolbox` is published for `linux/amd64` only, so `agy-box` is built and published for `linux/amd64` only. There is no native arm64 (aarch64) image; on arm64 hosts the image would only run under emulation, if at all. Real arm64 support requires a multi-arch base image and is tracked in [TODO.md](TODO.md#possible-future-work).
-- **Open WebUI is CPU-only**: The bundled Open WebUI uses CPU-only PyTorch wheels to keep the image small. GPU inference is expected to happen in a separate Ollama backend (see [Local Workspace Web Dashboard](#local-workspace-web-dashboard-open-webui)).
-- **Antigravity toolchain is installed per user, not baked into the image**: The Antigravity Agent UI, IDE, CLI, SDK, Google ADK, and Gemini CLI are installed into the box user's home directory (`~/.local`) by `agy-box-manager install` (via `agy-install-toolchain`) rather than at image build time, so the first install needs network access to the Antigravity download endpoints, PyPI, and npm. See [Product Deep Dive](#product-deep-dive-the-antigravity-suite).
+- **Multi-Architecture Support**: Built and published natively for both `linux/amd64` and `linux/arm64` (aarch64) via the multi-arch base image `quay.io/toolbx/ubuntu-toolbox:24.04`. Full native execution without emulation on both Intel/AMD x86_64 and 64-bit ARM hardware (such as NVIDIA DGX Spark Grace Blackwell nodes, Ampere Altra, Apple Silicon, and ARM64 Chromebooks).
+- **NVIDIA GPU Acceleration**: `agy-box-manager` automatically detects host NVIDIA GPUs (including NVIDIA DGX Spark Grace Blackwell accelerators) and configures container GPU passthrough via Distrobox (`--nvidia`).
+- **Open WebUI is CPU-only in Container**: The bundled Open WebUI uses CPU-only PyTorch wheels to keep the base image download fast and lightweight (~4.5 GB smaller). GPU inference is intended to run via a host-side or networked Ollama / vLLM backend (see [Local Workspace Web Dashboard](#local-workspace-web-dashboard-open-webui)).
+- **Batteries-Included Toolchain (Option A)**: The full developer toolchain (Google Antigravity Agent UI, IDE, CLI `agy`, Python SDK, Google ADK, and Gemini CLI) is pre-baked into system paths (`/usr/local/bin`, `/opt`) during image build. This ensures Syft generates a 100% genuine, verifiable SBOM that Grype scans prior to release, while the included `agy-install-toolchain` utility remains available for runtime per-user customizations.
 
 ## Architecture
 
-The `agy-box` is designed to run via **Distrobox** on the `bluefin-wtg` immutable host OS (or any standard Linux distribution). It leverages an Ubuntu toolbox base image (`ghcr.io/ublue-os/ubuntu-toolbox`, pinned by digest in the [`Containerfile`](Containerfile); Ubuntu 26.04 LTS, `linux/amd64`) and acts as a host-integrated developer sandbox.
+The `agy-box` is designed to run via **Distrobox** on the `bluefin-wtg` immutable host OS (or any standard Linux distribution). It leverages an Ubuntu toolbox base image (`quay.io/toolbx/ubuntu-toolbox:24.04`, pinned by digest in the [`Containerfile`](Containerfile); Ubuntu 24.04 LTS, multi-arch `linux/amd64` and `linux/arm64`) and acts as a host-integrated developer sandbox.
 
 ### Host-Integrated Sandbox Model
 
@@ -282,13 +283,13 @@ You can also bypass the interactive menu by passing commands directly, which is 
 
 ## Alternative & Cloud Deployments
 
-While `agy-box` is optimized for local execution via Distrobox, it is built as a standard, OCI-compliant container image (`ghcr.io/wtg-codes/agy-box:latest`, `linux/amd64`). This enables deployment across various cloud and remote environments:
+While `agy-box` is optimized for local execution via Distrobox, it is built as a standard, OCI-compliant multi-arch container image (`ghcr.io/wtg-codes/agy-box:latest`, `linux/amd64` and `linux/arm64`). This enables deployment across various cloud and remote environments:
 
 > [!NOTE]
-> Outside Distrobox, the image entrypoint only creates an unprivileged user (`agyuser`, UID/GID `9000` by default, override with `PUID`/`PGID`) and runs `sleep infinity`. It does **not** start the VDI desktop or an SSH server automatically, and the per-user Antigravity toolchain still has to be installed by running `agy-install-toolchain` inside the container.
+> Outside Distrobox, the image entrypoint only creates an unprivileged user (`agyuser`, UID/GID `9000` by default, override with `PUID`/`PGID`) and runs `sleep infinity`. It does **not** start the VDI desktop or an SSH server automatically. You can start the desktop with `agy-vdi` or update the toolchain with `agy-install-toolchain`.
 
-### 1. Cloud Virtual Machines (GCP Compute Engine, AWS EC2, Azure VMs)
-You can run `agy-box` as a standalone container on any amd64 cloud instance running Docker or Podman.
+### 1. Cloud Virtual Machines (GCP Compute Engine, AWS EC2, Azure VMs, OCI Ampere)
+You can run `agy-box` as a standalone container on any amd64 or arm64 cloud instance running Docker or Podman.
 *   **Run command:**
     ```bash
     docker run -d \
@@ -357,14 +358,14 @@ For detailed installation prerequisites, rootless engine configurations (Podman 
 
 ## CI/CD Pipeline
 
-The container is built, tested, and published to the GitHub Container Registry (GHCR) by the [`CI/CD` workflow](.github/workflows/ci.yml) on every pull request, every push to `main`, and every `v*` tag. Only `linux/amd64` is built (see [Known Limitations](#known-limitations)).
+The container is built, tested, and published to the GitHub Container Registry (GHCR) by the [`CI/CD` workflow](.github/workflows/ci.yml) on every pull request, every push to `main`, and every `v*` tag across both `linux/amd64` and `linux/arm64` architectures.
 
 | Job | Runs on | What it does |
 | :--- | :--- | :--- |
 | **Lint Codebase** | PRs, `main`, tags | `yamllint` (strict), ShellCheck on all shell scripts and `agy-box-manager`, and `hadolint` on the `Containerfile`. |
 | **Run Script Tests** | PRs, `main`, tags | Runs the Bats unit tests in `tests/`. |
-| **Build & Validate Image (amd64)** | PRs, `main`, tags | Builds the image once with Docker Buildx (GitHub Actions layer cache), runs the Distrobox integration tests (`scripts/test-box.sh`) against that exact build, generates an SPDX SBOM with Syft and scans it with Grype (informational, `--only-fixed`; findings do not fail the build), and uploads the SBOM as a workflow artifact. On `main` and tags (never on PRs) it then pushes the same build to GHCR **by digest** (untagged). |
-| **Publish & Release** | `main`, tags | Runs only after all three jobs above pass. Applies the tags to the pushed digest, creates a signed SLSA **build provenance attestation** (`actions/attest-build-provenance`, pushed to the registry), and on `v*` tags creates a GitHub Release with the SBOM attached. |
+| **Build & Validate Image (matrix: amd64, arm64)** | PRs, `main`, tags | Builds the image natively on `ubuntu-24.04` (amd64) and `ubuntu-24.04-arm` (arm64) using Docker Buildx (GitHub Actions layer cache), runs the Distrobox integration tests (`scripts/test-box.sh`) against that exact native build, generates an SPDX SBOM with Syft and scans it with Grype (informational, `--only-fixed`), and uploads the SBOM as a workflow artifact. On `main` and tags (never on PRs) it then pushes each architecture build to GHCR **by digest** (untagged). |
+| **Publish & Release** | `main`, tags | Runs only after all upstream jobs pass. Merges the per-architecture digests into a multi-arch manifest list (`docker buildx imagetools create`), applies release tags (`latest`, `0.6.0`, etc.), creates signed SLSA **build provenance attestations** (`actions/attest-build-provenance`), and on `v*` tags creates a GitHub Release with both SBOMs attached. |
 
 Pull requests never push images, so there are no per-PR image tags. Published tags are:
 

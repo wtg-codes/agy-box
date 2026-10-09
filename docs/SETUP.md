@@ -7,7 +7,7 @@ This guide details the system prerequisites, installation instructions, and reso
 ## 1. System Requirements & Prerequisites
 
 To run `agy-box`, your host machine requires:
-- **Linux OS on x86_64 (amd64)** (with systemd and standard user namespaces enabled). The `ghcr.io/wtg-codes/agy-box` image is published for `linux/amd64` only because its upstream base image is amd64-only; arm64 hosts are not supported yet.
+- **Linux OS on x86_64 (amd64) or aarch64 (arm64)** (with systemd and standard user namespaces enabled). The `ghcr.io/wtg-codes/agy-box` image is published natively for both `linux/amd64` and `linux/arm64`, supporting PCs, servers, NVIDIA DGX Spark workstations, Apple Silicon (Asahi Linux), and ChromeOS Crostini.
 - **Distrobox** (version `1.4.0` or newer).
 - **A compatible container engine**:
   - 🍎 **Podman** (Highly Recommended for native rootless user mappings and safety).
