@@ -16,7 +16,7 @@ KUBECTL_VERSION="v1.36.1"
 if [[ "$ARCH" = "amd64" ]]; then
     KUBECTL_SHA256="629d3f410e09bf49b64ae7079f7f0bda1191efed311f7d37fdbab0ad5b0ec2b7"
 else
-    KUBECTL_SHA256=$(curl -fsSL "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl.sha256")
+    KUBECTL_SHA256="59f7ee8e477fae658447607dc3c8790ac17a1b016c01c622c12070e969e2d4e7"
 fi
 
 curl -LO --http1.1 --connect-timeout 5 --retry 5 --retry-delay 2 "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${ARCH}/kubectl"
@@ -38,7 +38,7 @@ HELM_VERSION="v3.21.0"
 if [[ "$ARCH" = "amd64" ]]; then
     HELM_SHA256="0093eb572e3d2380f094df162ddb525e219249de88957afe24cfbb19632acd36"
 else
-    HELM_SHA256=$(curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-${ARCH}.tar.gz.sha256" | awk '{print $1}')
+    HELM_SHA256="8de5a0c9a47431e59fd560e91e0779c8cf9316c383da7efb84128a4c339ecb2d"
 fi
 
 curl -sSLO --http1.1 --connect-timeout 5 --retry 5 --retry-delay 2 "https://get.helm.sh/helm-${HELM_VERSION}-linux-${ARCH}.tar.gz"

@@ -100,6 +100,19 @@ mock_installer_env() {
   refute_grep -F '/usr/bin/agy' "$TEST_LOG"
 }
 
+@test "install-agent-toolchain.sh supports aarch64 and downloads arm64 binaries" {
+  mock_installer_env
+  create_mock "uname" 'echo aarch64'
+  TMPDIR="$TEST_DIR" run ./scripts/install-agent-toolchain.sh
+  echo "$output"
+  [ "$status" -eq 0 ]
+
+  grep -F 'https://storage.googleapis.com/antigravity-public/antigravity-cli/1.0.0-5288553236791296/linux-arm/cli_linux_arm64.tar.gz' "$TEST_LOG"
+  grep -F 'https://storage.googleapis.com/antigravity-public/antigravity-hub/2.0.1-6566078776737792/linux-arm/Antigravity.tar.gz' "$TEST_LOG"
+  grep -F 'https://edgedl.me.gvt1.com/edgedl/release2/j0qc3/antigravity/stable/1.23.2-4781536860569600/linux-arm/Antigravity.tar.gz' "$TEST_LOG"
+  [ -x "$HOME/.local/bin/agy" ]
+}
+
 @test "install-agent-toolchain.sh is idempotent and preserves existing user settings" {
   mock_installer_env
   TMPDIR="$TEST_DIR" run ./scripts/install-agent-toolchain.sh
