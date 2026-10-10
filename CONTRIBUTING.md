@@ -10,7 +10,7 @@ Thank you for your interest in contributing to `agy-box`! This guide outlines ho
 
 The repository is structured as a Distrobox overlay template:
 
-- 📄 **[Containerfile](Containerfile)**: Image definition. Based on `ghcr.io/ublue-os/ubuntu-toolbox` (pinned by digest; Ubuntu 26.04 LTS, `linux/amd64` only).
+- 📄 **[Containerfile](Containerfile)**: Image definition. Based on `quay.io/toolbx/ubuntu-toolbox:24.04` (pinned by digest; Ubuntu 24.04 LTS, multi-arch `linux/amd64` and `linux/arm64`).
 - 📂 **[rootfs/](rootfs)**: Files copied directly into the root filesystem (`/`) of the container during the build.
   - 📂 **[rootfs/etc/profile.d/agy-setup-check.sh](rootfs/etc/profile.d/agy-setup-check.sh)**: Hook that launches the interactive setup helper on first interactive TTY shell login.
   - 📂 **[rootfs/usr/local/bin/agy-setup-helper](rootfs/usr/local/bin/agy-setup-helper)**: Interactive first-time CLI helper verifying API keys, D-Bus, Chrome version, and Git setups. Its `VERSION` variable is the image version (it also selects the versioned wallpaper).
@@ -21,7 +21,7 @@ The repository is structured as a Distrobox overlay template:
   - 📄 **[scripts/install-agent-deps.sh](scripts/install-agent-deps.sh)**: Installs basic dependencies and system-level requirements (like `libsecret-1-0` for keyring mapping, Chrome, the VDI stack, and Gum).
   - 📄 **[scripts/install-open-webui.sh](scripts/install-open-webui.sh)**: Installs Open WebUI into `/opt/open-webui-venv` with `uv` and CPU-only PyTorch.
   - 📄 **[scripts/install-tools.sh](scripts/install-tools.sh)**: Installs pinned, checksum-verified CNCF tools (`kubectl`, `helm`, `k9s`).
-  - 📄 **[scripts/install-agent-toolchain.sh](scripts/install-agent-toolchain.sh)**: Per-user Antigravity toolchain installer (Agent UI, IDE, `agy` CLI, SDK, ADK, Gemini CLI → `~/.local`). Shipped in the image as `/usr/local/bin/agy-install-toolchain` and run inside the box by `agy-box-manager install|dev|update-toolchain`; the toolchain itself is not baked into the image.
+  - 📄 **[scripts/install-agent-toolchain.sh](scripts/install-agent-toolchain.sh)**: Antigravity toolchain installer (Agent UI, IDE, `agy` CLI, SDK, ADK, Gemini CLI). Baked system-wide into `/usr/local/bin` and `/opt` during image build (Option A) for authentic Syft SBOM & Grype scanning, and shipped as `/usr/local/bin/agy-install-toolchain` for runtime per-user customizations.
   - 📄 **[scripts/test-box.sh](scripts/test-box.sh)**: Integration test harness that builds the image, creates a temporary distrobox, installs the toolchain, and runs the assertions.
   - 📄 **[scripts/assert-box.sh](scripts/assert-box.sh)**: Assertions asserting that all commands are functional inside the sandbox.
 - 📂 **[tests/](tests)**: Bats unit tests for the installation scripts.

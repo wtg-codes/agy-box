@@ -681,6 +681,9 @@ cmd_install_official() {
     if [[ -n "$memory_limit" ]]; then
         dbx_flags+=("--additional-flags" "-m $memory_limit")
     fi
+    if command -v nvidia-smi &>/dev/null && { [ -e /dev/nvidiactl ] || [ -e /dev/nvhost-ctrl ] || [ -e /dev/nvidia0 ]; }; then
+        dbx_flags+=("--nvidia")
+    fi
 
     local log_file
     log_file=$(mktemp)
@@ -817,6 +820,9 @@ cmd_build_dev() {
     fi
     if [[ -n "$memory_limit" ]]; then
         dbx_flags+=("--additional-flags" "-m $memory_limit")
+    fi
+    if command -v nvidia-smi &>/dev/null && { [ -e /dev/nvidiactl ] || [ -e /dev/nvhost-ctrl ] || [ -e /dev/nvidia0 ]; }; then
+        dbx_flags+=("--nvidia")
     fi
 
     local log_file

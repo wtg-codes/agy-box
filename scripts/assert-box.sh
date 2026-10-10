@@ -6,6 +6,7 @@ export PATH="$HOME/.local/bin:$PATH"
 
 RED="\033[0;31m"
 GREEN="\033[0;32m"
+YELLOW="\033[0;33m"
 NC="\033[0m"
 
 assert_cmd() {
@@ -20,8 +21,11 @@ assert_cmd() {
     fi
     
     # Verify it runs and outputs successfully
-    if ! eval "$ver_cmd" &>/dev/null; then
+    local ver_out
+    if ! ver_out=$(eval "$ver_cmd" 2>&1); then
         echo -e "${RED}FAILED (command failed to execute)${NC}"
+        echo -e "${YELLOW}Command: $ver_cmd${NC}"
+        echo -e "${YELLOW}Output:${NC} $ver_out"
         return 1
     fi
     

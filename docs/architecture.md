@@ -81,47 +81,55 @@ When executed by the autonomous agent orchestration runtime (Jules):
 
 ## 7. Image Composition
 
-The image is intentionally split into a system layer (baked at build time) and a per-user layer (installed into the box user's home):
+The image is built on a multi-arch Ubuntu base with a batteries-included developer toolchain baked system-wide (Option A) for complete SBOM attestation and fast startup:
 
 | Layer | Installed by | Contents |
 | :--- | :--- | :--- |
-| Base | `ghcr.io/ublue-os/ubuntu-toolbox` (pinned digest) | Ubuntu 26.04 LTS toolbox userland (`linux/amd64` only). |
-| System deps | `scripts/install-agent-deps.sh` | git, curl, jq, Python/pipx, Node.js/npm, `libsecret-1-0` + Python keyring, `tini`, `gosu`, Gum, Google Chrome (wrapped), Xvfb, x11vnc, IceWM, PCManFM, noVNC, websockify, xterm. |
+| Base | `quay.io/toolbx/ubuntu-toolbox:24.04` (pinned digest) | Ubuntu 24.04 LTS toolbox userland (native `linux/amd64` and `linux/arm64`). |
+| System deps | `scripts/install-agent-deps.sh` | git, curl, jq, Python/pipx, Node.js 22 LTS (NodeSource), `libsecret-1-0` + Python keyring, `tini`, `gosu`, Gum, Google Chrome (amd64) / Chromium (arm64 via xtradeb), Xvfb, x11vnc, IceWM, PCManFM, noVNC, websockify, xterm. |
 | Local Web Dashboard | `scripts/install-open-webui.sh` | Python 3.12 + `uv`, Open WebUI in `/opt/open-webui-venv` with CPU-only PyTorch. |
-| CNCF tools | `scripts/install-tools.sh` | `kubectl`, `helm`, `k9s` (pinned versions, checksum-verified). |
+| CNCF tools | `scripts/install-tools.sh` | `kubectl`, `helm`, `k9s` (pinned versions, checksum-verified for both amd64 and arm64). |
+| Pre-baked toolchain (Option A) | `scripts/install-agent-toolchain.sh --system` | Antigravity Agent UI, Antigravity IDE, Antigravity CLI (`agy`), Antigravity SDK, Google ADK, Gemini CLI in `/usr/local/bin` and `/opt`. |
 | rootfs overlay | `rootfs/` | `agy-setup-helper`, `agy-vdi`, `entrypoint.sh`, profile hook, IceWM config, desktop icons, versioned wallpaper. |
-| Per-user toolchain | `agy-install-toolchain` (run by `agy-box-manager install`) | Antigravity Agent UI, Antigravity IDE, Antigravity CLI (`agy`), Antigravity SDK, Google ADK, Gemini CLI in `~/.local`. |
+| Runtime toolchain utility | `scripts/install-agent-toolchain.sh` | Shipped to `/usr/local/bin/agy-install-toolchain` for runtime per-user customizations. |
 
 ---
 
 ## 8. CI/CD Pipeline
 
-The [`CI/CD` workflow](../.github/workflows/ci.yml) builds and validates a single `linux/amd64` image. Pull requests run every check but never push; pushes to `main` and `v*` tags additionally publish.
+The [`CI/CD` workflow](../.github/workflows/ci.yml) builds and validates native images in parallel across `linux/amd64` (on `ubuntu-24.04`) and `linux/arm64` (on `ubuntu-24.04-arm`). Pull requests run every check but never push; pushes to `main` and `v*` tags additionally publish multi-arch images.
 
 ```mermaid
 flowchart LR
     trigger["PR / push to main / v* tag"] --> lint["Lint Codebase<br/>yamllint, ShellCheck, hadolint"]
     trigger --> bats["Run Script Tests<br/>Bats"]
-    trigger --> build["Build & Validate Image (amd64)<br/>Buildx build + load"]
-    build --> itest["Distrobox integration tests<br/>scripts/test-box.sh"]
-    build --> sbom["Syft SBOM (SPDX JSON)"]
-    sbom --> grype["Grype scan<br/>informational, only-fixed"]
-    itest --> push{"main or tag?"}
-    grype --> push
-    push -- "yes" --> digest["Push image by digest<br/>(untagged)"]
-    push -- "no (PR)" --> done["Done"]
+    trigger --> build_amd64["Build Image (amd64)<br/>ubuntu-24.04"]
+    trigger --> build_arm64["Build Image (arm64)<br/>ubuntu-24.04-arm"]
+    build_amd64 --> itest_amd64["Distrobox tests (amd64)<br/>scripts/test-box.sh"]
+    build_arm64 --> itest_arm64["Distrobox tests (arm64)<br/>scripts/test-box.sh"]
+    build_amd64 --> sbom_amd64["Syft SBOM (amd64)"]
+    build_arm64 --> sbom_arm64["Syft SBOM (arm64)"]
+    sbom_amd64 --> grype_amd64["Grype scan (amd64)"]
+    sbom_arm64 --> grype_arm64["Grype scan (arm64)"]
+    itest_amd64 --> push_amd64{"main or tag?"}
+    itest_arm64 --> push_arm64{"main or tag?"}
+    push_amd64 -- "yes" --> digest_amd64["Push amd64 digest"]
+    push_arm64 -- "yes" --> digest_arm64["Push arm64 digest"]
     lint --> publish["Publish & Release"]
     bats --> publish
-    digest --> publish
-    publish --> tags["Tag digest<br/>latest + main, or X.Y.Z + X.Y"]
+    digest_amd64 --> publish
+    digest_arm64 --> publish
+    publish --> manifest["Create multi-arch manifest<br/>docker buildx imagetools create"]
+    manifest --> tags["Tag multi-arch index<br/>latest + main, or X.Y.Z + X.Y"]
     tags --> prov["Build provenance attestation"]
     prov --> release{"v* tag?"}
     release -- "yes" --> gh["GitHub Release<br/>+ sbom.spdx.json"]
 ```
 
 Notes:
-- Only `linux/amd64` is built because the upstream base image is amd64-only; previously published "arm64" images were actually amd64 userland built under QEMU.
-- The SBOM is published as a workflow artifact and a release asset, not as a registry attestation (the SBOM of the multi-GB image exceeds the attestation size limit).
+- Native multi-arch builds (`amd64` and `arm64`) run in parallel on native GitHub Actions runners without QEMU emulation.
+- Full hardware support for Intel/AMD x86_64, NVIDIA DGX Spark workstations (Grace Blackwell), Apple Silicon, and ChromeOS Crostini.
+- The SBOMs are published as workflow artifacts and release assets, scanned by Grype in CI.
 - [`pages.yml`](../.github/workflows/pages.yml) deploys `docs/` to [GitHub Pages](https://wtg-codes.github.io/agy-box/) on every push to `main`; [`compile-diagrams.yml`](../.github/workflows/compile-diagrams.yml) re-renders `docs/diagrams/*.mmd` to `docs/diagrams/rendered/` when the sources change.
 
 ---

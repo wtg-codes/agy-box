@@ -13,7 +13,7 @@ Developers using the `bluefin-wtg` ecosystem and other Linux distributions need 
 A solution is needed that provides the safety and reproducibility of containerization while retaining the seamless hardware, file system, and GUI integration of the host operating system.
 
 ## Decision
-We utilize **Distrobox** on top of a rootless container engine (**Podman** or **Docker**) as the base architecture for the `agy-box` developer sandbox. The container image is layered from the Ubuntu toolbox image (`ghcr.io/ublue-os/ubuntu-toolbox:latest`) via `Containerfile`.
+We utilize **Distrobox** on top of a rootless container engine (**Podman** or **Docker**) as the base architecture for the `agy-box` developer sandbox. The container image is layered from the multi-arch Ubuntu toolbox image (`quay.io/toolbx/ubuntu-toolbox:24.04`, pinned by digest) via `Containerfile`.
 
 Distrobox manages the container lifecycle and automatically handles:
 1. **Home Directory Bind-Mount**: Mounts the host user's home directory (`~/`) directly into the container to share files, project workspaces, and configuration files.

@@ -1,10 +1,8 @@
 # Future Improvements
 
 ## Architectural Goals
-- **Multi-Architecture Support**: Update the CI pipeline and Docker build configuration to support generating multi-arch images (e.g., `amd64`, `arm64`) using `docker buildx`.
-  - *Blocked by base image*: `ghcr.io/ublue-os/ubuntu-toolbox` is published for `linux/amd64` only (single `latest` tag, no manifest list), so CI currently builds and publishes amd64 only. Earlier "arm64" images built under QEMU were actually amd64 userland. Enabling arm64 requires a multi-arch base and re-adding a native `ubuntu-24.04-arm` build job — see [Possible future work](#possible-future-work).
-- **Authentic Supply Chain Security (Option A: Batteries-Included Image)**:
-  - *Resolution*: Moving the developer toolchain to a post-image user script led to an incomplete Syft SBOM. Under Option A, the complete Antigravity toolchain (Agent UI, IDE, CLI, SDK, ADK, Gemini CLI) is pre-baked into `/opt` and `/usr/local/bin` at build time so Syft generates a 100% genuine SBOM that Grype scans prior to release. The user installer `agy-install-toolchain` is retained in the image for runtime updates.
+- ~~**Multi-Architecture Support**: Update the CI pipeline and Docker build configuration to support generating multi-arch images (`amd64`, `arm64`) using native parallel GitHub Actions runners and Docker Buildx.~~ ✅ Done (`feat/nvidia-dgx-spark-arm64`): Switched base to `quay.io/toolbx/ubuntu-toolbox:24.04`, added native `ubuntu-24.04-arm` runner job, and auto-detects NVIDIA GPUs (including DGX Spark Grace Blackwell) via `--nvidia`.
+- ~~**Authentic Supply Chain Security (Option A: Batteries-Included Image)**:~~ ✅ Done (PR #29): The complete Antigravity toolchain is pre-baked into `/opt` and `/usr/local/bin` at build time so Syft generates a 100% genuine SBOM that Grype scans prior to release, with `agy-install-toolchain` retained for runtime updates.
 
 ## Technical Debt
 - ~~**Containerfile Linting**: Implement `hadolint` in the GitHub Actions workflow to ensure `Containerfile` adheres to best practices.~~ ✅ Done (v0.6.0, `Lint Codebase` job).
@@ -35,16 +33,16 @@
 Ideas that are not scheduled yet. Each needs a decision before implementation.
 
 ### Images & platforms
-- **Batteries-Included Toolchain & Honest SBOM (Option A)**: Bake the developer toolchain (Google Antigravity Agent UI, IDE/VS Code extension, CLI `agy`, Python SDK, and Google ADK) directly into system paths (`/usr/local/bin`, `/opt`) at container build time. This ensures Syft generates a 100% authentic, comprehensive `sbom.spdx.json` that Grype scans in CI, while eliminating slow and error-prone user-space downloads on first boot.
+- ~~**Batteries-Included Toolchain & Honest SBOM (Option A)**: Bake the developer toolchain (Google Antigravity Agent UI, IDE/VS Code extension, CLI `agy`, Python SDK, and Google ADK) directly into system paths (`/usr/local/bin`, `/opt`) at container build time. This ensures Syft generates a 100% authentic, comprehensive `sbom.spdx.json` that Grype scans in CI, while eliminating slow and error-prone user-space downloads on first boot.~~ ✅ Done (PR #29).
 - **Upstream Version Sync via `agy-easy-install`**: Source upstream release URLs, versions, and verified SHA256 checksums from `wtg-codes/agy-easy-install`'s `versions.json` (scraped nightly) as build arguments in GitHub Actions CI.
 - **Googlebook (ChromeOS / Crostini) Support**: Validate and document running `agy-box` / `agy-box-manager` inside ChromeOS Crostini Linux container (both x86_64 and ARM64 Googlebook devices), including localhost port forwarding for noVNC VDI (`6080`) and Open WebUI (`8080`).
 - **Antigravity IDE Extension Transition**: With Google deprecating the Standalone Antigravity IDE in favor of editor extensions, package VS Code / VSCodium with the official `Google Antigravity` extension pre-configured inside the VDI desktop, keeping the standalone IDE as a legacy option.
 - **Optional CUDA PyTorch variant for Open WebUI**: Offer CUDA-enabled PyTorch either as a separate image tag (e.g. `ghcr.io/wtg-codes/agy-box:<version>-cuda`) or as an opt-in installer inside the box. Only useful with NVIDIA GPU passthrough into the container, and adds roughly 4.5 GB of NVIDIA libraries, so the default image stays CPU-only.
-- **Real arm64 support**: Move to a multi-arch base image — `quay.io/toolbx/ubuntu-toolbox:26.04` (same Ubuntu release as today) and `:24.04` both publish `linux/amd64` + `linux/arm64` — and add a native `ubuntu-24.04-arm` CI job that builds and tests arm64 and pushes by digest, merged into one manifest list in `Publish & Release`. Also requires arm64 builds of the Antigravity tarballs (currently `linux-x64` only) and keeping the Chromium fallback in `install-agent-deps.sh`.
+- ~~**Real arm64 support (NVIDIA DGX Spark / Apple Silicon / Crostini)**: Moved to multi-arch base image `quay.io/toolbx/ubuntu-toolbox:24.04` (publishing native `amd64` and `arm64`) with parallel native GitHub Actions runners (`ubuntu-24.04` and `ubuntu-24.04-arm`). Updated `scripts/install-agent-toolchain.sh` with Google's official Linux ARM64 binaries and checksums. Added `--nvidia` GPU auto-detection in `agy-box-manager` for NVIDIA Grace Blackwell workstations.~~ ✅ Done (`feat/nvidia-dgx-spark-arm64`).
 - **v0.6.0 wallpaper asset**: Add `rootfs/usr/share/agy-box/wallpaper-v0.6.0.png`. Until then the `Containerfile` falls back to the newest existing wallpaper (`wallpaper-v0.5.0.png`).
 
 ### Toolchain
-- **`agy-box-manager update-toolchain` command**: Re-run the per-user toolchain installer (`agy-install-toolchain`) inside an existing box to pick up new Antigravity/SDK/ADK/Gemini CLI versions without recreating the container (unless the toolchain fix PR already adds an equivalent).
+- ~~**`agy-box-manager update-toolchain` command**: Re-run the per-user toolchain installer (`agy-install-toolchain`) inside an existing box to pick up new Antigravity/SDK/ADK/Gemini CLI versions without recreating the container.~~ ✅ Done (PR #29).
 - **Update notes**: Show what changed (image tag, toolchain versions) when `agy-box-manager install` recreates an existing box, e.g. by linking the GitHub Release notes for the pulled tag.
 
 ### CI/CD & supply chain

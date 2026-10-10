@@ -68,20 +68,24 @@ jobs:
       - name: Run Bats Tests
         run: ./node_modules/.bin/bats tests/
 
-  # Architecture note: only linux/amd64 is built and published.
-  # The upstream base image (ghcr.io/ublue-os/ubuntu-toolbox) is published for
-  # linux/amd64 only, so a native arm64 build fails with
-  # InvalidBaseImagePlatform / "exec format error". Earlier QEMU-based "arm64"
-  # builds only succeeded because BuildKit silently fell back to the amd64 base,
-  # i.e. previously published "arm64" images were actually amd64 userland.
-  # Re-add a native `ubuntu-24.04-arm` job (push-by-digest, merged in
-  # publish-and-release) once the base image ships a multi-arch manifest list.
+  # Multi-arch build matrix: both linux/amd64 and linux/arm64 are built on native
+  # runners (ubuntu-24.04 and ubuntu-24.04-arm) in parallel without slow QEMU emulation.
+  # The base image (quay.io/toolbx/ubuntu-toolbox:24.04) ships native multi-arch manifests.
   #
-  # amd64: build once, test it, and (on main/tags) push the exact same build by
-  # digest. The push step reuses the local BuildKit cache, so it does not rebuild.
-  build-amd64:
-    name: Build & Validate Image (amd64)
-    runs-on: ubuntu-24.04
+  # Each architecture: builds once, tests it via Distrobox, scans SBOM via Syft/Grype,
+  # and (on main/tags) pushes by digest. The Publish & Release job joins the digests
+  # into a multi-arch manifest index via `docker buildx imagetools create`.
+  build:
+    name: Build & Validate Image (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
     permissions:
       contents: read
       packages: write
@@ -118,11 +122,11 @@ jobs:
           context: .
           file: ./Containerfile
           load: true
-          platforms: linux/amd64
+          platforms: linux/${{ matrix.arch }}
           tags: localhost/agy-box:test
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=amd64
-          cache-to: type=gha,mode=max,scope=amd64,ignore-error=true
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.arch }},ignore-error=true
 
       - name: Install Syft
         id: syft
@@ -191,11 +195,14 @@ jobs:
           fi
           "$GRYPE" sbom:sbom.spdx.json --only-fixed -o table
 
+      - name: Prepare and upload SBOM Artifact
+        run: cp sbom.spdx.json "sbom-${{ matrix.arch }}.spdx.json"
+
       - name: Upload SBOM Artifact
         uses: actions/upload-artifact@v7
         with:
-          name: sbom
-          path: sbom.spdx.json
+          name: sbom-${{ matrix.arch }}
+          path: sbom-${{ matrix.arch }}.spdx.json
           if-no-files-found: error
           retention-days: 5
 
@@ -207,17 +214,17 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push amd64 image by digest
+      - name: Push image by digest
         id: push
         if: github.event_name != 'pull_request'
         uses: docker/build-push-action@v7
         with:
           context: .
           file: ./Containerfile
-          platforms: linux/amd64
+          platforms: linux/${{ matrix.arch }}
           outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=amd64
+          cache-from: type=gha,scope=${{ matrix.arch }}
 
       - name: Export digest
         if: github.event_name != 'pull_request'
@@ -231,7 +238,7 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v7
         with:
-          name: digests-amd64
+          name: digests-${{ matrix.arch }}
           path: ${{ runner.temp }}/digests/*
           if-no-files-found: error
           retention-days: 1
@@ -240,7 +247,7 @@ jobs:
   # pushed image exists only as an untagged digest.
   publish-and-release:
     name: Publish & Release
-    needs: [build-amd64, lint, test-scripts]
+    needs: [build, lint, test-scripts]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
@@ -256,10 +263,12 @@ jobs:
           pattern: digests-*
           merge-multiple: true
 
-      - name: Download SBOM
+      - name: Download SBOMs
         uses: actions/download-artifact@v8
         with:
-          name: sbom
+          path: ${{ runner.temp }}/sboms
+          pattern: sbom-*
+          merge-multiple: true
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -312,4 +321,4 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
-          files: sbom.spdx.json
+          files: ${{ runner.temp }}/sboms/*.spdx.json

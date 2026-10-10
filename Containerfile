@@ -1,4 +1,4 @@
-FROM ghcr.io/ublue-os/ubuntu-toolbox@sha256:3f785ee330215c50b5144a78b0edb846919feed9ad8cdf1326de04a70732c1b5
+FROM quay.io/toolbx/ubuntu-toolbox:24.04@sha256:1466ed74617c23677fadb0922387ff7267532027c8a8e18c5b101d3f0b6dcb40
 
 LABEL org.opencontainers.image.description="Declarative Student Workspace for wtgOS Cloud-Native Laboratory"
 

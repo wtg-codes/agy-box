@@ -88,9 +88,29 @@ else
 fi
 
 arch="$(uname -m)"
-if [ "$arch" != "x86_64" ]; then
-    die "unsupported architecture '${arch}': the Antigravity downloads are linux-x64 only."
-fi
+case "$arch" in
+    x86_64)
+        CLI_ARCH="linux-x64"
+        CLI_TARBALL="cli_linux_x64.tar.gz"
+        CLI_SHA512="5ccdcc01fb863c7e8e56473c6c95dba75fed4fd2a242200d80cfc4c7fab811b733f5a7fab25332130aad298e72627e1018e6911a5658f4f059ef6e019f211972"
+        HUB_ARCH="linux-x64"
+        HUB_SHA256="0727e1f56961b6d2347941f278da69cc6c17de3befe988524848cd167380e9ab"
+        IDE_ARCH="linux-x64"
+        IDE_SHA256="5232a4048ff4fa15685d9a981ba4fba573e297f3efc9b76f638e794baf775725"
+        ;;
+    aarch64|arm64)
+        CLI_ARCH="linux-arm"
+        CLI_TARBALL="cli_linux_arm64.tar.gz"
+        CLI_SHA512="9797c7955d0e07fc57605f81fab16dfd2f390d43b2508af3ca697b1cfa498e37e43a3a9a55ad8b26eb1353d80bbec522d108eb75a0eb0eb00e979cb579d6e277"
+        HUB_ARCH="linux-arm"
+        HUB_SHA256="5af56cc9dda954f369a61045b7da2f348bcb0b3507d272b4c0e9aa7cd6175d9b"
+        IDE_ARCH="linux-arm"
+        IDE_SHA256="64d11085f17edc691adbe8952d59887f257d58448705dc2a19dfa23890d36df1"
+        ;;
+    *)
+        die "unsupported architecture '${arch}': must be x86_64 or aarch64."
+        ;;
+esac
 
 for cmd in curl tar sha256sum sha512sum python3 npm; do
     command -v "$cmd" >/dev/null 2>&1 || die "required command '${cmd}' not found in PATH."
@@ -177,9 +197,8 @@ ensure_default_settings() {
 step "Installing Google Antigravity (Agent UI)"
 IDE_VERSION="2.0.1"
 IDE_EXEC_ID="6566078776737792"
-IDE_URL="https://storage.googleapis.com/antigravity-public/antigravity-hub/${IDE_VERSION}-${IDE_EXEC_ID}/linux-x64/Antigravity.tar.gz"
-IDE_SHA256="0727e1f56961b6d2347941f278da69cc6c17de3befe988524848cd167380e9ab"
-install_app_tarball "$IDE_URL" "$IDE_SHA256" "$SHARE_DIR/antigravity"
+IDE_URL="https://storage.googleapis.com/antigravity-public/antigravity-hub/${IDE_VERSION}-${IDE_EXEC_ID}/${HUB_ARCH}/Antigravity.tar.gz"
+install_app_tarball "$IDE_URL" "$HUB_SHA256" "$SHARE_DIR/antigravity"
 
 app_exec="$SHARE_DIR/antigravity/antigravity"
 write_file_atomic "$BIN_DIR/antigravity" 0755 << EOF
@@ -209,8 +228,7 @@ fi
 # --- 2. Antigravity IDE (Stable 1.23.2 Tarball) -------------------------------
 step "Installing Antigravity IDE"
 IDE_VERSION="1.23.2"
-IDE_URL="https://edgedl.me.gvt1.com/edgedl/release2/j0qc3/antigravity/stable/${IDE_VERSION}-4781536860569600/linux-x64/Antigravity.tar.gz"
-IDE_SHA256="5232a4048ff4fa15685d9a981ba4fba573e297f3efc9b76f638e794baf775725"
+IDE_URL="https://edgedl.me.gvt1.com/edgedl/release2/j0qc3/antigravity/stable/${IDE_VERSION}-4781536860569600/${IDE_ARCH}/Antigravity.tar.gz"
 install_app_tarball "$IDE_URL" "$IDE_SHA256" "$SHARE_DIR/antigravity-ide"
 
 ide_exec="$SHARE_DIR/antigravity-ide/antigravity"
@@ -242,11 +260,10 @@ fi
 step "Installing Antigravity CLI (agy)"
 CLI_VERSION="1.0.0"
 CLI_EXEC_ID="5288553236791296"
-CLI_URL="https://storage.googleapis.com/antigravity-public/antigravity-cli/${CLI_VERSION}-${CLI_EXEC_ID}/linux-x64/cli_linux_x64.tar.gz"
-CLI_SHA512="5ccdcc01fb863c7e8e56473c6c95dba75fed4fd2a242200d80cfc4c7fab811b733f5a7fab25332130aad298e72627e1018e6911a5658f4f059ef6e019f211972"
+CLI_URL="https://storage.googleapis.com/antigravity-public/antigravity-cli/${CLI_VERSION}-${CLI_EXEC_ID}/${CLI_ARCH}/${CLI_TARBALL}"
 
-download_verify "$CLI_URL" sha512 "$CLI_SHA512" "$WORK_DIR/cli_linux_x64.tar.gz"
-tar -xzf "$WORK_DIR/cli_linux_x64.tar.gz" -C "$WORK_DIR" antigravity
+download_verify "$CLI_URL" sha512 "$CLI_SHA512" "$WORK_DIR/$CLI_TARBALL"
+tar -xzf "$WORK_DIR/$CLI_TARBALL" -C "$WORK_DIR" antigravity
 # Copy next to the target and rename, so a running agy is replaced atomically.
 cp "$WORK_DIR/antigravity" "$BIN_DIR/agy.new"
 chmod 0755 "$BIN_DIR/agy.new"
