@@ -76,7 +76,7 @@ Edit the Mermaid sources in `docs/diagrams/*.mmd` only. The [`compile-diagrams.y
   - `fix: correct D-Bus keyring validation checks`
   - `docs: update system topology diagram`
   - `style: lint cleanup`
-- **CI Pipelines**: On every pull request, GitHub Actions lints the repository (yamllint, ShellCheck, hadolint), runs the Bats tests, builds the `linux/amd64` image, runs the Distrobox integration test suite against it, and generates an SBOM plus an informational Grype vulnerability scan. Pull requests never push images to GHCR. Make sure all local lints and tests pass before pushing!
+- **CI Pipelines**: On every pull request, GitHub Actions lints the repository (yamllint, ShellCheck, hadolint), runs the Bats tests, builds the `linux/amd64` and `linux/arm64` images on native runners, runs the Distrobox integration test suite against both, and generates an SBOM plus an informational Grype vulnerability scan for each architecture. Pull requests never push images to GHCR. Make sure all local lints and tests pass before pushing!
 - **Releases**: Maintainers bump `VERSION` in `agy-box-manager` and `rootfs/usr/local/bin/agy-setup-helper` (plus the version shown in `docs/index.html`), merge to `main`, and push a `v<version>` tag. See [Releases](README.md#releases).
 
 ---

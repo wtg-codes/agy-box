@@ -55,7 +55,7 @@ To support remote development, headless environments (e.g. Google Cloud Shell, V
 
 ## 6. Cloud & Alternative Deployment Architectures
 
-Because `agy-box` is built as a self-contained, standard OCI image (`ghcr.io/wtg-codes/agy-box`, `linux/amd64`), it can execute without the host-integration layers (such as host home folder bind-mounts or local Wayland compositor sockets) required for distrobox.
+Because `agy-box` is built as a self-contained, standard OCI image (`ghcr.io/wtg-codes/agy-box`, `linux/amd64` and `linux/arm64`), it can execute without the host-integration layers (such as host home folder bind-mounts or local Wayland compositor sockets) required for distrobox.
 
 When run outside Distrobox, the image entrypoint (`/usr/local/bin/entrypoint.sh`, run under `tini`) only creates an unprivileged `agyuser` (UID/GID from `PUID`/`PGID`, default `9000`), fixes ownership of the `/workspace` and `/config` volumes, and executes the container command (default `sleep infinity`) as that user. No desktop, VNC, or SSH service is started automatically.
 
@@ -85,7 +85,7 @@ The image is built on a multi-arch Ubuntu base with a batteries-included develop
 
 | Layer | Installed by | Contents |
 | :--- | :--- | :--- |
-| Base | `quay.io/toolbx/ubuntu-toolbox:24.04` (pinned digest) | Ubuntu 24.04 LTS toolbox userland (native `linux/amd64` and `linux/arm64`). |
+| Base | `quay.io/toolbx/ubuntu-toolbox:24.04` | Ubuntu 24.04 LTS toolbox userland (native `linux/amd64` and `linux/arm64`). |
 | System deps | `scripts/install-agent-deps.sh` | git, curl, jq, Python/pipx, Node.js 22 LTS (NodeSource), `libsecret-1-0` + Python keyring, `tini`, `gosu`, Gum, Google Chrome (amd64) / Chromium (arm64 via xtradeb), Xvfb, x11vnc, IceWM, PCManFM, noVNC, websockify, xterm. |
 | Local Web Dashboard | `scripts/install-open-webui.sh` | Python 3.12 + `uv`, Open WebUI in `/opt/open-webui-venv` with CPU-only PyTorch. |
 | CNCF tools | `scripts/install-tools.sh` | `kubectl`, `helm`, `k9s` (pinned versions, checksum-verified for both amd64 and arm64). |
