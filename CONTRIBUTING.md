@@ -10,7 +10,7 @@ Thank you for your interest in contributing to `agy-box`! This guide outlines ho
 
 The repository is structured as a Distrobox overlay template:
 
-- 📄 **[Containerfile](Containerfile)**: Image definition. Based on `quay.io/toolbx/ubuntu-toolbox:24.04` (pinned by digest; Ubuntu 24.04 LTS, multi-arch `linux/amd64` and `linux/arm64`).
+- 📄 **[Containerfile](Containerfile)**: Image definition. Based on `quay.io/toolbx/ubuntu-toolbox:24.04` (Ubuntu 24.04 LTS, multi-arch `linux/amd64` and `linux/arm64`).
 - 📂 **[rootfs/](rootfs)**: Files copied directly into the root filesystem (`/`) of the container during the build.
   - 📂 **[rootfs/etc/profile.d/agy-setup-check.sh](rootfs/etc/profile.d/agy-setup-check.sh)**: Hook that launches the interactive setup helper on first interactive TTY shell login.
   - 📂 **[rootfs/usr/local/bin/agy-setup-helper](rootfs/usr/local/bin/agy-setup-helper)**: Interactive first-time CLI helper verifying API keys, D-Bus, Chrome version, and Git setups. Its `VERSION` variable is the image version (it also selects the versioned wallpaper).

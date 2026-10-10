@@ -8,7 +8,7 @@
 - ~~**Containerfile Linting**: Implement `hadolint` in the GitHub Actions workflow to ensure `Containerfile` adheres to best practices.~~ ✅ Done (v0.6.0, `Lint Codebase` job).
 - ~~**Shell Script Linting**: Add `shellcheck` into the linting workflow to validate the integrity of scripts within `scripts/`.~~ ✅ Done (v0.6.0; also covers `agy-box-manager`, `agy-setup-helper`, `agy-vdi`, and the IceWM startup script).
 - **Dependency Pinning**: Ensure all package installations inside the `Containerfile` and scripts use strictly pinned versions instead of `latest` where possible.
-  - *Status (v0.6.0)*: Base image pinned by digest; `kubectl`, `helm`, `k9s`, Gum, Antigravity tarballs, SDK, ADK, and Gemini CLI pinned. Still unpinned: Google Chrome (`google-chrome-stable`), apt packages, `uv`, Open WebUI and PyTorch wheels.
+  - *Status (v0.6.0)*: Base image pinned to Ubuntu 24.04 release tag (`quay.io/toolbx/ubuntu-toolbox:24.04`); `kubectl`, `helm`, `k9s`, Gum, Antigravity tarballs, SDK, ADK, and Gemini CLI pinned. Still unpinned: Google Chrome (`google-chrome-stable`), apt packages, `uv`, Open WebUI and PyTorch wheels.
 - **Unused legacy install scripts**: `scripts/install-gemini-cli.sh` and `scripts/install-google-adk.sh` are no longer called by the `Containerfile` (superseded by `scripts/install-agent-toolchain.sh`) but are still exercised by Bats tests. Remove them and point the tests at the toolchain installer.
 - **`agy-box-manager` runtime selection**: The manager always prefers Podman when installed and ignores a user-provided `DBX_CONTAINER_MANAGER` (see [docs/SETUP.md](docs/SETUP.md) Q4). Honor the variable.
 

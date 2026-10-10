@@ -84,7 +84,7 @@ If you plan to use this container locally or build from source, your host system
 
 ## Architecture
 
-The `agy-box` is designed to run via **Distrobox** on the `bluefin-wtg` immutable host OS (or any standard Linux distribution). It leverages an Ubuntu toolbox base image (`quay.io/toolbx/ubuntu-toolbox:24.04`, pinned by digest in the [`Containerfile`](Containerfile); Ubuntu 24.04 LTS, multi-arch `linux/amd64` and `linux/arm64`) and acts as a host-integrated developer sandbox.
+The `agy-box` is designed to run via **Distrobox** on the `bluefin-wtg` immutable host OS (or any standard Linux distribution). It leverages an Ubuntu toolbox base image (`quay.io/toolbx/ubuntu-toolbox:24.04` in the [`Containerfile`](Containerfile); Ubuntu 24.04 LTS, multi-arch `linux/amd64` and `linux/arm64`) and acts as a host-integrated developer sandbox.
 
 ### Host-Integrated Sandbox Model
 
