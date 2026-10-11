@@ -245,12 +245,15 @@ agy-box-manager
 
 This will launch an interactive menu that detects the current state of your system, displays a status panel of your installed tools/workspaces, and offers to:
 
-1. Pull and install the official stable release from GHCR (`ghcr.io/wtg-codes/agy-box:latest`), or update it if it exists.
-2. Build a local development workspace from the source files (`agy-box:dev`).
-3. Enter your active workspaces or start the VDI Web Desktop.
-4. Check the status, port mappings, and run doctor diagnostics, or securely remove old environments.
-5. **Install the CLI globally** so you can run `agy-box-manager` from anywhere on your system.
-6. **Uninstall the CLI** entirely if you no longer need the global binary or its auto-completions.
+1. Run the interactive first-run configuration wizard or inspect environment health.
+2. Pull and install the official stable release from GHCR (`ghcr.io/wtg-codes/agy-box:latest`), or update it if it exists.
+3. Build a local development workspace from the source files (`agy-box:dev`).
+4. Enter your active workspaces or start the VDI Web Desktop.
+5. Check status, port mappings, component versions, and run deep diagnostics.
+6. Unified updates across Antigravity toolchain, IDE extensions (VS Code & Zed), and container packages.
+7. Back up and restore settings, transcripts, and container state to portable tar.gz archives.
+8. **Install the CLI globally** so you can run `agy-box-manager` from anywhere on your system.
+9. **Uninstall the CLI** entirely if you no longer need the global binary or its auto-completions.
 
 ### Scriptable Usage
 
@@ -259,6 +262,11 @@ You can also bypass the interactive menu by passing commands directly, which is 
 | Action | Bash Command | Just Command |
 | :--- | :--- | :--- |
 | **Interactive Menu** | `agy-box-manager` | `just agy` |
+| **First-Run Setup Wizard** | `agy-box-manager wizard [--defaults]` | `just agy-wizard` |
+| **Inspect Components & Status** | `agy-box-manager check` | `just agy-check` |
+| **Unified Updater (All/Toolchain/IDEs/OS)** | `agy-box-manager update [prod\|dev] [--all\|--check]` | `just agy-update` |
+| **Backup Settings & State** | `agy-box-manager backup [file]` | `just agy-backup` |
+| **Restore Settings from Archive** | `agy-box-manager restore <file> [-y]` | `just agy-restore` |
 | **Install Official** | `agy-box-manager install` | `just agy-install` |
 | **Build Dev Env** | `agy-box-manager dev` | `just agy-box-dev` |
 | **Enter Official Env** | `agy-box-manager enter` | `just agy-enter` |

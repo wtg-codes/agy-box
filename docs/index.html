@@ -916,9 +916,10 @@ flowchart LR
                         </h3>
                         <p class="text-slate-400 text-xs">Run automated assertions on container health, port mappings, and toolchains:</p>
                         <div class="space-y-1.5 font-mono text-xs text-emerald-400 bg-slate-900 p-3 rounded-lg border border-slate-800">
-                            <div>agy-box-manager status &nbsp;# State &amp; ports</div>
-                            <div>agy-box-manager doctor &nbsp;# Deep diagnostic</div>
-                            <div>agy-box-manager test &nbsp;&nbsp;&nbsp;# 20 Bats assertions</div>
+                            <div>agy-box-manager check   &nbsp;# Status &amp; component inspect</div>
+                            <div>agy-box-manager status  &nbsp;# Container state &amp; ports</div>
+                            <div>agy-box-manager doctor  &nbsp;# Host diagnostics &amp; hints</div>
+                            <div>agy-box-manager test    &nbsp;&nbsp;&nbsp;# 32 Bats unit assertions</div>
                         </div>
                     </div>
 
@@ -928,10 +929,11 @@ flowchart LR
                             <i data-lucide="arrow-up-circle" class="w-4 h-4 text-emerald-400"></i>
                             Updating Tools &amp; Packages
                         </h3>
-                        <p class="text-slate-400 text-xs">Upgrade the Antigravity suite or container packages independently:</p>
+                        <p class="text-slate-400 text-xs">Upgrade the Antigravity suite, IDE extensions, or container OS packages:</p>
                         <div class="space-y-1.5 font-mono text-xs text-emerald-400 bg-slate-900 p-3 rounded-lg border border-slate-800">
-                            <div>agy-box-manager update-toolchain &nbsp;# Suite</div>
-                            <div>distrobox upgrade agy-box &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# APT/VSCode</div>
+                            <div>agy-box-manager update         &nbsp;# All (Suite, IDEs, OS)</div>
+                            <div>agy-box-manager update --check &nbsp;# Dry-run check</div>
+                            <div>agy-box-manager wizard         &nbsp;# Reconfigure settings</div>
                         </div>
                     </div>
                 </div>
@@ -1114,6 +1116,33 @@ agy-box-manager install</pre>
                             <p>Run clean followed by install. Your code repositories in <code class="text-slate-200 font-mono">~/</code> and your isolated container configurations in <code class="text-slate-200 font-mono">~/.config/agy-box/home</code> are completely preserved:</p>
                             <pre class="bg-slate-900 p-2.5 rounded font-mono text-emerald-400">agy-box-manager clean
 agy-box-manager install</pre>
+                        </div>
+                    </details>
+
+                    <details class="group bg-slate-800/70 rounded-xl border border-slate-700 p-4">
+                        <summary class="cursor-pointer text-sm font-semibold text-white hover:text-indigo-300 transition-colors flex items-center justify-between">
+                            <span>Q: What is Isolated Keyring mode and how do I enable it?</span>
+                            <i data-lucide="chevron-down" class="w-4 h-4 transition-transform group-open:rotate-180 text-indigo-400 flex-shrink-0"></i>
+                        </summary>
+                        <div class="mt-3 text-xs text-slate-300 space-y-2 border-t border-slate-700/60 pt-3">
+                            <p>By default, <code class="text-emerald-400 font-mono">AGY_KEYRING_MODE="host"</code> shares your host D-Bus secret service so you don't need to re-authenticate. If you are on a shared system or prefer air-gapped credentials, set <code class="text-emerald-400 font-mono">AGY_KEYRING_MODE="isolated"</code> in <code class="text-slate-200 font-mono">~/.config/agy-box/config.env</code>:</p>
+                            <pre class="bg-slate-900 p-2.5 rounded font-mono text-emerald-400"># Switch to container-local encrypted file keyring:
+echo 'AGY_KEYRING_MODE="isolated"' >> ~/.config/agy-box/config.env
+agy-box-manager check</pre>
+                            <p>This stores credentials securely inside an encrypted local keyring at <code class="text-slate-200 font-mono">~/.config/agy-box/home/.config/python_keyring/keyringrc.cfg</code>.</p>
+                        </div>
+                    </details>
+
+                    <details class="group bg-slate-800/70 rounded-xl border border-slate-700 p-4">
+                        <summary class="cursor-pointer text-sm font-semibold text-white hover:text-indigo-300 transition-colors flex items-center justify-between">
+                            <span>Q: How do I run the setup wizard non-interactively or in CI?</span>
+                            <i data-lucide="chevron-down" class="w-4 h-4 transition-transform group-open:rotate-180 text-indigo-400 flex-shrink-0"></i>
+                        </summary>
+                        <div class="mt-3 text-xs text-slate-300 space-y-2 border-t border-slate-700/60 pt-3">
+                            <p>Pass the <code class="text-emerald-400 font-mono">--defaults</code> flag to generate or populate <code class="text-slate-200 font-mono">~/.config/agy-box/config.env</code> with recommended settings without launching Charm Gum:</p>
+                            <pre class="bg-slate-900 p-2.5 rounded font-mono text-emerald-400">agy-box-manager wizard --defaults
+# or via Justfile:
+just agy-wizard --defaults</pre>
                         </div>
                     </details>
                 </div>
