@@ -543,7 +543,11 @@ _agy_box_manager() {
             return 0
             ;;
         install)
-            COMPREPLY=( $(compgen -W "-n --name -i --image --home -s --systemd -y --yes" -- "$cur") )
+            COMPREPLY=( $(compgen -W "-n --name -i --image --home -s --systemd -y --yes --enter --no-enter" -- "$cur") )
+            return 0
+            ;;
+        dev)
+            COMPREPLY=( $(compgen -W "-s --systemd --enter --no-enter" -- "$cur") )
             return 0
             ;;
         update)
@@ -855,6 +859,7 @@ cmd_install_official() {
     local target_image="$IMAGE_NAME"
     local custom_home=""
     local auto_yes=false
+    local enter_after_install=""
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -878,6 +883,14 @@ cmd_install_official() {
                 auto_yes=true
                 shift
                 ;;
+            --enter)
+                enter_after_install=true
+                shift
+                ;;
+            --no-enter)
+                enter_after_install=false
+                shift
+                ;;
             *)
                 shift
                 ;;
@@ -888,7 +901,7 @@ cmd_install_official() {
     runtime=$(get_runtime)
 
     if check_container_exists "$target_name"; then
-        if [ "$auto_yes" = "true" ] || (command -v gum >/dev/null 2>&1 && gum confirm "Container '$target_name' already exists. Recreate it?"); then
+        if [ "$auto_yes" = "true" ] || ([ -t 0 ] && command -v gum >/dev/null 2>&1 && gum confirm "Container '$target_name' already exists. Recreate it?"); then
             cmd_clean "$target_name"
         else
             ui_warn "Skipping creation of '$target_name'."
@@ -992,10 +1005,60 @@ cmd_install_official() {
     # Set up ujust/just integration by default
     setup_shell_integration
 
-    if [ "$target_name" = "$CONTAINER_NAME" ]; then
-        ui_ok "✓ Created successfully! Run 'agy-box-manager enter' to launch."
+    # Print status of active environments
+    echo ""
+    cmd_status
+
+    local vdi_port=6080
+    local enter_cmd="just agy-enter"
+    local desktop_cmd="just agy-desktop"
+    local clean_cmd="just agy-clean"
+    if [ "$target_name" != "$CONTAINER_NAME" ]; then
+        vdi_port=6081
+        enter_cmd="just agy-enter $target_name"
+        desktop_cmd="just agy-desktop $target_name -p $vdi_port"
+        clean_cmd="just agy-clean $target_name --purge"
+    fi
+
+    echo ""
+    if command -v gum >/dev/null 2>&1; then
+        gum style --border rounded --padding "0 2" --border-foreground 46 \
+            "🚀 Environment '$target_name' is running and ready!" \
+            "" \
+            "Next Steps:" \
+            "  • Enter Shell:  $enter_cmd" \
+            "  • Desktop VDI:  $desktop_cmd" \
+            "  • View Status:  just agy-status" \
+            "  • Clean Up:     $clean_cmd"
     else
-        ui_ok "✓ Environment '$target_name' created successfully! Run 'agy-box-manager enter $target_name' to launch."
+        echo -e "${GREEN}🚀 Environment '$target_name' is running and ready!${NC}"
+        echo ""
+        echo "Next Steps:"
+        echo "  • Enter Shell:  $enter_cmd"
+        echo "  • Desktop VDI:  $desktop_cmd"
+        echo "  • View Status:  just agy-status"
+        echo "  • Clean Up:     $clean_cmd"
+        echo ""
+    fi
+
+    if [ "$enter_after_install" = "true" ]; then
+        cmd_enter "$target_name"
+    elif [ "$enter_after_install" != "false" ] && [ "$auto_yes" != "true" ] && [ -t 0 ]; then
+        echo ""
+        local should_enter=false
+        if command -v gum >/dev/null 2>&1; then
+            if gum confirm "🚀 Enter '$target_name' environment now?"; then
+                should_enter=true
+            fi
+        else
+            read -r -p "🚀 Enter '$target_name' environment now? [Y/n] " choice
+            if [[ -z "$choice" || "$choice" =~ ^[Yy]$ ]]; then
+                should_enter=true
+            fi
+        fi
+        if [ "$should_enter" = "true" ]; then
+            cmd_enter "$target_name"
+        fi
     fi
 }
 
@@ -1003,10 +1066,19 @@ cmd_build_dev() {
     load_config
     apply_keyring_configuration
     local systemd=false
+    local enter_after_install=""
     while [[ $# -gt 0 ]]; do
         case "$1" in
             -s|--systemd)
                 systemd=true
+                shift
+                ;;
+            --enter)
+                enter_after_install=true
+                shift
+                ;;
+            --no-enter)
+                enter_after_install=false
                 shift
                 ;;
             *)
@@ -1021,7 +1093,7 @@ cmd_build_dev() {
     fi
 
     if check_container_exists "$DEV_CONTAINER_NAME"; then
-        if gum confirm "Container '$DEV_CONTAINER_NAME' already exists. Recreate it?"; then
+        if [ -t 0 ] && command -v gum >/dev/null 2>&1 && gum confirm "Container '$DEV_CONTAINER_NAME' already exists. Recreate it?"; then
             cmd_clean "$DEV_CONTAINER_NAME"
         else
             gum style --foreground 212 "Skipping build."
@@ -1139,7 +1211,50 @@ cmd_build_dev() {
     # Set up ujust/just integration by default
     setup_shell_integration
 
-    gum style --foreground 46 --margin "1 0" "✓ Dev environment ready! Run 'agy-box-manager enter dev' to launch."
+    # Print status of active environments
+    echo ""
+    cmd_status
+
+    echo ""
+    if command -v gum >/dev/null 2>&1; then
+        gum style --border rounded --padding "0 2" --border-foreground 46 \
+            "🚀 Dev Environment '$DEV_CONTAINER_NAME' is running and ready!" \
+            "" \
+            "Next Steps:" \
+            "  • Enter Shell:  just agy-enter dev" \
+            "  • Desktop VDI:  just agy-desktop dev" \
+            "  • View Status:  just agy-status" \
+            "  • Clean Up:     just agy-clean dev"
+    else
+        echo -e "${GREEN}🚀 Dev Environment '$DEV_CONTAINER_NAME' is running and ready!${NC}"
+        echo ""
+        echo "Next Steps:"
+        echo "  • Enter Shell:  just agy-enter dev"
+        echo "  • Desktop VDI:  just agy-desktop dev"
+        echo "  • View Status:  just agy-status"
+        echo "  • Clean Up:     just agy-clean dev"
+        echo ""
+    fi
+
+    if [ "$enter_after_install" = "true" ]; then
+        cmd_enter "$DEV_CONTAINER_NAME"
+    elif [ "$enter_after_install" != "false" ] && [ -t 0 ]; then
+        echo ""
+        local should_enter=false
+        if command -v gum >/dev/null 2>&1; then
+            if gum confirm "🚀 Enter '$DEV_CONTAINER_NAME' environment now?"; then
+                should_enter=true
+            fi
+        else
+            read -r -p "🚀 Enter '$DEV_CONTAINER_NAME' environment now? [Y/n] " choice
+            if [[ -z "$choice" || "$choice" =~ ^[Yy]$ ]]; then
+                should_enter=true
+            fi
+        fi
+        if [ "$should_enter" = "true" ]; then
+            cmd_enter "$DEV_CONTAINER_NAME"
+        fi
+    fi
 }
 
 cmd_desktop() {
@@ -2682,9 +2797,13 @@ show_help() {
     echo "                              --home <path>     Custom isolated home directory"
     echo "                              -s, --systemd     Enable user-mode systemd support"
     echo "                              -y, --yes         Non-interactive recreation confirmation"
+    echo "                              --enter           Enter the container immediately after creation"
+    echo "                              --no-enter        Do not prompt to enter the container after creation"
     echo "  dev                       Build the image from local source and create dev environment"
     echo "                            Options:"
     echo "                              -s, --systemd     Enable user-mode systemd support"
+    echo "                              --enter           Enter the container immediately after creation"
+    echo "                              --no-enter        Do not prompt to enter the container after creation"
     echo "  enter [name|dev|prod]     Enter environment (default: agy-box)"
     echo "  desktop [name|dev|prod]   Launch VDI Web Desktop (default: agy-box)"
     echo "                            Options:"

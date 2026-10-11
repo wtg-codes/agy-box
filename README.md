@@ -276,7 +276,7 @@ You can also bypass the interactive menu by passing commands directly, which is 
 | **Unified Updater (All/Toolchain/IDEs/OS)** | `agy-box-manager update [name\|prod\|dev] [--all\|--check]` | `just agy-update` |
 | **Backup Settings & State** | `agy-box-manager backup [file]` | `just agy-backup` |
 | **Restore Settings from Archive** | `agy-box-manager restore <file> [-y]` | `just agy-restore` |
-| **Install (Official / Named)** | `agy-box-manager install [-n <name>] [-i <img>]` | `just agy-install` |
+| **Install (Official / Named)** | `agy-box-manager install [-n <name>] [-i <img>] [--enter]` | `just agy-install` |
 | **Build Dev Env** | `agy-box-manager dev` | `just agy-box-dev` |
 | **Enter (Official / Dev / Named)** | `agy-box-manager enter [name\|dev]` | `just agy-enter` |
 | **VDI Desktop (Official / Dev / Named)** | `agy-box-manager desktop [name\|dev] [-p port]` | `just agy-desktop` |
