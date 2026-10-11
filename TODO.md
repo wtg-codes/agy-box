@@ -39,7 +39,7 @@ Ideas that are not scheduled yet. Each needs a decision before implementation.
 - **Antigravity IDE Extension Transition**: With Google deprecating the Standalone Antigravity IDE in favor of editor extensions, package VS Code / VSCodium with the official `Google Antigravity` extension pre-configured inside the VDI desktop, keeping the standalone IDE as a legacy option.
 - **Optional CUDA PyTorch variant for Open WebUI**: Offer CUDA-enabled PyTorch either as a separate image tag (e.g. `ghcr.io/wtg-codes/agy-box:<version>-cuda`) or as an opt-in installer inside the box. Only useful with NVIDIA GPU passthrough into the container, and adds roughly 4.5 GB of NVIDIA libraries, so the default image stays CPU-only.
 - ~~**Real arm64 support (NVIDIA DGX Spark / Apple Silicon / Crostini)**: Moved to multi-arch base image `quay.io/toolbx/ubuntu-toolbox:24.04` (publishing native `amd64` and `arm64`) with parallel native GitHub Actions runners (`ubuntu-24.04` and `ubuntu-24.04-arm`). Updated `scripts/install-agent-toolchain.sh` with Google's official Linux ARM64 binaries and checksums. Added `--nvidia` GPU auto-detection in `agy-box-manager` for NVIDIA Grace Blackwell workstations.~~ ✅ Done (`feat/nvidia-dgx-spark-arm64`).
-- **v0.6.0 wallpaper asset**: Add `rootfs/usr/share/agy-box/wallpaper-v0.6.0.png`. Until then the `Containerfile` falls back to the newest existing wallpaper (`wallpaper-v0.5.0.png`).
+- ~~**v0.6.0 wallpaper asset**: Add `rootfs/usr/share/agy-box/wallpaper-v0.6.0.png`.~~ ✅ Done
 
 ### Toolchain
 - ~~**`agy-box-manager update-toolchain` command**: Re-run the per-user toolchain installer (`agy-install-toolchain`) inside an existing box to pick up new Antigravity/SDK/ADK/Gemini CLI versions without recreating the container.~~ ✅ Done (PR #29).
