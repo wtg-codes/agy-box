@@ -76,16 +76,12 @@ sudo pacman -S distrobox podman
 > [!NOTE]
 > **Why it happens:** Some team environments mandate Docker or have specific proxy and registry rules defined exclusively for Docker.
 
-- **The Fix (plain Distrobox):** Create a configuration file at `~/.distroboxrc` on your host and manually define the execution runtime:
-  ```bash
-  # Force Docker engine globally
-  DBX_CONTAINER_MANAGER="docker"
-  ```
-  Alternatively, you can set this variable in your host environment before calling `distrobox` directly:
+- **The Fix:** `agy-box-manager` honors `DBX_CONTAINER_MANAGER` if set in your environment. Simply export it before running `agy-box-manager`:
   ```bash
   export DBX_CONTAINER_MANAGER="docker"
-  distrobox create -i ghcr.io/wtg-codes/agy-box:latest -n agy-box
+  agy-box-manager install
   ```
-
-> [!WARNING]
-> `agy-box-manager` currently does **not** honor `DBX_CONTAINER_MANAGER`: whenever Podman is installed it selects Podman (and exports `DBX_CONTAINER_MANAGER=podman` for the Distrobox calls it makes). To use Docker with `agy-box-manager` today, Podman must not be on your `PATH`; otherwise create the box with plain `distrobox` commands as shown above.
+  Alternatively, you can configure it persistently in `~/.distroboxrc`:
+  ```bash
+  DBX_CONTAINER_MANAGER="docker"
+  ```
