@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Visual Studio Code
+Exec=code
+Icon=vscode
+Terminal=false
+Categories=Development;IDE;

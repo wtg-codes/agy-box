@@ -846,6 +846,15 @@ EOF
         gum style --foreground 46 "✓ Developer Skills Pack successfully installed!"
     fi
 
+    # Optional JetBrains IDEs Installation
+    if gum confirm "Would you like to install JetBrains IDEs (IntelliJ IDEA Community or PyCharm Community)?"; then
+        if command -v agy-install-ide &>/dev/null; then
+            agy-install-ide || true
+        elif [[ -x "/usr/local/bin/agy-install-ide" ]]; then
+            /usr/local/bin/agy-install-ide || true
+        fi
+    fi
+
     # End Screen Success Card
     local success_msg
     success_msg=$(printf "Setup Assistant Complete!\n\nAll baseline services and keys are verified.\nYour environment is ready for Cloud-Native Laboratory development.\n\nEnjoy using agy-box!")

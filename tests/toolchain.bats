@@ -98,6 +98,17 @@ mock_installer_env() {
   grep -F 'pip3 install --user --break-system-packages --no-cache-dir --retries 10 google-adk==2.1.0' "$TEST_LOG"
   grep -F "npm install -g --prefix $HOME/.local --omit=dev --no-audit --no-fund @google/gemini-cli@0.43.0" "$TEST_LOG"
   refute_grep -F '/usr/bin/agy' "$TEST_LOG"
+  [ -f "$HOME/.config/zed/settings.json" ]
+  grep -F '"antigravity": true' "$HOME/.config/zed/settings.json"
+}
+
+@test "install-agent-toolchain.sh installs Antigravity VS Code extension when code is available" {
+  mock_installer_env
+  create_mock "code" 'exit 0'
+  TMPDIR="$TEST_DIR" run ./scripts/install-agent-toolchain.sh
+  [ "$status" -eq 0 ]
+
+  grep -F 'code --install-extension Google.antigravity --force' "$TEST_LOG"
 }
 
 @test "install-agent-toolchain.sh supports aarch64 and downloads arm64 binaries" {

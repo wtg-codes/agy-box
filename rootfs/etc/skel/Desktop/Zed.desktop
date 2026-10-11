@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Zed
+Exec=zed
+Icon=zed
+Terminal=false
+Categories=Development;IDE;
