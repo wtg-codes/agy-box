@@ -447,12 +447,28 @@ calculate_box_port_offset() {
     echo 1
 }
 
+purge_box_home() {
+    local target_dir="$1"
+    [ -z "$target_dir" ] && return 0
+    [ ! -d "$target_dir" ] && return 0
+
+    if rm -rf "$target_dir" 2>/dev/null; then
+        return 0
+    fi
+
+    local runtime
+    runtime=$(get_runtime 2>/dev/null || echo "podman")
+    if [ "$runtime" = "podman" ] && command -v podman >/dev/null 2>&1; then
+        podman unshare rm -rf "$target_dir" 2>/dev/null || rm -rf "$target_dir"
+    fi
+}
+
 get_all_agy_boxes() {
     local boxes=()
     if command -v distrobox >/dev/null 2>&1; then
         while IFS= read -r b; do
             [ -n "$b" ] && boxes+=("$b")
-        done < <(distrobox list --no-color 2>/dev/null | awk -F'|' 'NR>1 {gsub(/^[ \t]+|[ \t]+$/, "", $2); if ($2 ~ /^agy-box/) print $2}')
+        done < <(distrobox list --no-color 2>/dev/null | awk -F'|' 'NR>1 {gsub(/^[ \t]+|[ \t]+$/, "", $2); gsub(/^[ \t]+|[ \t]+$/, "", $4); if ($2 ~ /^agy-box/ || $4 ~ /agy-box/) print $2}')
     fi
     local runtime
     runtime=$(get_runtime 2>/dev/null || echo "podman")
@@ -460,6 +476,14 @@ get_all_agy_boxes() {
         while IFS= read -r b; do
             [ -n "$b" ] && boxes+=("$b")
         done < <("$runtime" ps -a --format '{{.Names}}' 2>/dev/null | grep -E '^agy-box' || true)
+
+        while IFS= read -r b; do
+            [ -n "$b" ] && boxes+=("$b")
+        done < <("$runtime" ps -a --filter "label=agy-box.mode=sandbox" --format '{{.Names}}' 2>/dev/null || true)
+
+        while IFS= read -r b; do
+            [ -n "$b" ] && boxes+=("$b")
+        done < <("$runtime" ps -a --filter "label=manager=agy-box-${runtime}" --format '{{.Names}}' 2>/dev/null || true)
     fi
     if [ ${#boxes[@]} -eq 0 ]; then
         if check_container_exists "$CONTAINER_NAME"; then
@@ -994,6 +1018,9 @@ cmd_install_official() {
                 shift
                 ;;
             *)
+                if [[ "$1" != -* ]] && [ "$target_name" = "$CONTAINER_NAME" ]; then
+                    target_name="$1"
+                fi
                 shift
                 ;;
         esac
@@ -1065,13 +1092,13 @@ cmd_install_official() {
     # --- Isolated Home Directory Collision Check ---
     if [ "$target_name" != "$CONTAINER_NAME" ] && [ -d "$isolated_home" ] && [ -n "$(ls -A "$isolated_home" 2>/dev/null)" ]; then
         if [ "$fresh_home" = "true" ]; then
-            rm -rf "$isolated_home"
+            purge_box_home "$isolated_home"
             mkdir -p "$isolated_home"
             ui_ok "Wiped existing home directory for fresh start: $isolated_home"
         elif [ "$reuse_home" = "true" ]; then
             ui_ok "Reusing existing home directory: $isolated_home"
         elif [ "$auto_yes" = "true" ]; then
-            rm -rf "$isolated_home"
+            purge_box_home "$isolated_home"
             mkdir -p "$isolated_home"
             ui_ok "Wiped existing home directory for fresh start: $isolated_home"
         elif [ -t 0 ] && command -v gum >/dev/null 2>&1; then
@@ -1084,7 +1111,7 @@ cmd_install_official() {
                 "Cancel")
             case "$home_action" in
                 "Fresh Start"*)
-                    rm -rf "$isolated_home"
+                    purge_box_home "$isolated_home"
                     mkdir -p "$isolated_home"
                     ui_ok "Wiped existing home directory: $isolated_home"
                     ;;
@@ -2370,7 +2397,7 @@ cmd_clean() {
     # Handle isolated home directory
     if [ "$target_name" != "$CONTAINER_NAME" ] && [ -d "$box_home" ]; then
         if [ "$purge_home" = "true" ]; then
-            rm -rf "$box_home"
+            purge_box_home "$box_home"
             ui_ok "✓ Purged isolated home directory: $box_home"
         elif [ "$keep_home" = "true" ]; then
             ui_warn "ℹ️  Isolated home preserved at: $box_home"
@@ -2383,7 +2410,7 @@ cmd_clean() {
                 "Keep data intact (Preserve workspace state & configs)")
             case "$clean_action" in
                 "Purge"*)
-                    rm -rf "$box_home"
+                    purge_box_home "$box_home"
                     ui_ok "✓ Purged isolated home directory: $box_home"
                     ;;
                 "Keep"*)
@@ -2396,7 +2423,7 @@ cmd_clean() {
             echo "2) Keep data intact"
             read -r -p "Select [1 or 2]: " choice
             if [ "$choice" = "1" ]; then
-                rm -rf "$box_home"
+                purge_box_home "$box_home"
                 ui_ok "✓ Purged isolated home directory: $box_home"
             else
                 ui_warn "ℹ️  Isolated home preserved at: $box_home"
@@ -3145,14 +3172,14 @@ cmd_interactive() {
                                 if gum confirm "Are you sure you want to purge ALL preserved box data directories?"; then
                                     for item in "${orphaned[@]}"; do
                                         local dir_name="${item%% *}"
-                                        rm -rf "${homes_dir:?}/${dir_name:?}"
+                                        purge_box_home "${homes_dir:?}/${dir_name:?}"
                                     done
                                     ui_ok "✓ All preserved data directories purged."
                                 fi
                             elif [ -n "$selected_orphan" ] && [ "$selected_orphan" != "🔙 Cancel" ]; then
                                 local dir_name="${selected_orphan%% *}"
                                 if gum confirm "Permanently delete $homes_dir/$dir_name?"; then
-                                    rm -rf "${homes_dir:?}/${dir_name:?}"
+                                    purge_box_home "${homes_dir:?}/${dir_name:?}"
                                     ui_ok "✓ Removed $homes_dir/$dir_name"
                                 fi
                             fi
