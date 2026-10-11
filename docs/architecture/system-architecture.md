@@ -2,11 +2,18 @@
 
 This document provides a deep dive into the inner workings of the `agy-box` developer sandbox, detailing how it achieves seamless host integration, manages graphical rendering, secures credentials, and facilitates first-time configuration.
 
+> 🌐 **Interactive Architecture Visualizations (Archify Live Canvases):**
+> - 🚀 **[Explore Interactive System Architecture (Live Canvas)](https://wtg-codes.github.io/agy-box/diagrams/interactive/system-topology.html)**
+> - 🚀 **[Explore Interactive Product Communication (Live Canvas)](https://wtg-codes.github.io/agy-box/diagrams/interactive/product-communication.html)**
+> - 🚀 **[Explore Interactive Setup Assistant Flow (Live Canvas)](https://wtg-codes.github.io/agy-box/diagrams/interactive/setup-assistant.html)**
+
 ---
 
 ## 1. System Topology & Bridging
 
 Unlike typical sandbox runtimes that completely isolate applications, `agy-box` uses **Distrobox** (on top of Podman or Docker) to act as a **host-integrated developer environment**.
+
+🚀 **[Explore Interactive System Architecture (Live Canvas)](https://wtg-codes.github.io/agy-box/diagrams/interactive/system-topology.html)**
 
 ![agy-box System Topology](../diagrams/rendered/system-topology.svg)
 
@@ -15,6 +22,8 @@ Unlike typical sandbox runtimes that completely isolate applications, `agy-box` 
 ## 2. Interactive Setup Assistant Sequence Flow
 
 When a user opens an interactive shell session in the `agy-box` container for the first time, a hook in `/etc/profile.d/agy-setup-check.sh` is triggered. The helper handles verifying the environment and setting up credentials.
+
+🚀 **[Explore Interactive Setup Assistant Flow (Live Canvas)](https://wtg-codes.github.io/agy-box/diagrams/interactive/setup-assistant.html)**
 
 ![Interactive Setup Assistant Sequence Flow](../diagrams/rendered/setup-assistant.svg)
 
@@ -33,6 +42,8 @@ Even though the D-Bus socket is forwarded into the sandbox container by Distrobo
 ## 4. Port Mappings & IPC Loops
 
 The components of the Antigravity developer suite communicate over a series of ports and sockets inside the container loop:
+
+🚀 **[Explore Interactive Product Communication (Live Canvas)](https://wtg-codes.github.io/agy-box/diagrams/interactive/product-communication.html)**
 
 | Port | Protocol | Source | Target | Description |
 | :--- | :--- | :--- | :--- | :--- |

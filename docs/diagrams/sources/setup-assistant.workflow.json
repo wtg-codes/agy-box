@@ -1,0 +1,86 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "agy-box Setup Assistant Workflow",
+    "subtitle": "Interactive first-run wizard, diagnostics, keyring selection, and environment handoff",
+    "output": "docs/diagrams/interactive/setup-assistant.html",
+    "animation": "trace",
+    "visual_preset": "signal-flow",
+    "quality_profile": "showcase",
+    "viewBox": [1040, 656]
+  },
+  "lanes": [
+    { "id": "user_session", "label": "User Session" },
+    { "id": "shell_hook", "label": "Shell Profile Hook" },
+    { "id": "diagnostics", "label": "Setup Diagnostics" },
+    { "id": "credential_setup", "label": "Credential & Keyring Setup" }
+  ],
+  "phases": [
+    { "id": "intake_phase", "label": "Login & Trigger", "fromCol": 0, "toCol": 1 },
+    { "id": "diagnostics_phase", "label": "Diagnostics & Wizard", "fromCol": 2, "toCol": 3, "variant": "emphasis" },
+    { "id": "finalization_phase", "label": "Config & Handoff", "fromCol": 4, "toCol": 5, "variant": "dashed" }
+  ],
+  "groups": [
+    { "id": "diagnostics_group", "label": "Environment Diagnostics", "lane": "diagnostics", "fromCol": 1, "toCol": 2, "variant": "emphasis" },
+    { "id": "credential_group", "label": "Credential Provisioning", "lane": "credential_setup", "fromCol": 3, "toCol": 4, "variant": "security" }
+  ],
+  "mainPath": [
+    "terminal_login",
+    "profile_hook",
+    "check_env",
+    "prompt_user",
+    "keyring_selection",
+    "write_config",
+    "shell_handoff",
+    "active_shell"
+  ],
+  "nodes": [
+    { "id": "terminal_login", "lane": "user_session", "col": 0, "type": "frontend", "label": "Terminal Login", "sublabel": "Interactive TTY launch", "width": 140 },
+    { "id": "profile_hook", "lane": "shell_hook", "col": 0, "type": "backend", "label": "Profile Hook Trigger", "sublabel": "/etc/profile.d/agy-setup-check.sh", "width": 160 },
+    { "id": "check_env", "lane": "diagnostics", "col": 1, "type": "backend", "label": "Check Keys & Git", "sublabel": "Verify GEMINI_API_KEY & git identity", "width": 160 },
+    { "id": "prompt_user", "lane": "user_session", "col": 2, "type": "frontend", "label": "Interactive Prompt", "sublabel": "Gum TUI wizard banner", "width": 140 },
+    { "id": "keyring_selection", "lane": "credential_setup", "col": 3, "type": "security", "label": "Keyring Mode Selection", "sublabel": "Host D-Bus vs Isolated file keyring", "width": 160 },
+    { "id": "write_config", "lane": "credential_setup", "col": 4, "type": "database", "label": "Write config.env", "sublabel": "~/.config/agy-box/environment.d", "width": 150 },
+    { "id": "shell_handoff", "lane": "shell_hook", "col": 5, "type": "backend", "label": "Handoff to Shell", "sublabel": "Create .setup_done & launch", "width": 150 },
+    { "id": "active_shell", "lane": "user_session", "col": 5, "type": "external", "label": "Active User Shell", "sublabel": "Ready for agentic dev", "width": 140 }
+  ],
+  "edges": [
+    { "id": "login-to-hook", "from": "terminal_login", "to": "profile_hook", "label": "bash login", "variant": "default" },
+    { "id": "hook-to-diag", "from": "profile_hook", "to": "check_env", "label": "run checks", "variant": "emphasis" },
+    { "id": "diag-to-prompt", "from": "check_env", "to": "prompt_user", "label": "unconfigured", "variant": "emphasis" },
+    { "id": "prompt-to-keyring", "from": "prompt_user", "to": "keyring_selection", "label": "user choices", "variant": "emphasis" },
+    { "id": "keyring-to-write", "from": "keyring_selection", "to": "write_config", "label": "persist settings", "variant": "security" },
+    { "id": "write-to-handoff", "from": "write_config", "to": "shell_handoff", "label": "done flag", "variant": "emphasis" },
+    { "id": "handoff-to-active", "from": "shell_handoff", "to": "active_shell", "label": "exec bash", "variant": "emphasis" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "First-Run Lifecycle",
+      "items": [
+        "Triggered automatically on first interactive terminal login via /etc/profile.d",
+        "Skips instantly if ~/.config/agy-box/.setup_done marker exists",
+        "Zero-configuration fallback allows non-interactive CI/CD runs"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Security & Credentials",
+      "items": [
+        "Interactive Gum TUI prompts for GEMINI_API_KEY and Git identity",
+        "Keyring mode configures either host D-Bus forwarding or isolated file keyring",
+        "Keys written securely to environment.d/agy-box.conf with restricted permissions"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Developer Handoff",
+      "items": [
+        "Verifies Chrome, CNCF tools, and Antigravity toolchain health",
+        "Creates completion sentinel file to prevent repeated prompts",
+        "Hands off seamlessly to user's interactive shell session"
+      ]
+    }
+  ]
+}

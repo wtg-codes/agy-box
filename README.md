@@ -30,6 +30,9 @@ The published container image is **`ghcr.io/wtg-codes/agy-box`** (`:latest` trac
 - 📘 **[Master User Guide](docs/USER_GUIDE.md)** — Step-by-step handbook covering zero-to-hero setup, all 4 ways to work, IDE integrations (VS Code, Zed, Antigravity, JetBrains), AI model configuration, and CLI mastery.
 - 🌐 **[Project Website](https://wtg-codes.github.io/agy-box/)** — Interactive landing page (GitHub Pages, built from [`docs/index.html`](docs/index.html)).
 - 🏛️ **[System Architecture Guide](docs/architecture/system-architecture.md)** — Detailed walkthrough of the host-to-container bridging, D-Bus session keyring pipelines, interactive setup assistant sequence flows, and the CI/CD pipeline.
+- 🚀 **[Explore Interactive System Architecture (Live Canvas)](https://wtg-codes.github.io/agy-box/diagrams/interactive/system-topology.html)**
+- 🚀 **[Explore Interactive Product Communication (Live Canvas)](https://wtg-codes.github.io/agy-box/diagrams/interactive/product-communication.html)**
+- 🚀 **[Explore Interactive Setup Assistant Flow (Live Canvas)](https://wtg-codes.github.io/agy-box/diagrams/interactive/setup-assistant.html)**
 - 🤝 **[Developer Contribution Guide](CONTRIBUTING.md)** — Learn how to set up your environment, build from source, and run verification lints.
 - 🛠️ **[Setup & Troubleshooting Guide](docs/SETUP.md)** — Comprehensive guidelines on prerequisites, rootless configurations, toolchain exporting, and detailed troubleshooting solutions.
 - 🗺️ **[Roadmap / TODO](TODO.md)** — Planned improvements and possible future work.
@@ -102,6 +105,8 @@ Unlike traditional isolated virtual machines or containers, Distrobox provides a
 
 The diagram below outlines the layering stack and the host integration bridge of the `agy-box` sandbox developer environment:
 
+🚀 **[Explore Interactive System Architecture (Live Canvas)](https://wtg-codes.github.io/agy-box/diagrams/interactive/system-topology.html)**
+
 ![agy-box System Topology](docs/diagrams/rendered/system-topology.svg)
 
 ---
@@ -109,6 +114,8 @@ The diagram below outlines the layering stack and the host integration bridge of
 ### Product Deep Dive: The Antigravity Suite
 
 The developer environment packages four distinct products of the Google Antigravity ecosystem, each serving a specific role in agentic development:
+
+🚀 **[Explore Interactive Product Communication (Live Canvas)](https://wtg-codes.github.io/agy-box/diagrams/interactive/product-communication.html)**
 
 > **How the toolchain is installed:** the Antigravity toolchain is **not baked into the container image**. The image ships a per-user installer, `/usr/local/bin/agy-install-toolchain` (source: [`scripts/install-agent-toolchain.sh`](scripts/install-agent-toolchain.sh)), which installs the Agent UI, IDE, `agy` CLI, SDK, Google ADK and Gemini CLI into the box user's `~/.local` (pinned versions, checksum-verified). `agy-box-manager install` / `dev` run it automatically right after creating the box and then export `agy` to the host's `~/.local/bin`. Re-run it at any time to repair or update the toolchain with `agy-box-manager update-toolchain` (or `update-toolchain dev`) on the host, or `agy-install-toolchain` inside the box.
 
@@ -180,6 +187,8 @@ The developer environment packages four distinct products of the Google Antigrav
 ## First-Time Setup Assistant
 
 When you enter the `agy-box` container for the first time, a setup helper script (`agy-setup-helper`) launches automatically to guide you through environment initialization and sanity checks:
+
+🚀 **[Explore Interactive Setup Assistant Flow (Live Canvas)](https://wtg-codes.github.io/agy-box/diagrams/interactive/setup-assistant.html)**
 
 1. **Host Keyring Verification**: Asserts that D-Bus socket forwarding is configured correctly and `libsecret` is available inside the container to communicate with the host's GNOME Keyring.
 2. **Antigravity API Keys**: Prompts you to input your Gemini or Antigravity API keys if they are not already set in the environment, and securely writes them to `~/.config/environment.d/agy-box.conf` so they are automatically loaded in all subsequent container and IDE sessions.
@@ -381,7 +390,7 @@ Pull requests never push images, so there are no per-PR image tags. Published ta
 - `latest` and `main` — every successful push to `main`.
 - `<major>.<minor>.<patch>` and `<major>.<minor>` (e.g. `0.6.0`, `0.6`) — every `v*` release tag.
 
-Two auxiliary workflows support the docs: [`pages.yml`](.github/workflows/pages.yml) deploys `docs/` to [GitHub Pages](https://wtg-codes.github.io/agy-box/) on every push to `main`, and [`compile-diagrams.yml`](.github/workflows/compile-diagrams.yml) re-renders the Mermaid sources in `docs/diagrams/*.mmd` to SVG/PNG and commits them back whenever a diagram source changes.
+Two auxiliary workflows support the docs: [`pages.yml`](.github/workflows/pages.yml) deploys `docs/` to [GitHub Pages](https://wtg-codes.github.io/agy-box/) on every push to `main`, and [`compile-diagrams.yml`](.github/workflows/compile-diagrams.yml) re-renders Mermaid diagrams and interactive Archify models whenever diagram sources change.
 
 ## Artifacts
 

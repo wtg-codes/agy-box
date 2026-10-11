@@ -1,9 +1,10 @@
-name: Compile Mermaid Diagrams
+name: Compile Diagrams
 
 on:
   push:
     paths:
       - 'docs/diagrams/*.mmd'
+      - 'docs/diagrams/sources/**'
       - 'docs/diagrams/config.json'
       - 'docs/diagrams/style.css'
       - 'docs/diagrams/puppeteer-config.json'
@@ -32,7 +33,7 @@ jobs:
           npm install -g @mermaid-js/mermaid-cli
 
       - name: Create rendered output directory
-        run: mkdir -p docs/diagrams/rendered
+        run: mkdir -p docs/diagrams/rendered docs/diagrams/interactive
 
       - name: Compile Diagrams
         run: |
@@ -45,8 +46,17 @@ jobs:
             fi
           done
 
+      - name: Render Archify Diagrams
+        run: |
+          if [ ! -d /tmp/archify ]; then
+            git clone --depth 1 https://github.com/tt-a1i/archify /tmp/archify
+          fi
+          node /tmp/archify/archify/bin/archify.mjs render architecture docs/diagrams/sources/system-topology.architecture.json docs/diagrams/interactive/system-topology.html
+          node /tmp/archify/archify/bin/archify.mjs render architecture docs/diagrams/sources/product-communication.architecture.json docs/diagrams/interactive/product-communication.html
+          node /tmp/archify/archify/bin/archify.mjs render workflow docs/diagrams/sources/setup-assistant.workflow.json docs/diagrams/interactive/setup-assistant.html
+
       - name: Commit and push changes
         uses: stefanzweifel/git-auto-commit-action@v7
         with:
-          commit_message: "chore: auto-compile Mermaid diagrams to SVG/PNG [skip ci]"
-          file_pattern: "docs/diagrams/rendered/*"
+          commit_message: "chore: auto-compile diagrams to SVG/PNG/HTML [skip ci]"
+          file_pattern: "docs/diagrams/rendered/* docs/diagrams/interactive/*"
