@@ -16,6 +16,7 @@ RED=$'\e[0;31m'
 GREEN=$'\e[0;32m'
 YELLOW=$'\e[1;33m'
 BLUE=$'\e[0;34m'
+MAGENTA=$'\e[0;35m'
 CYAN=$'\e[0;36m'
 WHITE=$'\e[1;37m'
 NC=$'\e[0m' # No Color
@@ -177,37 +178,54 @@ probe_host_capabilities() {
         export DBX_CONTAINER_MANAGER="podman"
     elif command -v docker >/dev/null 2>&1; then
         export DBX_CONTAINER_MANAGER="docker"
-    elif [ "$mode" != "menu" ]; then
-        gum style --foreground 196 --border rounded --padding "0 2" --margin "1 0" \
-            "❌ ERROR: No container runtime found!" \
-            "Please install either Podman (Highly Recommended) or Docker."
+    elif [ "$mode" != "menu" ] && [ "$mode" != "optional" ]; then
+        if command -v gum >/dev/null 2>&1; then
+            gum style --foreground 196 --border rounded --padding "0 2" --margin "1 0" \
+                "❌ ERROR: No container runtime found!" \
+                "Please install either Podman (Highly Recommended) or Docker."
+        else
+            echo -e "${RED}❌ ERROR: No container runtime found!${NC}\nPlease install either Podman (Highly Recommended) or Docker." >&2
+        fi
         exit 1
     fi
 
-    if [ "${DBX_CONTAINER_MANAGER:-}" = "docker" ] && [ "$mode" != "menu" ]; then
+    if [ "${DBX_CONTAINER_MANAGER:-}" = "docker" ] && [ "$mode" != "menu" ] && [ "$mode" != "optional" ]; then
         # Check if Docker daemon is running and user has access
         if ! docker info >/dev/null 2>&1; then
-            gum style --foreground 196 --border rounded --padding "0 2" --margin "1 0" \
-                "❌ ERROR: Docker daemon is unreachable!" \
-                "Please check if the Docker service is active, or add your user" \
-                "to the 'docker' Unix group:" \
-                "  sudo usermod -aG docker $USER" \
-                "You may need to log out and log back in for changes to apply."
+            if command -v gum >/dev/null 2>&1; then
+                gum style --foreground 196 --border rounded --padding "0 2" --margin "1 0" \
+                    "❌ ERROR: Docker daemon is unreachable!" \
+                    "Please check if the Docker service is active, or add your user" \
+                    "to the 'docker' Unix group:" \
+                    "  sudo usermod -aG docker $USER" \
+                    "You may need to log out and log back in for changes to apply."
+            else
+                echo -e "${RED}❌ ERROR: Docker daemon is unreachable!${NC}\nPlease check if Docker service is active, or add your user to 'docker' group: sudo usermod -aG docker \$USER" >&2
+            fi
         elif ! docker info 2>/dev/null | grep -q "rootless"; then
-            gum style --foreground 214 --border rounded --padding "0 2" --margin "1 0" \
-                "⚠️ CAUTION: Rootful Docker detected!" \
-                "Since standard Docker runs as a root daemon, files written to" \
-                "your mounted home directory may be saved with root ownership." \
-                "Consider setting up rootless Docker or installing Podman."
+            if command -v gum >/dev/null 2>&1; then
+                gum style --foreground 214 --border rounded --padding "0 2" --margin "1 0" \
+                    "⚠️ CAUTION: Rootful Docker detected!" \
+                    "Since standard Docker runs as a root daemon, files written to" \
+                    "your mounted home directory may be saved with root ownership." \
+                    "Consider setting up rootless Docker or installing Podman."
+            else
+                echo -e "${YELLOW}⚠️ CAUTION: Rootful Docker detected! Files written to mounted home may have root ownership.${NC}" >&2
+            fi
         fi
     fi
 }
 
 # --- Dependency Management ---
 install_gum() {
+    if [ ! -t 0 ]; then
+        return 0
+    fi
     echo -e "${CYAN}Gum is required for the UI but is not installed.${NC}"
-    # When piped via curl, read needs to be forced to /dev/tty
-    exec < /dev/tty
+    # When piped via curl, read needs to be forced to /dev/tty if available
+    if [ -e /dev/tty ]; then
+        exec < /dev/tty 2>/dev/null || true
+    fi
     read -r -p "Would you like to attempt to install it now? (y/N): " choice
     if [[ "$choice" =~ ^[Yy]$ ]]; then
         if command -v brew &> /dev/null; then
@@ -254,13 +272,15 @@ gpgkey=https://repo.charm.sh/yum/gpg.key' | sudo tee /etc/zypp/repos.d/charm.rep
 check_deps() {
     local mode=${1:-}
     if ! command -v gum &> /dev/null; then
-        install_gum
+        if [ "$mode" != "quiet" ] && [ "$mode" != "optional" ] && [ -t 0 ]; then
+            install_gum
+        fi
     fi
 
     # Initialize container engine binding
     probe_host_capabilities "$mode"
 
-    if [ "$mode" = "menu" ]; then
+    if [ "$mode" = "menu" ] || [ "$mode" = "optional" ]; then
         return 0
     fi
 
@@ -274,43 +294,49 @@ check_deps() {
         missing=1
     fi
     if [ $missing -eq 1 ]; then
-        echo -e "\n${CYAN}Would you like to try installing the missing container dependencies now?${NC}"
-        exec < /dev/tty
-        if gum confirm "Install missing dependencies?"; then
-            if command -v apt-get &> /dev/null; then
-                sudo apt update && sudo apt install -y podman distrobox
-            elif command -v dnf &> /dev/null; then
-                sudo dnf install -y podman distrobox
-            elif command -v pacman &> /dev/null; then
-                sudo pacman -S --noconfirm podman distrobox
-            elif command -v zypper &> /dev/null; then
-                sudo zypper install -y podman distrobox
-            elif command -v brew &> /dev/null; then
-                brew install podman distrobox
-            else
-                echo -e "${RED}Could not detect a supported package manager. Please install manually.${NC}"
-                echo "Tip: You can install Distrobox without root via:"
-                echo "  curl -s https://raw.githubusercontent.com/89luca89/distrobox/main/install | sh -s -- --prefix ~/.local"
-                exit 1
-            fi
+        if [ "$mode" != "quiet" ] && [ -t 0 ] && [ -e /dev/tty ] && command -v gum &> /dev/null; then
+            echo -e "\n${CYAN}Would you like to try installing the missing container dependencies now?${NC}"
+            exec < /dev/tty 2>/dev/null || true
+            if gum confirm "Install missing dependencies?"; then
+                if command -v apt-get &> /dev/null; then
+                    sudo apt update && sudo apt install -y podman distrobox
+                elif command -v dnf &> /dev/null; then
+                    sudo dnf install -y podman distrobox
+                elif command -v pacman &> /dev/null; then
+                    sudo pacman -S --noconfirm podman distrobox
+                elif command -v zypper &> /dev/null; then
+                    sudo zypper install -y podman distrobox
+                elif command -v brew &> /dev/null; then
+                    brew install podman distrobox
+                else
+                    echo -e "${RED}Could not detect a supported package manager. Please install manually.${NC}"
+                    echo "Tip: You can install Distrobox without root via:"
+                    echo "  curl -s https://raw.githubusercontent.com/89luca89/distrobox/main/install | sh -s -- --prefix ~/.local"
+                    exit 1
+                fi
 
-            # Re-check dependencies
-            if ! command -v distrobox &> /dev/null || (! command -v podman &> /dev/null && ! command -v docker &> /dev/null); then
-                echo -e "${RED}Dependencies still missing after installation attempt. Please install manually.${NC}"
+                # Re-check dependencies
+                if ! command -v distrobox &> /dev/null || (! command -v podman &> /dev/null && ! command -v docker &> /dev/null); then
+                    echo -e "${RED}Dependencies still missing after installation attempt. Please install manually.${NC}"
+                    echo "Tip: You can install Distrobox without root via:"
+                    echo "  curl -s https://raw.githubusercontent.com/89luca89/distrobox/main/install | sh -s -- --prefix ~/.local"
+                    exit 1
+                else
+                    echo -e "${CYAN}Dependencies installed successfully!${NC}"
+                fi
+            else
+                echo -e "\nPlease install the missing container dependencies and try again."
                 echo "Tip: You can install Distrobox without root via:"
                 echo "  curl -s https://raw.githubusercontent.com/89luca89/distrobox/main/install | sh -s -- --prefix ~/.local"
                 exit 1
-            else
-                echo -e "${CYAN}Dependencies installed successfully!${NC}"
             fi
         else
-            echo -e "\nPlease install the missing container dependencies and try again."
-            echo "Tip: You can install Distrobox without root via:"
-            echo "  curl -s https://raw.githubusercontent.com/89luca89/distrobox/main/install | sh -s -- --prefix ~/.local"
+            echo -e "${YELLOW}Please install distrobox and podman/docker to proceed.${NC}" >&2
+            echo "Tip: You can install Distrobox without root via:" >&2
+            echo "  curl -s https://raw.githubusercontent.com/89luca89/distrobox/main/install | sh -s -- --prefix ~/.local" >&2
             exit 1
         fi
     fi
-
 }
 
 detect_runtime() {
@@ -1774,18 +1800,26 @@ show_banner() {
     printf "${WHITE}  /__|_|____|_|__\\${NC}\n"
     printf "${RED}      /\\/\\/\\/\\ ${NC}\n"
 
-    gum style \
-        --foreground 212 --border-foreground 212 --border rounded \
-        --align center --width 50 --margin "0 2" --padding "0 1" \
-        "🚀 AGY Box Manager v${VERSION}"
+    if command -v gum >/dev/null 2>&1; then
+        gum style \
+            --foreground 212 --border-foreground 212 --border rounded \
+            --align center --width 50 --margin "0 2" --padding "0 1" \
+            "🚀 AGY Box Manager v${VERSION}"
+    else
+        echo -e "${MAGENTA}=== 🚀 AGY Box Manager v${VERSION} ===${NC}\n"
+    fi
 }
 
 show_compact_banner() {
     clear
-    gum style \
-        --foreground 212 --border-foreground 212 --border rounded \
-        --align center --width 50 --margin "0 2" --padding "0 1" \
-        "🚀 AGY Box Manager v${VERSION}"
+    if command -v gum >/dev/null 2>&1; then
+        gum style \
+            --foreground 212 --border-foreground 212 --border rounded \
+            --align center --width 50 --margin "0 2" --padding "0 1" \
+            "🚀 AGY Box Manager v${VERSION}"
+    else
+        echo -e "${MAGENTA}=== 🚀 AGY Box Manager v${VERSION} ===${NC}\n"
+    fi
 }
 
 show_system_status() {
@@ -2360,26 +2394,26 @@ fi
 setup_completions
 
 case "${1:-}" in
-    wizard)           check_deps "quiet"; cmd_wizard "${@:2}" ;;
-    check)            check_deps "quiet"; cmd_check "${@:2}" ;;
-    update)           check_deps "quiet"; cmd_update "${@:2}" ;;
-    backup)           check_deps "quiet"; cmd_backup "${@:2}" ;;
-    restore)          check_deps "quiet"; cmd_restore "${@:2}" ;;
+    wizard)           check_deps "optional"; cmd_wizard "${@:2}" ;;
+    check)            check_deps "optional"; cmd_check "${@:2}" ;;
+    update)           check_deps "optional"; cmd_update "${@:2}" ;;
+    backup)           check_deps "optional"; cmd_backup "${@:2}" ;;
+    restore)          check_deps "optional"; cmd_restore "${@:2}" ;;
     install)          check_deps "quiet"; cmd_install_official "${@:2}" ;;
     dev)              check_deps "quiet"; cmd_build_dev "${@:2}" ;;
     enter)            check_deps "quiet"; if [ "${2:-}" = "dev" ]; then cmd_enter dev; else cmd_enter prod; fi ;;
     desktop)          check_deps "quiet"; if [ "${2:-}" = "dev" ]; then cmd_desktop dev; else cmd_desktop prod; fi ;;
     clean)            check_deps "quiet"; if [ "${2:-}" = "dev" ]; then cmd_clean "$DEV_CONTAINER_NAME"; else cmd_clean "$CONTAINER_NAME"; fi ;;
     update-toolchain) check_deps "quiet"; if [ "${2:-}" = "dev" ]; then cmd_update_toolchain dev; else cmd_update_toolchain prod; fi ;;
-    status)           check_deps "quiet"; cmd_status ;;
+    status)           check_deps "optional"; cmd_status ;;
     ports)            check_deps "quiet"; cmd_ports ;;
-    doctor)           check_deps "quiet"; cmd_doctor ;;
-    install-global)   check_deps "quiet"; cmd_install_global ;;
-    uninstall-global) check_deps "quiet"; cmd_uninstall_global ;;
+    doctor)           check_deps "optional"; cmd_doctor ;;
+    install-global)   check_deps "optional"; cmd_install_global ;;
+    uninstall-global) check_deps "optional"; cmd_uninstall_global ;;
     autocomplete)     cmd_autocomplete "${2:-bash}" ;;
-    test)             check_deps "quiet"; if [ -f "scripts/test-box.sh" ]; then ./scripts/test-box.sh; else gum style --foreground 196 "Test script not found. Please run this command inside the repository."; exit 1; fi ;;
+    test)             check_deps "quiet"; if [ -f "scripts/test-box.sh" ]; then ./scripts/test-box.sh; else echo -e "${RED}Test script not found. Please run this command inside the repository.${NC}"; exit 1; fi ;;
     version|--version|-v) echo "agy-box-manager version $VERSION"; exit 0 ;;
     help|--help|-h)   show_help ;;
     "")               cmd_interactive ;;
-    *)                gum style --foreground 196 "Unknown command: $1"; echo ""; show_help; exit 1 ;;
+    *)                if command -v gum >/dev/null 2>&1; then gum style --foreground 196 "Unknown command: $1"; else echo -e "${RED}Unknown command: $1${NC}"; fi; echo ""; show_help; exit 1 ;;
 esac
