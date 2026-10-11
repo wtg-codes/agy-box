@@ -303,6 +303,33 @@ else
 fi
 
 
+# --- 7. Visual Studio Code Antigravity Extension -----------------------------
+if command -v code >/dev/null 2>&1; then
+    step "Installing Antigravity extension for Visual Studio Code"
+    if [ "$MODE" = "system" ]; then
+        code --user-data-dir /tmp/vscode-root --extensions-dir /etc/skel/.vscode/extensions --install-extension Google.antigravity --force || true
+        mkdir -p /root/.vscode
+        cp -r /etc/skel/.vscode/extensions /root/.vscode/ 2>/dev/null || true
+    else
+        code --install-extension Google.antigravity --force || true
+    fi
+fi
+
+
+# --- 8. Zed Editor Configuration ---------------------------------------------
+if [ "$MODE" = "system" ]; then
+    mkdir -p /etc/skel/.config/zed
+    if [ ! -f /etc/skel/.config/zed/settings.json ]; then
+        echo '{"auto_install_extensions": {"antigravity": true}}' > /etc/skel/.config/zed/settings.json
+    fi
+else
+    mkdir -p "$HOME/.config/zed"
+    if [ ! -f "$HOME/.config/zed/settings.json" ]; then
+        echo '{"auto_install_extensions": {"antigravity": true}}' > "$HOME/.config/zed/settings.json"
+    fi
+fi
+
+
 # --- Verify -------------------------------------------------------------------
 step "Verifying installation"
 missing=0

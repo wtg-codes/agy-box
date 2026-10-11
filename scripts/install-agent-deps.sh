@@ -80,3 +80,46 @@ else
     printf '#!/bin/bash\nexec /usr/bin/google-chrome-stable.orig --disable-dev-shm-usage --disable-gpu --disable-crash-reporter --no-sandbox "$@"\n' > /usr/bin/google-chrome-stable
     chmod +x /usr/bin/google-chrome-stable
 fi
+
+# 5. Install Visual Studio Code
+echo "Installing Visual Studio Code..."
+mkdir -p /etc/apt/keyrings
+curl -fsSL --retry 5 --retry-delay 2 --connect-timeout 5 https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /etc/apt/keyrings/packages.microsoft.gpg
+echo "deb [arch=${TARGETARCH} signed-by=/etc/apt/keyrings/packages.microsoft.gpg] https://packages.microsoft.com/repos/code stable main" > /etc/apt/sources.list.d/vscode.list
+apt-get update && apt-get install -y --no-install-recommends code && rm -rf /var/lib/apt/lists/*
+
+# Apply container wrapper for Visual Studio Code
+if [ -f /usr/bin/code ]; then
+    mv /usr/bin/code /usr/bin/code.orig
+    printf '#!/bin/bash\nexec /usr/bin/code.orig --disable-dev-shm-usage --no-sandbox "$@"\n' > /usr/bin/code
+    chmod +x /usr/bin/code
+fi
+
+# 6. Install Zed Editor
+echo "Installing Zed Editor..."
+if [[ "$TARGETARCH" = "arm64" ]]; then
+    ZED_ARCH="aarch64"
+else
+    ZED_ARCH="x86_64"
+fi
+ZED_URL="https://github.com/zed-industries/zed/releases/latest/download/zed-linux-${ZED_ARCH}.tar.gz"
+mkdir -p /usr/local/share/zed
+curl -fsSL --retry 5 --retry-delay 2 --connect-timeout 5 "$ZED_URL" | tar -xz -C /usr/local/share/zed --strip-components=1
+ln -sf /usr/local/share/zed/bin/zed /usr/local/bin/zed
+chmod -R ugo+rX /usr/local/share/zed
+chmod +x /usr/local/bin/zed
+
+# Integrate desktop assets and icons
+if [ -d /usr/local/share/zed/share/icons ]; then
+    mkdir -p /usr/share/icons/hicolor
+    cp -r /usr/local/share/zed/share/icons/* /usr/share/icons/ 2>/dev/null || true
+    if [ -f /usr/local/share/zed/share/icons/hicolor/512x512/apps/zed.png ]; then
+        mkdir -p /usr/share/pixmaps
+        cp /usr/local/share/zed/share/icons/hicolor/512x512/apps/zed.png /usr/share/pixmaps/zed.png 2>/dev/null || true
+    fi
+fi
+if [ -d /usr/local/share/zed/share/applications ]; then
+    mkdir -p /usr/share/applications
+    cp /usr/local/share/zed/share/applications/*.desktop /usr/share/applications/ 2>/dev/null || true
+fi
+

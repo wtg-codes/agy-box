@@ -37,6 +37,7 @@ RUN chmod +x /usr/local/bin/entrypoint.sh \
              /usr/local/bin/agy-setup-helper \
              /usr/local/bin/agy-vdi \
              /usr/local/bin/agy-install-toolchain \
+             /usr/local/bin/agy-install-ide \
              /etc/profile.d/agy-setup-check.sh \
              /etc/profile.d/agy-toolchain.sh \
              /etc/X11/icewm/startup \

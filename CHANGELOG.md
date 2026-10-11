@@ -9,6 +9,14 @@ Container images are published to `ghcr.io/wtg-codes/agy-box` (`:<version>`, `:<
 
 ## [Unreleased]
 
+### Added
+- **Container IDE Support**:
+  - Pre-installed **Visual Studio Code** (`code`) and **Zed Editor** (`zed`) in the container image with multi-arch support (`amd64` and `arm64`).
+  - Pre-installed/pre-configured **Antigravity extensions**: `Google.antigravity` extension pre-installed in VS Code and auto-installation configured for Zed (`~/.config/zed/settings.json`).
+  - IceWM desktop launchers and application menu/toolbar entries for VS Code and Zed.
+  - On-demand **JetBrains IDE installer** (`agy-install-ide`) supporting IntelliJ IDEA Community and PyCharm Community with Antigravity plugin installation, desktop shortcuts, and an interactive integration menu in `agy-setup-helper`.
+  - Comprehensive health checks in `scripts/assert-box.sh` and Bats unit tests for IDE installation and toolchain extensions.
+
 ## [0.6.0] - 2026-10-03
 
 ### Added

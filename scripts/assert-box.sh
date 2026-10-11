@@ -53,6 +53,9 @@ assert_cmd "Toolchain on login-shell PATH (profile.d)" "sh" "env PATH=/usr/local
 assert_cmd "Google Chrome" "google-chrome-stable" "google-chrome-stable --version" || errors=$((errors+1))
 assert_cmd "Google Antigravity (Agent UI)" "antigravity" "{ test -x /usr/local/bin/antigravity && test -d /opt/antigravity; } || { test -x \"$HOME/.local/bin/antigravity\" && test -d \"$HOME/.local/share/antigravity\"; }" || errors=$((errors+1))
 assert_cmd "Antigravity IDE" "antigravity-ide" "{ test -x /usr/local/bin/antigravity-ide && test -d /opt/antigravity-ide; } || { test -x \"$HOME/.local/bin/antigravity-ide\" && test -d \"$HOME/.local/share/antigravity-ide\"; }" || errors=$((errors+1))
+assert_cmd "Visual Studio Code" "code" "code --version" || errors=$((errors+1))
+assert_cmd "Zed" "zed" "zed --version" || errors=$((errors+1))
+assert_cmd "JetBrains IDE Installer" "agy-install-ide" "test -x /usr/local/bin/agy-install-ide" || errors=$((errors+1))
 assert_cmd "IceWM Startup Script" "icewm-session" "test -x /etc/X11/icewm/startup" || errors=$((errors+1))
 assert_cmd "IceWM Preferences" "icewm-session" "test -f /etc/X11/icewm/preferences" || errors=$((errors+1))
 

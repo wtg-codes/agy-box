@@ -48,6 +48,7 @@ jobs:
           # Executable scripts without a .sh extension
           shellcheck rootfs/usr/local/bin/agy-setup-helper \
             rootfs/usr/local/bin/agy-vdi \
+            rootfs/usr/local/bin/agy-install-ide \
             rootfs/etc/X11/icewm/startup
 
       - name: Lint Containerfile

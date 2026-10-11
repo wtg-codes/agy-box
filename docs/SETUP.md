@@ -90,7 +90,7 @@ sudo pacman -S distrobox podman
   Alternatively, you can set this variable in your host environment before calling `distrobox` directly:
   ```bash
   export DBX_CONTAINER_MANAGER="docker"
-  distrobox create -i ghcr.io/wtg-codes/agy-box:latest -n agy-box
+  distrobox enter agy-box
   ```
 
 > [!TIP]

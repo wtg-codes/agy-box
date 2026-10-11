@@ -8,6 +8,8 @@ setup() {
   # Create directories before we mock mkdir
   mkdir -p "$MOCK_BIN"
   mkdir -p "$TEST_DIR/usr/bin"
+  mkdir -p "$TEST_DIR/usr/local/bin"
+  mkdir -p "$TEST_DIR/usr/local/share"
   mkdir -p "$TEST_DIR/var/lib/apt/lists"
   mkdir -p "$TEST_DIR/etc/apt/sources.list.d"
   mkdir -p "$TEST_DIR/usr/share/keyrings"
@@ -88,7 +90,11 @@ EOF2
   
   # Mock gpg
   create_mock "gpg" 'exit 0'
-  
+
+  # Mock ln and cp
+  create_mock "ln" 'exit 0'
+  create_mock "cp" 'exit 0'
+
   # Prepend mock bin to PATH
   export ORIGINAL_PATH="$PATH"
   export PATH="$MOCK_BIN:$PATH"
@@ -98,7 +104,7 @@ teardown() {
   # Restore PATH and clean up temp directory
   export PATH="$ORIGINAL_PATH"
   rm -rf "$TEST_DIR"
-  rm -rf k9s* helm* kubectl* checksums.sha256* gpg.key linux-* nodesource* lookup*
+  rm -rf k9s* helm* kubectl* checksums.sha256* gpg.key linux-* nodesource* lookup* microsoft* zed*
 }
 
 @test "install-tools.sh pins and installs correct versions of kubectl, k9s, and helm" {
@@ -119,7 +125,7 @@ teardown() {
   grep -F 'curl -sSLO --http1.1 --connect-timeout 5 --retry 5 --retry-delay 2 https://get.helm.sh/helm-v3.21.0-linux-amd64.tar.gz' "$TEST_LOG"
 }
 
-@test "install-agent-deps.sh pins and installs correct versions of gum and google-chrome-stable" {
+@test "install-agent-deps.sh pins and installs correct versions of gum, google-chrome-stable, vs code, and zed" {
   # Mock system commands to prevent actual wrapper modification or errors
   # (e.g. mv, printf, chmod, mkdir) since we don't want them to execute/fail
   create_mock "mv" 'exit 0'
@@ -128,9 +134,11 @@ teardown() {
   create_mock "mkdir" 'exit 0'
   
   touch "$TEST_DIR/usr/bin/google-chrome-stable"
+  touch "$TEST_DIR/usr/bin/code"
   
   sed -e "s|/etc/apt|$TEST_DIR/etc/apt|g" \
       -e "s|/usr/share|$TEST_DIR/usr/share|g" \
+      -e "s|/usr/local|$TEST_DIR/usr/local|g" \
       -e "s|/usr/bin|$TEST_DIR/usr/bin|g" \
       -e "s|/var/lib|$TEST_DIR/var/lib|g" \
       ./scripts/install-agent-deps.sh > "$TEST_DIR/install-agent-deps.sh"
@@ -139,21 +147,27 @@ teardown() {
   run "$TEST_DIR/install-agent-deps.sh"
   [ "$status" -eq 0 ]
   
-  # Verify gum and google-chrome-stable pins
+  # Verify gum, google-chrome-stable, vs code, and zed
   grep -F 'apt-get install -y --no-install-recommends gum=0.17.0' "$TEST_LOG"
   grep -F 'apt-get install -y --no-install-recommends google-chrome-stable' "$TEST_LOG"
+  grep -F 'apt-get install -y --no-install-recommends code' "$TEST_LOG"
+  grep -F 'https://packages.microsoft.com/keys/microsoft.asc' "$TEST_LOG"
+  grep -F 'https://packages.microsoft.com/repos/code stable main' "$TEST_DIR/etc/apt/sources.list.d/vscode.list"
+  grep -F 'https://github.com/zed-industries/zed/releases/latest/download/zed-linux-x86_64.tar.gz' "$TEST_LOG"
 }
 
-@test "install-agent-deps.sh on arm64 installs chromium" {
+@test "install-agent-deps.sh on arm64 installs chromium, code arm64, and zed aarch64" {
   create_mock "mv" 'exit 0'
   create_mock "printf" 'exit 0'
   create_mock "chmod" 'exit 0'
   create_mock "mkdir" 'exit 0'
   
   touch "$TEST_DIR/usr/bin/google-chrome-stable"
+  touch "$TEST_DIR/usr/bin/code"
   
   sed -e "s|/etc/apt|$TEST_DIR/etc/apt|g" \
       -e "s|/usr/share|$TEST_DIR/usr/share|g" \
+      -e "s|/usr/local|$TEST_DIR/usr/local|g" \
       -e "s|/usr/bin|$TEST_DIR/usr/bin|g" \
       -e "s|/var/lib|$TEST_DIR/var/lib|g" \
       ./scripts/install-agent-deps.sh > "$TEST_DIR/install-agent-deps.sh"
@@ -164,6 +178,8 @@ teardown() {
   
   grep -F 'apt-get install -y --no-install-recommends gum=0.17.0' "$TEST_LOG"
   grep -E 'apt-get install -y --no-install-recommends chromium' "$TEST_LOG"
+  grep -F 'apt-get install -y --no-install-recommends code' "$TEST_LOG"
+  grep -F 'https://github.com/zed-industries/zed/releases/latest/download/zed-linux-aarch64.tar.gz' "$TEST_LOG"
 }
 
 @test "install-tools.sh on arm64 fetches and installs arm64 versions" {
@@ -174,3 +190,16 @@ teardown() {
   grep -F 'curl -sSLO --http1.1 --connect-timeout 5 --retry 5 --retry-delay 2 https://github.com/derailed/k9s/releases/download/v0.50.18/k9s_Linux_arm64.tar.gz' "$TEST_LOG"
   grep -F 'curl -sSLO --http1.1 --connect-timeout 5 --retry 5 --retry-delay 2 https://get.helm.sh/helm-v3.21.0-linux-arm64.tar.gz' "$TEST_LOG"
 }
+
+@test "agy-install-ide --help displays usage" {
+  run ./rootfs/usr/local/bin/agy-install-ide --help
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Usage: agy-install-ide"* ]]
+}
+
+@test "agy-install-ide --version displays version" {
+  run ./rootfs/usr/local/bin/agy-install-ide --version
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"agy-install-ide v"* ]]
+}
+
