@@ -238,3 +238,37 @@ mock_distrobox() {
   [ "$status" -eq 0 ]
   [ "$output" = "sourced-ok" ]
 }
+
+@test "agy-box-manager: detect_runtime honors DBX_CONTAINER_MANAGER when on PATH" {
+  create_mock "custom-engine" 'exit 0'
+  create_mock "podman" 'exit 0'
+  create_mock "docker" 'exit 0'
+  run bash -c 'source ./agy-box-manager && DBX_CONTAINER_MANAGER="custom-engine" detect_runtime'
+  [ "$status" -eq 0 ]
+  [ "$output" = "custom-engine" ]
+}
+
+@test "agy-box-manager: detect_runtime falls back to podman when DBX_CONTAINER_MANAGER is unset" {
+  mkdir -p "$TEST_DIR/mock-podman"
+  cat <<'EOF' > "$TEST_DIR/mock-podman/podman"
+#!/bin/sh
+exit 0
+EOF
+  chmod +x "$TEST_DIR/mock-podman/podman"
+  run env -i PATH="$TEST_DIR/mock-podman:/bin:/usr/bin" bash -c 'source ./agy-box-manager && detect_runtime'
+  [ "$status" -eq 0 ]
+  [ "$output" = "podman" ]
+}
+
+@test "agy-box-manager: detect_runtime falls back to docker when podman not found" {
+  mkdir -p "$TEST_DIR/mock-docker"
+  cat <<'EOF' > "$TEST_DIR/mock-docker/docker"
+#!/bin/sh
+exit 0
+EOF
+  chmod +x "$TEST_DIR/mock-docker/docker"
+  run env -i PATH="$TEST_DIR/mock-docker:/bin:/usr/bin" bash -c 'source ./agy-box-manager && detect_runtime'
+  [ "$status" -eq 0 ]
+  [ "$output" = "docker" ]
+}
+
