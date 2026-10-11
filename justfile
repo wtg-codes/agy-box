@@ -100,7 +100,7 @@ agy-e2e *tag="0.6.0":
 agy-assert *args="":
     @target_name="agy-box"; \
     if [ "{{args}}" = "dev" ]; then target_name="agy-box-dev"; fi; \
-    if ! distrobox list --no-color 2>/dev/null | grep -qw "$target_name"; then \
+    if ! distrobox list --no-color 2>/dev/null | awk -F'|' -v name="$target_name" 'NR>1 {gsub(/^[ \t]+|[ \t]+$/, "", $2); if ($2 == name) exit 0} END {exit 1}'; then \
         echo "Error: Container '$target_name' is not running or registered." >&2; \
         exit 1; \
     fi; \
@@ -144,7 +144,7 @@ test-scripts:
     else \
         echo "bats not found locally, falling back to container..."; \
         runtime=$(command -v podman &>/dev/null && echo "podman" || echo "docker"); \
-        $runtime run --rm -v "$(pwd):/code" -w /code docker.io/bats/bats:latest tests/; \
+        $runtime run --rm -v "$(pwd):/code:z" -w /code docker.io/bats/bats:latest tests/; \
     fi
 
 # Launch Local Workspace Web Dashboard (requires Ollama backend)

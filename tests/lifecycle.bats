@@ -401,3 +401,24 @@ EOF2
   [ "$status" -eq 0 ]
 }
 
+@test "agy-box-manager: check_container_exists matches exact container names without substring collisions" {
+  cat <<EOF2 > "$MOCK_BIN/podman"
+#!/bin/bash
+if [ "\$1" = "ps" ]; then
+  echo "agy-box"
+  echo "agy-box-test2"
+fi
+exit 0
+EOF2
+  chmod +x "$MOCK_BIN/podman"
+
+  run bash -c "source ./agy-box-manager && check_container_exists 'test2'"
+  [ "$status" -ne 0 ]
+
+  run bash -c "source ./agy-box-manager && check_container_exists 'agy-box-test2'"
+  [ "$status" -eq 0 ]
+
+  run bash -c "source ./agy-box-manager && check_container_exists 'agy-box'"
+  [ "$status" -eq 0 ]
+}
+

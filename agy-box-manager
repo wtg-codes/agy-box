@@ -389,7 +389,7 @@ check_container_exists() {
     local name=$1
     local runtime
     runtime=$(get_runtime)
-    if "$runtime" ps -a --format '{{.Names}}' 2>/dev/null | grep -qw "$name"; then return 0; else return 1; fi
+    if "$runtime" ps -a --format '{{.Names}}' 2>/dev/null | grep -qxF "$name"; then return 0; else return 1; fi
 }
 
 get_box_manager() {
@@ -409,7 +409,7 @@ get_box_manager() {
             echo "$runtime"
             return 0
         fi
-        if command -v distrobox >/dev/null 2>&1 && distrobox list --no-color 2>/dev/null | awk -F'|' 'NR>1 {gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2}' | grep -qw "$target_name"; then
+        if command -v distrobox >/dev/null 2>&1 && distrobox list --no-color 2>/dev/null | awk -F'|' 'NR>1 {gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2}' | grep -qxF "$target_name"; then
             echo "distrobox"
             return 0
         fi
@@ -1599,7 +1599,7 @@ cmd_desktop() {
         if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
             podman unshare chown -R 9000:9000 "$isolated_home" 2>/dev/null || true
         fi
-        if ! "$runtime" ps --format '{{.Names}}' 2>/dev/null | grep -qw "$target_name"; then
+        if ! "$runtime" ps --format '{{.Names}}' 2>/dev/null | grep -qxF "$target_name"; then
             run_step "Starting container '$target_name'..." "$runtime" start "$target_name"
         fi
         echo -e "Starting VDI Virtual Desktop inside ${CYAN}$target_name${NC} (Sandbox)..."
@@ -1673,7 +1673,7 @@ cmd_enter() {
         if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
             podman unshare chown -R 9000:9000 "$isolated_home" 2>/dev/null || true
         fi
-        if ! "$runtime" ps --format '{{.Names}}' 2>/dev/null | grep -qw "$target_name"; then
+        if ! "$runtime" ps --format '{{.Names}}' 2>/dev/null | grep -qxF "$target_name"; then
             run_step "Starting container '$target_name'..." "$runtime" start "$target_name"
         fi
         echo -e "Entering ${CYAN}$target_name${NC} (Sandbox)..."
@@ -2041,14 +2041,18 @@ cmd_check() {
     local official_status="Not Installed"
     local dev_status="Not Installed"
     if check_container_exists "$CONTAINER_NAME"; then
-        if distrobox list --no-color 2>/dev/null | grep -w "$CONTAINER_NAME" | grep -qi "running"; then
+        if "$runtime" ps --format '{{.Names}}' 2>/dev/null | grep -qxF "$CONTAINER_NAME"; then
+            official_status="Running"
+        elif distrobox list --no-color 2>/dev/null | awk -F'|' -v name="$CONTAINER_NAME" 'NR>1 {gsub(/^[ \t]+|[ \t]+$/, "", $2); if ($2 == name) {print $3}}' | grep -qi "running"; then
             official_status="Running"
         else
             official_status="Stopped"
         fi
     fi
     if check_container_exists "$DEV_CONTAINER_NAME"; then
-        if distrobox list --no-color 2>/dev/null | grep -w "$DEV_CONTAINER_NAME" | grep -qi "running"; then
+        if "$runtime" ps --format '{{.Names}}' 2>/dev/null | grep -qxF "$DEV_CONTAINER_NAME"; then
+            dev_status="Running"
+        elif distrobox list --no-color 2>/dev/null | awk -F'|' -v name="$DEV_CONTAINER_NAME" 'NR>1 {gsub(/^[ \t]+|[ \t]+$/, "", $2); if ($2 == name) {print $3}}' | grep -qi "running"; then
             dev_status="Running"
         else
             dev_status="Stopped"
@@ -2342,6 +2346,10 @@ cmd_clean() {
 
     local box_home
     box_home=$(get_box_home "$target_name")
+    if [ ! -d "$box_home" ] && [ -d "$(get_box_home "agy-box-$target_name")" ]; then
+        target_name="agy-box-$target_name"
+        box_home=$(get_box_home "$target_name")
+    fi
     local container_found=false
 
     if check_container_exists "$target_name"; then
@@ -2427,9 +2435,9 @@ cmd_status() {
             local mgr
             mgr=$(get_box_manager "$b")
             local status="stopped"
-            if "$runtime" ps --format '{{.Names}}' 2>/dev/null | grep -qw "$b"; then
+            if "$runtime" ps --format '{{.Names}}' 2>/dev/null | grep -qxF "$b"; then
                 status="running"
-            elif [ "$mgr" = "distrobox" ] && command -v distrobox >/dev/null 2>&1 && distrobox list --no-color 2>/dev/null | grep -w "$b" | grep -qi "running"; then
+            elif [ "$mgr" = "distrobox" ] && command -v distrobox >/dev/null 2>&1 && distrobox list --no-color 2>/dev/null | awk -F'|' -v name="$b" 'NR>1 {gsub(/^[ \t]+|[ \t]+$/, "", $2); if ($2 == name) {print $3}}' | grep -qi "running"; then
                 status="running"
             fi
             
@@ -2813,8 +2821,13 @@ show_compact_status() {
     local dev_status="❌ Not Installed"
     local other_count=0
 
+    local runtime
+    runtime=$(get_runtime 2>/dev/null || echo "podman")
+
     if check_container_exists "$CONTAINER_NAME"; then
-        if distrobox list --no-color 2>/dev/null | grep -w "$CONTAINER_NAME" | grep -qi "running"; then
+        if "$runtime" ps --format '{{.Names}}' 2>/dev/null | grep -qxF "$CONTAINER_NAME"; then
+            official_status="🟢 Running"
+        elif distrobox list --no-color 2>/dev/null | awk -F'|' -v name="$CONTAINER_NAME" 'NR>1 {gsub(/^[ \t]+|[ \t]+$/, "", $2); if ($2 == name) {print $3}}' | grep -qi "running"; then
             official_status="🟢 Running"
         else
             official_status="💤 Installed"
@@ -2822,7 +2835,9 @@ show_compact_status() {
     fi
 
     if check_container_exists "$DEV_CONTAINER_NAME"; then
-        if distrobox list --no-color 2>/dev/null | grep -w "$DEV_CONTAINER_NAME" | grep -qi "running"; then
+        if "$runtime" ps --format '{{.Names}}' 2>/dev/null | grep -qxF "$DEV_CONTAINER_NAME"; then
+            dev_status="🟢 Running"
+        elif distrobox list --no-color 2>/dev/null | awk -F'|' -v name="$DEV_CONTAINER_NAME" 'NR>1 {gsub(/^[ \t]+|[ \t]+$/, "", $2); if ($2 == name) {print $3}}' | grep -qi "running"; then
             dev_status="🟢 Running"
         else
             dev_status="💤 Installed"
