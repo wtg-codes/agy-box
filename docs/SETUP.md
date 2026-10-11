@@ -76,12 +76,22 @@ sudo pacman -S distrobox podman
 > [!NOTE]
 > **Why it happens:** Some team environments mandate Docker or have specific proxy and registry rules defined exclusively for Docker.
 
-- **The Fix:** `agy-box-manager` honors `DBX_CONTAINER_MANAGER` if set in your environment. Simply export it before running `agy-box-manager`:
+- **The Fix (`agy-box-manager`):** `agy-box-manager` honors `DBX_CONTAINER_MANAGER` when set in your environment (as long as the binary exists on `$PATH`). Simply export the variable before running manager commands:
   ```bash
   export DBX_CONTAINER_MANAGER="docker"
   agy-box-manager install
   ```
-  Alternatively, you can configure it persistently in `~/.distroboxrc`:
+
+- **The Fix (plain Distrobox):** Create a configuration file at `~/.distroboxrc` on your host and manually define the execution runtime:
   ```bash
+  # Force Docker engine globally
   DBX_CONTAINER_MANAGER="docker"
   ```
+  Alternatively, you can set this variable in your host environment before calling `distrobox` directly:
+  ```bash
+  export DBX_CONTAINER_MANAGER="docker"
+  distrobox enter agy-box
+  ```
+
+> [!TIP]
+> If `DBX_CONTAINER_MANAGER` is unset or points to a binary not found on `$PATH`, `agy-box-manager` will automatically fall back to Podman (if installed), followed by Docker.
