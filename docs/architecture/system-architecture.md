@@ -8,7 +8,7 @@ This document provides a deep dive into the inner workings of the `agy-box` deve
 
 Unlike typical sandbox runtimes that completely isolate applications, `agy-box` uses **Distrobox** (on top of Podman or Docker) to act as a **host-integrated developer environment**.
 
-![agy-box System Topology](diagrams/rendered/system-topology.svg)
+![agy-box System Topology](../diagrams/rendered/system-topology.svg)
 
 ---
 
@@ -16,7 +16,7 @@ Unlike typical sandbox runtimes that completely isolate applications, `agy-box` 
 
 When a user opens an interactive shell session in the `agy-box` container for the first time, a hook in `/etc/profile.d/agy-setup-check.sh` is triggered. The helper handles verifying the environment and setting up credentials.
 
-![Interactive Setup Assistant Sequence Flow](diagrams/rendered/setup-assistant.svg)
+![Interactive Setup Assistant Sequence Flow](../diagrams/rendered/setup-assistant.svg)
 
 ---
 
@@ -26,7 +26,7 @@ Google Chrome and Google Antigravity (Agent UI) encrypt credentials (e.g. Google
 
 Even though the D-Bus socket is forwarded into the sandbox container by Distrobox, client applications must have the `libsecret` library installed inside the container to make method calls over D-Bus to request credentials decryption. Without `libsecret-1-0`, these apps fail to authenticate silently.
 
-![D-Bus session keyring pipeline](diagrams/rendered/dbus-keyring.svg)
+![D-Bus session keyring pipeline](../diagrams/rendered/dbus-keyring.svg)
 
 ---
 
@@ -49,9 +49,9 @@ The components of the Antigravity developer suite communicate over a series of p
 
 ## 5. VDI Web Desktop (Headless Display Routing)
 
-To support remote development, headless environments (e.g. Google Cloud Shell, VMs), and easy environment debugging, the workspace provides a built-in virtual desktop environment utilizing **noVNC** and **Xvfb**, started on demand by `agy-vdi` (`agy-box-manager desktop`). See [ADR-0003](architecture/adr/0003-headless-novnc-display-routing.md) for the design.
+To support remote development, headless environments (e.g. Google Cloud Shell, VMs), and easy environment debugging, the workspace provides a built-in virtual desktop environment utilizing **noVNC** and **Xvfb**, started on demand by `agy-vdi` (`agy-box-manager desktop`). See [ADR-0003](adr/0003-headless-novnc-display-routing.md) for the design.
 
-![VDI Web Desktop Headless Display Routing](diagrams/rendered/vdi-desktop.svg)
+![VDI Web Desktop Headless Display Routing](../diagrams/rendered/vdi-desktop.svg)
 
 ## 6. Cloud & Alternative Deployment Architectures
 
@@ -67,7 +67,7 @@ When running on standard Cloud VMs (Compute Engine, EC2):
 
 ### B. Devcontainer Integration (GitHub Codespaces / Coder)
 When used as a devcontainer:
-1. **Workspace Mounting:** The cloud provider mounts the active repository workspace folder into the container (this repository's [`.devcontainer/devcontainer.json`](../.devcontainer/devcontainer.json) mounts it at `/workspace`).
+1. **Workspace Mounting:** The cloud provider mounts the active repository workspace folder into the container (this repository's [`.devcontainer/devcontainer.json`](../../.devcontainer/devcontainer.json) mounts it at `/workspace`).
 2. **Port Forwarding:** The provider forwards the standard communication ports (e.g., `6080` for noVNC, `8080` for the Antigravity API, and `9222` for the Chrome DevTools Protocol), exposing them securely over HTTPS via OAuth proxy loops.
 3. **Toolchain:** The image provides the system-level toolchain (Chrome, CNCF tools, VDI stack, Open WebUI); the per-user Antigravity toolchain is installed into `~/.local` with `agy-install-toolchain`.
 
@@ -97,7 +97,7 @@ The image is built on a multi-arch Ubuntu base with a batteries-included develop
 
 ## 8. CI/CD Pipeline
 
-The [`CI/CD` workflow](../.github/workflows/ci.yml) builds and validates native images in parallel across `linux/amd64` (on `ubuntu-24.04`) and `linux/arm64` (on `ubuntu-24.04-arm`). Pull requests run every check but never push; pushes to `main` and `v*` tags additionally publish multi-arch images.
+The [`CI/CD` workflow](../../.github/workflows/ci.yml) builds and validates native images in parallel across `linux/amd64` (on `ubuntu-24.04`) and `linux/arm64` (on `ubuntu-24.04-arm`). Pull requests run every check but never push; pushes to `main` and `v*` tags additionally publish multi-arch images.
 
 ```mermaid
 flowchart LR
@@ -130,7 +130,7 @@ Notes:
 - Native multi-arch builds (`amd64` and `arm64`) run in parallel on native GitHub Actions runners without QEMU emulation.
 - Full hardware support for Intel/AMD x86_64, NVIDIA DGX Spark workstations (Grace Blackwell), Apple Silicon, and ChromeOS Crostini.
 - The SBOMs are published as workflow artifacts and release assets, scanned by Grype in CI.
-- [`pages.yml`](../.github/workflows/pages.yml) deploys `docs/` to [GitHub Pages](https://wtg-codes.github.io/agy-box/) on every push to `main`; [`compile-diagrams.yml`](../.github/workflows/compile-diagrams.yml) re-renders `docs/diagrams/*.mmd` to `docs/diagrams/rendered/` when the sources change.
+- [`pages.yml`](../../.github/workflows/pages.yml) deploys `docs/` to [GitHub Pages](https://wtg-codes.github.io/agy-box/) on every push to `main`; [`compile-diagrams.yml`](../../.github/workflows/compile-diagrams.yml) re-renders `docs/diagrams/*.mmd` to `docs/diagrams/rendered/` when the sources change.
 
 ---
 
@@ -138,7 +138,7 @@ Notes:
 
 The following architectural decision records document the technical reasoning and trade-offs for core system designs:
 
-- [ADR-0001: Distrobox Sandbox Base](architecture/adr/0001-distrobox-sandbox-base.md)
-- [ADR-0002: Credentials Decryption via D-Bus Session Keyring Forwarding and libsecret](architecture/adr/0002-dbus-keyring-decryption.md)
-- [ADR-0003: Virtual Desktop Display Routing](architecture/adr/0003-headless-novnc-display-routing.md)
-- [ADR-0004: Interactive Setup Assistant Hook](architecture/adr/0004-setup-assistant-profile-hook.md)
+- [ADR-0001: Distrobox Sandbox Base](adr/0001-distrobox-sandbox-base.md)
+- [ADR-0002: Credentials Decryption via D-Bus Session Keyring Forwarding and libsecret](adr/0002-dbus-keyring-decryption.md)
+- [ADR-0003: Virtual Desktop Display Routing](adr/0003-headless-novnc-display-routing.md)
+- [ADR-0004: Interactive Setup Assistant Hook](adr/0004-setup-assistant-profile-hook.md)

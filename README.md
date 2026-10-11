@@ -29,7 +29,7 @@ The published container image is **`ghcr.io/wtg-codes/agy-box`** (`:latest` trac
 
 - 📘 **[Master User Guide](docs/USER_GUIDE.md)** — Step-by-step handbook covering zero-to-hero setup, all 4 ways to work, IDE integrations (VS Code, Zed, Antigravity, JetBrains), AI model configuration, and CLI mastery.
 - 🌐 **[Project Website](https://wtg-codes.github.io/agy-box/)** — Interactive landing page (GitHub Pages, built from [`docs/index.html`](docs/index.html)).
-- 🏛️ **[System Architecture Guide](docs/architecture.md)** — Detailed walkthrough of the host-to-container bridging, D-Bus session keyring pipelines, interactive setup assistant sequence flows, and the CI/CD pipeline.
+- 🏛️ **[System Architecture Guide](docs/architecture/system-architecture.md)** — Detailed walkthrough of the host-to-container bridging, D-Bus session keyring pipelines, interactive setup assistant sequence flows, and the CI/CD pipeline.
 - 🤝 **[Developer Contribution Guide](CONTRIBUTING.md)** — Learn how to set up your environment, build from source, and run verification lints.
 - 🛠️ **[Setup & Troubleshooting Guide](docs/SETUP.md)** — Comprehensive guidelines on prerequisites, rootless configurations, toolchain exporting, and detailed troubleshooting solutions.
 - 🗺️ **[Roadmap / TODO](TODO.md)** — Planned improvements and possible future work.
