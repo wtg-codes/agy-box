@@ -161,3 +161,70 @@ Antigravity loads customizations (rules, skills, plugins, hooks) in a tiered hie
 
 ### Directory Rules (`GEMINI.md` / `AGENTS.md`)
 Rules files can be placed at the root of a repository or in subdirectories. As the agent navigates files, it walks up the directory hierarchy to the repository root, injecting all applicable rules into the conversation context with automatic deduplication.
+
+---
+
+## 6. Host Environment Configuration (`~/.config/agy-box/config.env`)
+
+`agy-box-manager` reads user-level host settings from `~/.config/agy-box/config.env`.
+
+If this file does not exist when `agy-box-manager` is invoked, it is automatically initialized with secure, deterministic default values. You can also run the interactive setup wizard at any time via:
+```bash
+agy-box-manager wizard
+```
+Or force re-initialization of defaults non-interactively:
+```bash
+agy-box-manager wizard --defaults
+```
+
+### Example `~/.config/agy-box/config.env`
+
+```bash
+# Container runtime engine ("podman" or "docker")
+AGY_CONTAINER_MANAGER="podman"
+
+# Keyring credential security mode ("host" or "isolated")
+#   host:     Shares host D-Bus Secret Service for seamless single sign-on
+#   isolated: Uses encrypted container-local file keyring (air-gapped credentials)
+AGY_KEYRING_MODE="host"
+
+# Antigravity agent authentication method ("oauth", "api-key", "service-account")
+AGY_AUTH_METHOD="oauth"
+
+# Default preferred editor inside container ("code", "zed", "jetbrains", "none")
+AGY_DEFAULT_IDE="code"
+
+# Host profile seeding ("true" to mount ~/.gitconfig, ~/.ssh, ~/.config/gcloud; "false" for pristine isolation)
+AGY_PROFILE_SEEDING="false"
+
+# Anonymous telemetry opt-in ("false" for privacy-first default)
+AGY_TELEMETRY="false"
+```
+
+### Schema & Property Reference
+
+| Variable | Type | Allowed Values | Default | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `AGY_CONTAINER_MANAGER` | `string` | `"podman"`, `"docker"` | Auto-detected (`"podman"` if available, else `"docker"`) | The container runtime engine used to build and execute Distrobox containers. Honored whenever `$DBX_CONTAINER_MANAGER` is not explicitly set in the host environment. |
+| `AGY_KEYRING_MODE` | `string` | `"host"`, `"isolated"` | `"host"` | Keyring credential storage mode. In `"host"` mode, the container shares the host's D-Bus Secret Service (GNOME Keyring / KWallet). In `"isolated"` mode, the host session bus is unmapped (`--unsetenv=DBUS_SESSION_BUS_ADDRESS`) and Python keyring is configured to use container-local `EncryptedKeyring` (`keyrings.alt.file.EncryptedKeyring`), ensuring complete air-gapped credential isolation. |
+| `AGY_AUTH_METHOD` | `string` | `"oauth"`, `"api-key"`, `"service-account"` | `"oauth"` | Authentication flow used for Google Antigravity services and models. `"oauth"` provides zero-config browser sign-in on first launch. |
+| `AGY_DEFAULT_IDE` | `string` | `"code"`, `"zed"`, `"jetbrains"`, `"none"` | `"code"` | The default editor to open when entering interactive workspace sessions or launching from the desktop. |
+| `AGY_PROFILE_SEEDING` | `string` | `"true"`, `"false"` | `"false"` | When set to `"true"`, mounts host `~/.gitconfig`, `~/.ssh`, and `~/.config/gcloud` into the container as read-only volumes. When set to `"false"`, launches pristine, empty profile directories for maximum privacy. |
+| `AGY_TELEMETRY` | `string` | `"true"`, `"false"` | `"false"` | Global telemetry opt-in. Kept disabled (`"false"`) by default. |
+
+---
+
+## 7. Resource Limits Configuration (`~/.config/agy-box/limits.conf`)
+
+Optionally, you can cap the CPU cores and RAM allocated to the `agy-box` container by creating `~/.config/agy-box/limits.conf`:
+
+```bash
+# Maximum CPU cores allocated to the container (e.g. 4, 8)
+CPU_LIMIT="8"
+
+# Maximum RAM allocated to the container (e.g. 16g, 32g)
+MEMORY_LIMIT="16g"
+```
+
+When present, `agy-box-manager install` and `dev` automatically inject `--cpus` and `-m` flags into the container engine.
+
