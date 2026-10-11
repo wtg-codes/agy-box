@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "agy-box Product Communication & Protocol Architecture",
+    "subtitle": "Inter-process communication, local API loops, browser automation, and cloud egress",
+    "output": "docs/diagrams/interactive/product-communication.html",
+    "visual_preset": "signal-flow",
+    "animation": "trace",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    { "id": "sdk", "type": "backend", "label": "Python SDK", "sublabel": "google-antigravity", "tag": "client lib", "pos": [60, 80], "size": [160, 60] },
+    { "id": "chrome", "type": "frontend", "label": "Google Chrome", "sublabel": "CDP :9222 automation", "tag": "browser sandbox", "pos": [60, 240], "size": [160, 60] },
+    { "id": "ide", "type": "frontend", "label": "Modern IDEs", "sublabel": "VS Code & Zed with agy ext", "tag": "editor bridge", "pos": [60, 400], "size": [160, 60] },
+    { "id": "agent_ui", "type": "frontend", "label": "Antigravity Agent UI", "sublabel": "Local API :8080 & Canvas", "tag": "agent runtime", "pos": [380, 160], "size": [170, 64] },
+    { "id": "cli", "type": "backend", "label": "Antigravity CLI (agy)", "sublabel": "WebSocket loop & runner", "tag": "orchestration", "pos": [380, 360], "size": [170, 60] },
+    { "id": "gemini_api", "type": "cloud", "label": "Google Cloud AI", "sublabel": "Vertex AI & Gemini 2.5 API", "tag": "inference egress", "pos": [720, 160], "size": [170, 64] },
+    { "id": "github_api", "type": "cloud", "label": "GitHub API", "sublabel": "Course Lab Submission", "tag": "git platform", "pos": [720, 360], "size": [170, 60] }
+  ],
+  "boundaries": [
+    {
+      "kind": "security-group",
+      "label": "agy-box OCI Container Sandbox",
+      "wraps": ["sdk", "chrome", "ide", "agent_ui", "cli"],
+      "pad": 20
+    },
+    {
+      "kind": "region",
+      "label": "External Cloud Services",
+      "wraps": ["gemini_api", "github_api"],
+      "pad": 20
+    }
+  ],
+  "connections": [
+    { "from": "sdk", "to": "agent_ui", "label": "Port 8080 REST API", "variant": "emphasis" },
+    { "from": "agent_ui", "to": "chrome", "label": "CDP port 9222", "variant": "emphasis", "fromSide": "bottom", "toSide": "top" },
+    { "from": "ide", "to": "chrome", "label": "inspect & debug", "variant": "dashed", "fromSide": "top", "toSide": "bottom" },
+    { "from": "ide", "to": "agent_ui", "label": "AGY extension protocol", "variant": "emphasis" },
+    { "from": "cli", "to": "agent_ui", "label": "WebSocket communication loop", "variant": "emphasis", "fromSide": "top", "toSide": "bottom" },
+    { "from": "agent_ui", "to": "gemini_api", "label": "Gemini 2.5 API :443", "variant": "emphasis" },
+    { "from": "cli", "to": "github_api", "label": "lab submission & sync", "variant": "emphasis" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "IPC & Local Loops",
+      "items": [
+        "Python SDK communicates with Agent UI over localhost port 8080 REST API",
+        "Antigravity CLI coordinates bidirectional agent task loops via WebSocket",
+        "Modern IDEs interface with Agent UI canvas and command executor"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Browser Automation",
+      "items": [
+        "Agent UI drives Google Chrome via Chrome DevTools Protocol (CDP port 9222)",
+        "Supports automated web exploration, screenshot capture, and DOM interaction",
+        "Un-sandboxed or host-forwarded Chrome execution prevents sandbox lockouts"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Cloud Integrations",
+      "items": [
+        "Agent UI streams generative tokens from Vertex AI & Gemini 2.5 API",
+        "CLI authenticates with GitHub API for automated lab and coursework sync",
+        "All external egress uses TLS 1.3 encrypted REST and gRPC endpoints"
+      ]
+    }
+  ]
+}

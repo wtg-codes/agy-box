@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "agy-box System Topology & Host Isolation",
+    "subtitle": "Distrobox container bridging, host socket forwarding, and Antigravity suite integration",
+    "output": "docs/diagrams/interactive/system-topology.html",
+    "visual_preset": "blueprint",
+    "animation": "trace",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    { "id": "host_os", "type": "external", "label": "Host OS", "sublabel": "Atomic / Immutable Linux", "tag": "host runtime", "pos": [40, 100], "size": [150, 60] },
+    { "id": "host_dbus", "type": "security", "label": "Host D-Bus", "sublabel": "GNOME Keyring / Secret Service", "tag": "credentials", "pos": [40, 230], "size": [150, 60] },
+    { "id": "host_display", "type": "frontend", "label": "Host Display", "sublabel": "Wayland / X11 Compositor", "tag": "native graphics", "pos": [40, 360], "size": [150, 60] },
+    { "id": "distrobox_bridge", "type": "backend", "label": "Distrobox Bridge", "sublabel": "Rootless Podman / Docker", "tag": "isolation layer", "pos": [260, 150], "size": [160, 60] },
+    { "id": "socket_forwarder", "type": "messagebus", "label": "Socket Forwarder", "sublabel": "D-Bus / X11 / Wayland IPC", "tag": "ipc forward", "pos": [260, 300], "size": [160, 60] },
+    { "id": "setup_assistant", "type": "backend", "label": "Setup Assistant", "sublabel": "/etc/profile.d hook & Gum TUI", "tag": "first-run wizard", "pos": [500, 80], "size": [160, 60] },
+    { "id": "keyring_bridge", "type": "security", "label": "Keyring Bridge", "sublabel": "libsecret-1-0 client", "tag": "token decryptor", "pos": [780, 80], "size": [160, 60] },
+    { "id": "modern_ides", "type": "frontend", "label": "Modern IDEs", "sublabel": "VS Code & Zed with agy ext", "tag": "code editor", "pos": [500, 220], "size": [160, 60] },
+    { "id": "agent_ui", "type": "frontend", "label": "Antigravity Agent UI", "sublabel": "Local API :8080 & Canvas", "tag": "agent workspace", "pos": [780, 220], "size": [160, 60] },
+    { "id": "agy_cli", "type": "backend", "label": "Antigravity CLI (agy)", "sublabel": "CLI runner & lab submission", "tag": "orchestration", "pos": [1060, 220], "size": [160, 60] },
+    { "id": "vdi_desktop", "type": "frontend", "label": "VDI noVNC Desktop", "sublabel": ":6080 HTML5 & IceWM", "tag": "headless vdi", "pos": [500, 360], "size": [160, 60] },
+    { "id": "open_webui", "type": "frontend", "label": "Open WebUI", "sublabel": "Local Dashboard :8080/:8081", "tag": "web interface", "pos": [780, 360], "size": [160, 60] },
+    { "id": "gemini_cloud", "type": "cloud", "label": "Google Cloud AI", "sublabel": "Gemini 2.5 API / Vertex AI", "tag": "external api", "pos": [1360, 220], "size": [160, 60] }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Host Machine Boundary",
+      "wraps": ["host_os", "host_dbus", "host_display"],
+      "pad": 18
+    },
+    {
+      "kind": "security-group",
+      "label": "Distrobox Virtualization & Sockets",
+      "wraps": ["distrobox_bridge", "socket_forwarder"],
+      "pad": 16
+    },
+    {
+      "kind": "security-group",
+      "label": "agy-box OCI Container Sandbox (ghcr.io/wtg-codes/agy-box:v0.6.0)",
+      "wraps": ["setup_assistant", "keyring_bridge", "modern_ides", "agent_ui", "agy_cli", "vdi_desktop", "open_webui"],
+      "pad": 20
+    }
+  ],
+  "connections": [
+    { "from": "host_os", "to": "distrobox_bridge", "label": "engine spawn", "variant": "emphasis" },
+    { "from": "host_dbus", "to": "socket_forwarder", "label": "forward session bus", "variant": "security" },
+    { "from": "host_display", "to": "socket_forwarder", "label": "display sockets", "variant": "dashed" },
+    { "from": "distrobox_bridge", "to": "setup_assistant", "label": "shell login", "variant": "emphasis" },
+    { "from": "socket_forwarder", "to": "keyring_bridge", "label": "secret service IPC", "variant": "security" },
+    { "from": "socket_forwarder", "to": "modern_ides", "label": "display socket", "variant": "dashed" },
+    { "from": "socket_forwarder", "to": "vdi_desktop", "label": "framebuffer stream", "variant": "dashed" },
+    { "from": "keyring_bridge", "to": "agent_ui", "label": "decrypt tokens", "variant": "security", "fromSide": "bottom", "toSide": "top" },
+    { "from": "setup_assistant", "to": "keyring_bridge", "label": "configure auth", "variant": "dashed" },
+    { "from": "modern_ides", "to": "agent_ui", "label": "AGY extension IPC", "variant": "emphasis" },
+    { "from": "agent_ui", "to": "agy_cli", "label": "WebSocket loop", "variant": "emphasis" },
+    { "from": "open_webui", "to": "agent_ui", "label": "dashboard API", "variant": "dashed", "fromSide": "top", "toSide": "bottom" },
+    { "from": "agent_ui", "to": "gemini_cloud", "label": "HTTPS REST / GRPC", "variant": "emphasis", "fromSide": "top", "toSide": "left" },
+    { "from": "agy_cli", "to": "gemini_cloud", "label": "Gemini 2.5 API :443", "variant": "security" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Host Integration & Isolation",
+      "items": [
+        "Rootless container engine binds home directory with zero host mutation",
+        "D-Bus, Wayland, and X11 sockets forwarded dynamically into container namespace",
+        "Isolated box home (~/.config/agy-box/home) protects host dotfiles"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Antigravity Toolchain",
+      "items": [
+        "Agent UI canvas and terminal workspace run on local port 8080",
+        "Antigravity CLI (agy) coordinates bidirectional agent loops",
+        "VS Code and Zed integrate directly via Antigravity extension bridge"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Security & Keyrings",
+      "items": [
+        "libsecret-1-0 bridges container apps to host GNOME Keyring / KWallet",
+        "API keys (GEMINI_API_KEY) managed in environment.d/agy-box.conf",
+        "Encrypted file keyring fallback available for headless or isolated sessions"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "VDI & Local UI Access",
+      "items": [
+        "Headless browser desktop via noVNC and IceWM on port 6080",
+        "Open WebUI developer dashboard running on ports 8080 and 8081",
+        "LAN-accessible virtual display auto-detects host network interface"
+      ]
+    }
+  ]
+}
