@@ -1047,8 +1047,8 @@ agy-box-manager restore agy-box-backup-YYYYMMDD-HHMMSS.tar.gz</code></pre>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-restore</code></td>
                             </tr>
                             <tr class="hover:bg-slate-800/40 transition-colors">
-                                <td class="px-4 py-2.5 text-slate-300">Install Official</td>
-                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">agy-box-manager install</code></td>
+                                <td class="px-4 py-2.5 text-slate-300">Install (Official / Named)</td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">agy-box-manager install [-n &lt;name&gt;] [-i &lt;img&gt;]</code></td>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-install</code></td>
                             </tr>
                             <tr class="hover:bg-slate-800/40 transition-colors">
@@ -1057,23 +1057,18 @@ agy-box-manager restore agy-box-backup-YYYYMMDD-HHMMSS.tar.gz</code></pre>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-box-dev</code></td>
                             </tr>
                             <tr class="hover:bg-slate-800/40 transition-colors">
-                                <td class="px-4 py-2.5 text-slate-300">Enter Official Box</td>
-                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">agy-box-manager enter</code></td>
+                                <td class="px-4 py-2.5 text-slate-300">Enter (Official / Dev / Named)</td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">agy-box-manager enter [name|dev]</code></td>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-enter</code></td>
                             </tr>
                             <tr class="hover:bg-slate-800/40 transition-colors">
-                                <td class="px-4 py-2.5 text-slate-300">Enter Dev Box</td>
-                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">agy-box-manager enter dev</code></td>
-                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-enter-dev</code></td>
-                            </tr>
-                            <tr class="hover:bg-slate-800/40 transition-colors">
                                 <td class="px-4 py-2.5 text-slate-300">Launch VDI Desktop</td>
-                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">agy-box-manager desktop</code></td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">agy-box-manager desktop [name|dev] [-p port]</code></td>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-desktop</code></td>
                             </tr>
                             <tr class="hover:bg-slate-800/40 transition-colors">
-                                <td class="px-4 py-2.5 text-slate-300">Clean Official Box</td>
-                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">agy-box-manager clean</code></td>
+                                <td class="px-4 py-2.5 text-slate-300">Clean (Official / Dev / Named)</td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">agy-box-manager clean [name|dev] [--purge]</code></td>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-clean</code></td>
                             </tr>
                             <tr class="hover:bg-slate-800/40 transition-colors">
@@ -1111,6 +1106,20 @@ agy-box-manager restore agy-box-backup-YYYYMMDD-HHMMSS.tar.gz</code></pre>
                 </div>
 
                 <div class="space-y-3">
+                    <details class="group bg-slate-800/70 rounded-xl border border-slate-700 p-4">
+                        <summary class="cursor-pointer text-sm font-semibold text-white hover:text-indigo-300 transition-colors flex items-center justify-between">
+                            <span>Q: How do I test a new version side-by-side without destroying my existing box?</span>
+                            <i data-lucide="chevron-down" class="w-4 h-4 transition-transform group-open:rotate-180 text-indigo-400 flex-shrink-0"></i>
+                        </summary>
+                        <div class="mt-3 text-xs text-slate-300 space-y-2 border-t border-slate-700/60 pt-3">
+                            <p><strong class="text-emerald-400">Solution:</strong> Use named container environments. You can install and test side-by-side without affecting your primary container or its storage:</p>
+                            <pre class="bg-slate-900/90 rounded-lg p-2.5 font-mono text-emerald-400 text-xs overflow-x-auto"><code>agy-box-manager install --name agy-box-test --image ghcr.io/wtg-codes/agy-box:v0.6.0
+agy-box-manager enter agy-box-test
+agy-box-manager desktop agy-box-test -p 6081
+agy-box-manager clean agy-box-test --purge</code></pre>
+                            <p>Each named box gets its own isolated home directory under <code class="text-indigo-300">~/.config/agy-box/homes/&lt;name&gt;</code> while leaving your primary <code class="text-indigo-300">~/.config/agy-box/home</code> untouched.</p>
+                        </div>
+                    </details>
                     <details class="group bg-slate-800/70 rounded-xl border border-slate-700 p-4">
                         <summary class="cursor-pointer text-sm font-semibold text-white hover:text-indigo-300 transition-colors flex items-center justify-between">
                             <span>Q: "Permission Denied" when creating files on the host</span>

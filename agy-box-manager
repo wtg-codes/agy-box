@@ -32,9 +32,24 @@ ui_ok() {
     if command -v gum &>/dev/null; then gum style --foreground 46 "$@"; else printf '%s\n' "$@"; fi
 }
 
+# Safe clear: suppress exit code failure in dumb/headless terminals
+clear() {
+    command clear 2>/dev/null || true
+}
+
 # --- Configuration & Paths ---
 get_config_dir() { echo "${HOME:-}/.config/agy-box"; }
 get_config_file() { echo "${HOME:-}/.config/agy-box/config.env"; }
+get_box_home() {
+    local name=${1:-$CONTAINER_NAME}
+    if [ "$name" = "$CONTAINER_NAME" ]; then
+        echo "${HOME:-}/.config/agy-box/home"
+    elif [ "$name" = "$DEV_CONTAINER_NAME" ]; then
+        echo "${HOME:-}/.config/agy-box/home-dev"
+    else
+        echo "${HOME:-}/.config/agy-box/homes/$name"
+    fi
+}
 
 init_defaults() {
     local silent=${1:-false}
@@ -363,6 +378,35 @@ check_container_exists() {
     if "$runtime" ps -a --format '{{.Names}}' 2>/dev/null | grep -qw "$name"; then return 0; else return 1; fi
 }
 
+get_all_agy_boxes() {
+    local boxes=()
+    if command -v distrobox >/dev/null 2>&1; then
+        while IFS= read -r b; do
+            [ -n "$b" ] && boxes+=("$b")
+        done < <(distrobox list --no-color 2>/dev/null | awk -F'|' 'NR>1 {gsub(/^[ \t]+|[ \t]+$/, "", $2); if ($2 ~ /^agy-box/) print $2}')
+    fi
+    if [ ${#boxes[@]} -eq 0 ]; then
+        local runtime
+        runtime=$(get_runtime 2>/dev/null || echo "podman")
+        if command -v "$runtime" >/dev/null 2>&1; then
+            while IFS= read -r b; do
+                [ -n "$b" ] && boxes+=("$b")
+            done < <("$runtime" ps -a --format '{{.Names}}' 2>/dev/null | grep -E '^agy-box' || true)
+        fi
+    fi
+    if [ ${#boxes[@]} -eq 0 ]; then
+        if check_container_exists "$CONTAINER_NAME"; then
+            boxes+=("$CONTAINER_NAME")
+        fi
+        if check_container_exists "$DEV_CONTAINER_NAME"; then
+            boxes+=("$DEV_CONTAINER_NAME")
+        fi
+    fi
+    if [ ${#boxes[@]} -gt 0 ]; then
+        printf "%s\n" "${boxes[@]}" | sort -u
+    fi
+}
+
 # --- Antigravity toolchain (per-user, installed inside the box) ---
 # The toolchain (Agent UI, IDE, agy CLI, SDK, ADK, Gemini CLI) is not baked into
 # the image. The image ships the installer `agy-install-toolchain`, which installs
@@ -429,6 +473,11 @@ export_agy_cli() {
             "   The box's CLI is still available inside the box, or via: distrobox enter $name -- $src"
         return 0
     fi
+    if [ -e "$dest" ] && [ "$name" != "$CONTAINER_NAME" ] && ! grep -qsxF "# name: ${name}" "$dest"; then
+        ui_warn "⚠️  '$dest' is already exported from primary '$CONTAINER_NAME'. Leaving it untouched." \
+            "   The box's CLI is still available inside the box, or via: agy-box-manager enter $name"
+        return 0
+    fi
     if ! distrobox enter "$name" -- sh -c 'command -v distrobox-export' >/dev/null 2>&1; then
         ui_error "❌ Error: distrobox-export is not available inside '$name'; cannot export the agy CLI."
         return 1
@@ -487,9 +536,14 @@ _agy_box_manager() {
     prev="${COMP_WORDS[COMP_CWORD-1]}"
     opts="install dev enter desktop clean update-toolchain status install-global uninstall-global test autocomplete ports doctor wizard check update backup restore"
     
-    case "$prev" in
         enter|desktop|clean|update-toolchain)
-            COMPREPLY=( $(compgen -W "dev prod" -- "$cur") )
+            local boxes
+            boxes=$(distrobox list --no-color 2>/dev/null | awk -F'|' 'NR>1 {gsub(/^[ \t]+|[ \t]+$/, "", $2); if ($2 ~ /^agy-box/) print $2}')
+            COMPREPLY=( $(compgen -W "dev prod ${boxes}" -- "$cur") )
+            return 0
+            ;;
+        install)
+            COMPREPLY=( $(compgen -W "-n --name -i --image --home -s --systemd -y --yes" -- "$cur") )
             return 0
             ;;
         update)
@@ -797,10 +851,31 @@ cmd_install_official() {
     load_config
     apply_keyring_configuration
     local systemd=false
+    local target_name="$CONTAINER_NAME"
+    local target_image="$IMAGE_NAME"
+    local custom_home=""
+    local auto_yes=false
+
     while [[ $# -gt 0 ]]; do
         case "$1" in
+            -n|--name)
+                target_name="$2"
+                shift 2
+                ;;
+            -i|--image)
+                target_image="$2"
+                shift 2
+                ;;
+            --home)
+                custom_home="$2"
+                shift 2
+                ;;
             -s|--systemd)
                 systemd=true
+                shift
+                ;;
+            -y|--yes)
+                auto_yes=true
                 shift
                 ;;
             *)
@@ -812,17 +887,22 @@ cmd_install_official() {
     local runtime
     runtime=$(get_runtime)
 
-    if check_container_exists "$CONTAINER_NAME"; then
-        if gum confirm "Container '$CONTAINER_NAME' already exists. Recreate it?"; then
-            cmd_clean "$CONTAINER_NAME"
+    if check_container_exists "$target_name"; then
+        if [ "$auto_yes" = "true" ] || (command -v gum >/dev/null 2>&1 && gum confirm "Container '$target_name' already exists. Recreate it?"); then
+            cmd_clean "$target_name"
         else
-            gum style --foreground 212 "Skipping creation."
-            return
+            ui_warn "Skipping creation of '$target_name'."
+            return 0
         fi
     fi
 
     local dbx_flags=()
-    local isolated_home="$HOME/.config/agy-box/home"
+    local isolated_home
+    if [ -n "$custom_home" ]; then
+        isolated_home="$custom_home"
+    else
+        isolated_home=$(get_box_home "$target_name")
+    fi
     mkdir -p "$isolated_home"
     dbx_flags+=("--home" "$isolated_home")
 
@@ -885,34 +965,24 @@ cmd_install_official() {
         dbx_flags+=("--nvidia")
     fi
 
-    local log_file
-    log_file=$(mktemp)
-
-    if ! gum spin --spinner dot --title "Pulling official container image from GHCR..." -- "$runtime" pull "$IMAGE_NAME" >"$log_file" 2>&1; then
-        cat "$log_file"
-        rm -f "$log_file"
-        gum style --foreground 196 "❌ Error: Failed to pull official container image."
+    if ! run_step "Pulling container image '$target_image' from GHCR..." "$runtime" pull "$target_image"; then
+        ui_error "❌ Error: Failed to pull container image."
         exit 1
     fi
 
-    if ! gum spin --spinner dot --title "Creating Distrobox environment '$CONTAINER_NAME'..." -- distrobox create -i "$IMAGE_NAME" -n "$CONTAINER_NAME" --hostname "$CONTAINER_NAME" "${dbx_flags[@]}" --yes >"$log_file" 2>&1; then
-        cat "$log_file"
-        rm -f "$log_file"
-        gum style --foreground 196 "❌ Error: Failed to create Distrobox environment."
+    if ! run_step "Creating Distrobox environment '$target_name'..." \
+        distrobox create -i "$target_image" -n "$target_name" --hostname "$target_name" "${dbx_flags[@]}" --yes; then
+        ui_error "❌ Error: Failed to create Distrobox environment."
         exit 1
     fi
-    rm -f "$log_file"
 
-    local isolated_home="$HOME/.config/agy-box/home"
-    local runtime
-    runtime=$(get_runtime)
     if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
         podman unshare chown -R 0:0 "$isolated_home" 2>/dev/null || true
     fi
 
     # Install the Antigravity toolchain into the box user's ~/.local (it is not
     # baked into the image), then export the agy CLI to the host ~/.local/bin.
-    if ! install_toolchain_in_box "$CONTAINER_NAME" "$isolated_home"; then
+    if ! install_toolchain_in_box "$target_name" "$isolated_home"; then
         exit 1
     fi
 
@@ -922,7 +992,11 @@ cmd_install_official() {
     # Set up ujust/just integration by default
     setup_shell_integration
 
-    gum style --foreground 46 --margin "1 0" "✓ Created successfully! Run 'agy-box-manager enter' to launch."
+    if [ "$target_name" = "$CONTAINER_NAME" ]; then
+        ui_ok "✓ Created successfully! Run 'agy-box-manager enter' to launch."
+    else
+        ui_ok "✓ Environment '$target_name' created successfully! Run 'agy-box-manager enter $target_name' to launch."
+    fi
 }
 
 cmd_build_dev() {
@@ -970,7 +1044,8 @@ cmd_build_dev() {
     rm -f "$log_file"
 
     local dbx_flags=()
-    local isolated_home="$HOME/.config/agy-box/home"
+    local isolated_home
+    isolated_home=$(get_box_home "$DEV_CONTAINER_NAME")
     mkdir -p "$isolated_home"
     dbx_flags+=("--home" "$isolated_home")
 
@@ -1044,7 +1119,8 @@ cmd_build_dev() {
     fi
     rm -f "$log_file"
 
-    local isolated_home="$HOME/.config/agy-box/home"
+    local isolated_home
+    isolated_home=$(get_box_home "$DEV_CONTAINER_NAME")
     local runtime
     runtime=$(get_runtime)
     if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
@@ -1069,22 +1145,53 @@ cmd_build_dev() {
 cmd_desktop() {
     load_config
     apply_keyring_configuration
-    local env_type="prod"
-    if [[ $# -gt 0 ]]; then
-        if [[ "$1" == "dev" || "$1" == "prod" ]]; then
-            env_type="$1"
-            shift
-        fi
+    local target_name="$CONTAINER_NAME"
+    local vdi_args=()
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            dev)
+                target_name="$DEV_CONTAINER_NAME"
+                shift
+                ;;
+            prod)
+                target_name="$CONTAINER_NAME"
+                shift
+                ;;
+            -p|--port)
+                vdi_args+=("-p" "$2")
+                shift 2
+                ;;
+            -r|--resolution)
+                vdi_args+=("-r" "$2")
+                shift 2
+                ;;
+            -*)
+                vdi_args+=("$1")
+                shift
+                ;;
+            *)
+                if [ "$target_name" = "$CONTAINER_NAME" ]; then
+                    target_name="$1"
+                else
+                    vdi_args+=("$1")
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    if ! check_container_exists "$target_name" && check_container_exists "agy-box-$target_name"; then
+        target_name="agy-box-$target_name"
     fi
-    local target_name=$CONTAINER_NAME
-    [ "$env_type" = "dev" ] && target_name=$DEV_CONTAINER_NAME
 
     if ! check_container_exists "$target_name"; then
-        gum style --foreground 196 "Environment '$target_name' does not exist. Please install or build it first."
+        ui_error "Environment '$target_name' does not exist. Please install or build it first."
         exit 1
     fi
 
-    local isolated_home="$HOME/.config/agy-box/home"
+    local isolated_home
+    isolated_home=$(get_box_home "$target_name")
     local runtime
     runtime=$(get_runtime)
     if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
@@ -1092,22 +1199,50 @@ cmd_desktop() {
     fi
 
     echo -e "Starting VDI Virtual Desktop inside ${CYAN}$target_name${NC}..."
-    distrobox enter "$target_name" -- /usr/local/bin/agy-vdi "$@"
+    distrobox enter "$target_name" -- /usr/local/bin/agy-vdi "${vdi_args[@]}"
 }
 
 cmd_enter() {
     load_config
     apply_keyring_configuration
-    local env_type=${1:-prod}
-    local target_name=$CONTAINER_NAME
-    [ "$env_type" = "dev" ] && target_name=$DEV_CONTAINER_NAME
+    local target_name="$CONTAINER_NAME"
+    local enter_args=()
+
+    if [[ $# -gt 0 ]]; then
+        case "$1" in
+            dev)
+                target_name="$DEV_CONTAINER_NAME"
+                enter_args=("${@:2}")
+                ;;
+            prod)
+                target_name="$CONTAINER_NAME"
+                enter_args=("${@:2}")
+                ;;
+            *)
+                target_name="$1"
+                enter_args=("${@:2}")
+                ;;
+        esac
+    fi
+
+    if ! check_container_exists "$target_name" && check_container_exists "agy-box-$target_name"; then
+        target_name="agy-box-$target_name"
+    fi
 
     if ! check_container_exists "$target_name"; then
-        gum style --foreground 196 "Environment '$target_name' does not exist. Please install or build it first."
+        ui_error "Environment '$target_name' does not exist. Available environments:"
+        local all_boxes
+        all_boxes=$(get_all_agy_boxes)
+        if [ -n "$all_boxes" ]; then
+            echo "$all_boxes" >&2
+        else
+            echo "  (none installed)" >&2
+        fi
         exit 1
     fi
 
-    local isolated_home="$HOME/.config/agy-box/home"
+    local isolated_home
+    isolated_home=$(get_box_home "$target_name")
     local runtime
     runtime=$(get_runtime)
     if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
@@ -1115,20 +1250,30 @@ cmd_enter() {
     fi
 
     echo -e "Entering ${CYAN}$target_name${NC}..."
-    distrobox enter "$target_name"
+    distrobox enter "$target_name" "${enter_args[@]}"
 }
 
 cmd_update_toolchain() {
-    local env_type=${1:-prod}
-    local target_name=$CONTAINER_NAME
-    [ "$env_type" = "dev" ] && target_name=$DEV_CONTAINER_NAME
+    local target_name="$CONTAINER_NAME"
+    if [[ $# -gt 0 ]]; then
+        case "$1" in
+            dev)  target_name="$DEV_CONTAINER_NAME" ;;
+            prod) target_name="$CONTAINER_NAME" ;;
+            *)    target_name="$1" ;;
+        esac
+    fi
+
+    if ! check_container_exists "$target_name" && check_container_exists "agy-box-$target_name"; then
+        target_name="agy-box-$target_name"
+    fi
 
     if ! check_container_exists "$target_name"; then
-        gum style --foreground 196 "Environment '$target_name' does not exist. Please install or build it first."
+        ui_error "Environment '$target_name' does not exist. Please install or build it first."
         exit 1
     fi
 
-    local isolated_home="$HOME/.config/agy-box/home"
+    local isolated_home
+    isolated_home=$(get_box_home "$target_name")
     local runtime
     runtime=$(get_runtime)
     if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
@@ -1182,10 +1327,14 @@ cmd_update() {
                 flags_specified=true
                 shift
                 ;;
-            *)
+            -*)
                 ui_error "Unknown option: $1"
-                echo "Usage: agy-box-manager update [prod|dev] [--all|--toolchain|--ides|--packages|--check]"
+                echo "Usage: agy-box-manager update [name|prod|dev] [--all|--toolchain|--ides|--packages|--check]"
                 return 1
+                ;;
+            *)
+                target="$1"
+                shift
                 ;;
         esac
     done
@@ -1200,6 +1349,13 @@ cmd_update() {
     local target_container="$CONTAINER_NAME"
     if [ "$target" = "dev" ]; then
         target_container="$DEV_CONTAINER_NAME"
+    elif [ "$target" = "prod" ]; then
+        target_container="$CONTAINER_NAME"
+    else
+        target_container="$target"
+        if ! check_container_exists "$target_container" && check_container_exists "agy-box-$target_container"; then
+            target_container="agy-box-$target_container"
+        fi
     fi
 
     if [ "$check_only" = "true" ]; then
@@ -1214,7 +1370,8 @@ cmd_update() {
         return 1
     fi
 
-    local isolated_home="$HOME/.config/agy-box/home"
+    local isolated_home
+    isolated_home=$(get_box_home "$target_container")
     local runtime
     runtime=$(detect_runtime)
     if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
@@ -1226,7 +1383,7 @@ cmd_update() {
     # 1. Toolchain update
     if [ "$update_toolchain" = "true" ]; then
         echo -e "\n${CYAN}==> Updating Antigravity Toolchain...${NC}"
-        cmd_update_toolchain "$target"
+        cmd_update_toolchain "$target_container"
     fi
 
     # 2. IDE extensions update
@@ -1688,21 +1845,90 @@ cmd_restore() {
 }
 
 cmd_clean() {
-    local target_name=${1:-$CONTAINER_NAME}
+    local target_name="$CONTAINER_NAME"
+    local purge_home=false
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --purge|-p)
+                purge_home=true
+                shift
+                ;;
+            dev)
+                target_name="$DEV_CONTAINER_NAME"
+                shift
+                ;;
+            prod)
+                target_name="$CONTAINER_NAME"
+                shift
+                ;;
+            *)
+                target_name="$1"
+                shift
+                ;;
+        esac
+    done
+
+    if ! check_container_exists "$target_name" && check_container_exists "agy-box-$target_name"; then
+        target_name="agy-box-$target_name"
+    fi
+
     if check_container_exists "$target_name"; then
-        # Clean up the exported host agy shim if it belongs to this box
         unexport_agy_cli "$target_name"
-        gum spin --spinner dot --title "Removing environment: $target_name..." -- distrobox rm --yes "$target_name"
-        gum style --foreground 46 "✓ Removed $target_name"
+        run_step "Removing environment: $target_name..." distrobox rm --yes "$target_name"
+        ui_ok "✓ Removed $target_name"
+
+        local box_home
+        box_home=$(get_box_home "$target_name")
+        if [ "$target_name" != "$CONTAINER_NAME" ] && [ -d "$box_home" ]; then
+            if [ "$purge_home" = "true" ] || (command -v gum >/dev/null 2>&1 && [ -t 0 ] && gum confirm "Also delete isolated home directory ($box_home)?"); then
+                rm -rf "$box_home"
+                ui_ok "✓ Removed isolated home: $box_home"
+            else
+                ui_warn "ℹ️  Isolated home preserved at: $box_home"
+            fi
+        fi
     else
-        gum style --foreground 214 "! Warning: $target_name does not exist."
+        ui_warn "! Warning: $target_name does not exist."
     fi
 }
 
 cmd_status() {
     echo ""
-    gum style --foreground 212 --border normal --padding "0 1" "Distrobox Status"
-    distrobox list | grep -E "NAME|$CONTAINER_NAME|$DEV_CONTAINER_NAME" || gum style --foreground 214 "No AGY Boxes found."
+    if command -v gum >/dev/null 2>&1; then
+        gum style --foreground 212 --border normal --padding "0 1" "AGY Box Environments Status"
+    else
+        echo -e "${MAGENTA}=== AGY Box Environments Status ===${NC}"
+    fi
+
+    local all_boxes=()
+    while IFS= read -r b; do
+        [ -n "$b" ] && all_boxes+=("$b")
+    done < <(get_all_agy_boxes)
+
+    if [ ${#all_boxes[@]} -gt 0 ]; then
+        if command -v distrobox >/dev/null 2>&1; then
+            local regex="NAME"
+            for b in "${all_boxes[@]}"; do
+                regex="${regex}|${b}"
+            done
+            distrobox list | grep -E "$regex" || true
+        else
+            printf "%s\n" "${all_boxes[@]}"
+        fi
+        echo ""
+        echo "Storage & Homes:"
+        for b in "${all_boxes[@]}"; do
+            local h
+            h=$(get_box_home "$b")
+            printf "  • %-20s -> %s\n" "$b" "$h"
+        done
+    else
+        if command -v gum >/dev/null 2>&1; then
+            gum style --foreground 214 "No AGY Boxes found."
+        else
+            echo "No AGY Boxes found."
+        fi
+    fi
     echo ""
 }
 
@@ -1957,7 +2183,16 @@ cmd_ports() {
     echo -e "${CYAN}        Sandboxed Port Forwarding Dashboard       ${NC}"
     echo -e "${CYAN}==================================================${NC}"
     
-    for container in "$CONTAINER_NAME" "$DEV_CONTAINER_NAME"; do
+    local all_boxes=()
+    while IFS= read -r b; do
+        [ -n "$b" ] && all_boxes+=("$b")
+    done < <(get_all_agy_boxes)
+
+    if [ ${#all_boxes[@]} -eq 0 ]; then
+        all_boxes=("$CONTAINER_NAME" "$DEV_CONTAINER_NAME")
+    fi
+
+    for container in "${all_boxes[@]}"; do
         echo -e "\n${BLUE}Container: $container${NC}"
         if check_container_exists "$container"; then
             local port_out
@@ -2026,9 +2261,10 @@ cmd_check_dependencies() {
 show_compact_status() {
     local official_status="❌ Not Installed"
     local dev_status="❌ Not Installed"
+    local other_count=0
 
     if check_container_exists "$CONTAINER_NAME"; then
-        if distrobox list --no-color | grep -w "$CONTAINER_NAME" | grep -qi "running"; then
+        if distrobox list --no-color 2>/dev/null | grep -w "$CONTAINER_NAME" | grep -qi "running"; then
             official_status="🟢 Running"
         else
             official_status="💤 Installed"
@@ -2036,15 +2272,26 @@ show_compact_status() {
     fi
 
     if check_container_exists "$DEV_CONTAINER_NAME"; then
-        if distrobox list --no-color | grep -w "$DEV_CONTAINER_NAME" | grep -qi "running"; then
+        if distrobox list --no-color 2>/dev/null | grep -w "$DEV_CONTAINER_NAME" | grep -qi "running"; then
             dev_status="🟢 Running"
         else
             dev_status="💤 Installed"
         fi
     fi
 
-    gum style --border rounded --border-foreground 39 --padding "0 2" --margin "0 2" --align center --width 50 \
-        "Official: $official_status  |  Dev: $dev_status"
+    while IFS= read -r b; do
+        if [ -n "$b" ] && [ "$b" != "$CONTAINER_NAME" ] && [ "$b" != "$DEV_CONTAINER_NAME" ]; then
+            ((other_count++)) || true
+        fi
+    done < <(get_all_agy_boxes)
+
+    local status_text="Official: $official_status  |  Dev: $dev_status"
+    if [ "$other_count" -gt 0 ]; then
+        status_text="$status_text  |  Custom: 📦 $other_count"
+    fi
+
+    gum style --border rounded --border-foreground 39 --padding "0 2" --margin "0 2" --align center --width 56 \
+        "$status_text"
 }
 
 choose_option() {
@@ -2135,6 +2382,18 @@ cmd_interactive() {
                     workspace_options+=("🌐 Launch Local Web Dashboard (agy-local-ui)")
                 fi
 
+                local all_boxes=()
+                while IFS= read -r b; do
+                    [ -n "$b" ] && all_boxes+=("$b")
+                done < <(get_all_agy_boxes)
+
+                for b in "${all_boxes[@]}"; do
+                    if [ "$b" != "$CONTAINER_NAME" ] && [ "$b" != "$DEV_CONTAINER_NAME" ]; then
+                        workspace_options+=("🚪 Enter $b")
+                        workspace_options+=("🖥️  Start VDI Web Desktop ($b)")
+                    fi
+                done
+
                 workspace_options+=("🔙 Back to Main Menu")
 
                 local sub_choice
@@ -2164,6 +2423,19 @@ cmd_interactive() {
                     "🌐 Launch Local Web Dashboard (agy-local-ui)")
                         gum style --foreground 212 "🚀 Launching Local Web Dashboard via agy-box..."
                         distrobox enter "$CONTAINER_NAME" -- just agy-local-ui &
+                        echo ""
+                        read -n 1 -s -r -p "Press any key to continue..."
+                        ;;
+                    "🚪 Enter "*)
+                        local target="${sub_choice#🚪 Enter }"
+                        cmd_enter "$target"
+                        echo ""
+                        read -n 1 -s -r -p "Press any key to continue..."
+                        ;;
+                    "🖥️  Start VDI Web Desktop ("*)
+                        local target="${sub_choice#🖥️  Start VDI Web Desktop (}"
+                        target="${target%)}"
+                        cmd_desktop "$target"
                         echo ""
                         read -n 1 -s -r -p "Press any key to continue..."
                         ;;
@@ -2198,6 +2470,19 @@ cmd_interactive() {
                     manage_options+=("🛠️  Build Dev Workspace (From local source)")
                 else
                     manage_options+=("🛠️  Build Dev Workspace (Requires Containerfile in CWD)")
+                fi
+
+                manage_options+=("➕ Create New Named Box...")
+
+                local custom_boxes=()
+                while IFS= read -r b; do
+                    if [ -n "$b" ] && [ "$b" != "$CONTAINER_NAME" ] && [ "$b" != "$DEV_CONTAINER_NAME" ]; then
+                        custom_boxes+=("$b")
+                    fi
+                done < <(get_all_agy_boxes)
+
+                if [ ${#custom_boxes[@]} -gt 0 ]; then
+                    manage_options+=("🗑️  Remove Named Box...")
                 fi
 
                 manage_options+=("🔙 Back to Main Menu")
@@ -2235,6 +2520,39 @@ cmd_interactive() {
                         ;;
                     "🗑️  Remove Dev Workspace")
                         cmd_clean "$DEV_CONTAINER_NAME"
+                        echo ""
+                        read -n 1 -s -r -p "Press any key to continue..."
+                        ;;
+                    "➕ Create New Named Box...")
+                        clear
+                        show_compact_banner
+                        echo -e "${CYAN}Create a New Named AGY Box Environment${NC}\n"
+                        local new_name
+                        new_name=$(gum input --placeholder "agy-box-test" --header "Enter a name for the new box (e.g. agy-box-test, agy-box-v060):")
+                        if [ -n "$new_name" ]; then
+                            if [[ "$new_name" != agy-box* ]]; then
+                                new_name="agy-box-$new_name"
+                            fi
+                            local new_image
+                            new_image=$(gum input --value "$IMAGE_NAME" --header "Enter container image to pull (press Enter for default):")
+                            : "${new_image:=$IMAGE_NAME}"
+                            cmd_install_official --name "$new_name" --image "$new_image"
+                        else
+                            ui_warn "Operation cancelled: no name provided."
+                        fi
+                        echo ""
+                        read -n 1 -s -r -p "Press any key to continue..."
+                        menu_state="workspaces"
+                        ;;
+                    "🗑️  Remove Named Box...")
+                        clear
+                        show_compact_banner
+                        echo -e "${CYAN}Select a Named AGY Box to Remove:${NC}\n"
+                        local box_to_remove
+                        box_to_remove=$(choose_option "${custom_boxes[@]}" "🔙 Cancel")
+                        if [ -n "$box_to_remove" ] && [ "$box_to_remove" != "🔙 Cancel" ]; then
+                            cmd_clean "$box_to_remove"
+                        fi
                         echo ""
                         read -n 1 -s -r -p "Press any key to continue..."
                         ;;
@@ -2347,39 +2665,44 @@ show_help() {
     echo -e "Usage: $0 [command]"
     echo ""
     echo "Commands:"
-    echo "  (none)              Launch the interactive UI"
-    echo "  wizard [--defaults] Run the first-run configuration wizard"
-    echo "  check               Inspect system, container workspaces, toolchain, IDEs & auth"
-    echo "  update [prod|dev]   Update toolchain, IDE extensions, and container packages"
-    echo "                      Options:"
-    echo "                        --all             Update all components (default)"
-    echo "                        --toolchain       Update Antigravity toolchain only"
-    echo "                        --ides            Update IDE extensions only"
-    echo "                        --packages        Upgrade container OS packages only"
-    echo "                        --check           Check for updates without modifying"
-    echo "  install             Pull the official image and create the environment"
-    echo "                      Options:"
-    echo "                        -s, --systemd     Enable user-mode systemd support"
-    echo "  dev                 Build the image from local source and create dev environment"
-    echo "                      Options:"
-    echo "                        -s, --systemd     Enable user-mode systemd support"
-    echo "  enter               Enter the official environment"
-    echo "  enter dev           Enter the development environment"
-    echo "  desktop             Launch VDI Web Desktop inside official environment"
-    echo "  desktop dev         Launch VDI Web Desktop inside development environment"
-    echo "  backup [file]       Back up settings and container state to tar.gz archive"
-    echo "  restore <file> [-y] Restore settings and container state from archive"
-    echo "  status              List AGY Box environments"
-    echo "  ports               Show sandboxed port mappings"
-    echo "  doctor              Run system diagnostics health check"
-    echo "  clean               Remove the official environment"
-    echo "  clean dev           Remove the development environment"
-    echo "  update-toolchain    Install/update the Antigravity toolchain (legacy alias)"
-    echo "  update-toolchain dev  Same, for the development environment"
-    echo "  install-global      Copy the CLI to ~/.local/bin for system-wide access"
-    echo "  uninstall-global    Remove the globally installed CLI and auto-completions"
-    echo "  autocomplete [sh]   Generate shell autocompletions (bash, zsh, fish)"
-    echo "  test                Run the local integration test suite"
+    echo "  (none)                    Launch the interactive UI"
+    echo "  wizard [--defaults]       Run the first-run configuration wizard"
+    echo "  check                     Inspect system, container workspaces, toolchain, IDEs & auth"
+    echo "  update [name|prod|dev]    Update toolchain, IDE extensions, and container packages"
+    echo "                            Options:"
+    echo "                              --all             Update all components (default)"
+    echo "                              --toolchain       Update Antigravity toolchain only"
+    echo "                              --ides            Update IDE extensions only"
+    echo "                              --packages        Upgrade container OS packages only"
+    echo "                              --check           Check for updates without modifying"
+    echo "  install                   Pull the official image and create the environment"
+    echo "                            Options:"
+    echo "                              -n, --name <name> Container name (default: agy-box)"
+    echo "                              -i, --image <img> Container image (default: official GHCR)"
+    echo "                              --home <path>     Custom isolated home directory"
+    echo "                              -s, --systemd     Enable user-mode systemd support"
+    echo "                              -y, --yes         Non-interactive recreation confirmation"
+    echo "  dev                       Build the image from local source and create dev environment"
+    echo "                            Options:"
+    echo "                              -s, --systemd     Enable user-mode systemd support"
+    echo "  enter [name|dev|prod]     Enter environment (default: agy-box)"
+    echo "  desktop [name|dev|prod]   Launch VDI Web Desktop (default: agy-box)"
+    echo "                            Options:"
+    echo "                              -p, --port <port> VDI web port (default: 6080)"
+    echo "                              -r, --res <WxH>   VDI desktop resolution (default: 1920x1080)"
+    echo "  backup [file]             Back up settings and container state to tar.gz archive"
+    echo "  restore <file> [-y]       Restore settings and container state from archive"
+    echo "  status                    List all AGY Box environments and their storage homes"
+    echo "  ports                     Show sandboxed port mappings for all AGY Boxes"
+    echo "  doctor                    Run system diagnostics health check"
+    echo "  clean [name|dev|prod]     Remove environment (default: agy-box)"
+    echo "                            Options:"
+    echo "                              -p, --purge       Also remove isolated home directory"
+    echo "  update-toolchain [name]   Install/update the Antigravity toolchain in container"
+    echo "  install-global            Copy the CLI to ~/.local/bin for system-wide access"
+    echo "  uninstall-global          Remove the globally installed CLI and auto-completions"
+    echo "  autocomplete [sh]         Generate shell autocompletions (bash, zsh, fish)"
+    echo "  test                      Run the local integration test suite"
     echo ""
 }
 
@@ -2401,10 +2724,10 @@ case "${1:-}" in
     restore)          check_deps "optional"; cmd_restore "${@:2}" ;;
     install)          check_deps "quiet"; cmd_install_official "${@:2}" ;;
     dev)              check_deps "quiet"; cmd_build_dev "${@:2}" ;;
-    enter)            check_deps "quiet"; if [ "${2:-}" = "dev" ]; then cmd_enter dev; else cmd_enter prod; fi ;;
-    desktop)          check_deps "quiet"; if [ "${2:-}" = "dev" ]; then cmd_desktop dev; else cmd_desktop prod; fi ;;
-    clean)            check_deps "quiet"; if [ "${2:-}" = "dev" ]; then cmd_clean "$DEV_CONTAINER_NAME"; else cmd_clean "$CONTAINER_NAME"; fi ;;
-    update-toolchain) check_deps "quiet"; if [ "${2:-}" = "dev" ]; then cmd_update_toolchain dev; else cmd_update_toolchain prod; fi ;;
+    enter)            check_deps "quiet"; cmd_enter "${@:2}" ;;
+    desktop)          check_deps "quiet"; cmd_desktop "${@:2}" ;;
+    clean)            check_deps "quiet"; cmd_clean "${@:2}" ;;
+    update-toolchain) check_deps "quiet"; cmd_update_toolchain "${@:2}" ;;
     status)           check_deps "optional"; cmd_status ;;
     ports)            check_deps "quiet"; cmd_ports ;;
     doctor)           check_deps "optional"; cmd_doctor ;;

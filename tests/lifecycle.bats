@@ -191,3 +191,134 @@ EOF
   run grep -F "Checking status and component versions" <<< "$output"
   [ "$status" -eq 0 ]
 }
+
+@test "agy-box-manager: get_box_home resolves correct paths for default, dev, and named boxes" {
+  run bash -c 'source ./agy-box-manager && get_box_home agy-box'
+  [ "$status" -eq 0 ]
+  [ "$output" = "$HOME/.config/agy-box/home" ]
+
+  run bash -c 'source ./agy-box-manager && get_box_home agy-box-dev'
+  [ "$status" -eq 0 ]
+  [ "$output" = "$HOME/.config/agy-box/home-dev" ]
+
+  run bash -c 'source ./agy-box-manager && get_box_home agy-box-test'
+  [ "$status" -eq 0 ]
+  [ "$output" = "$HOME/.config/agy-box/homes/agy-box-test" ]
+
+  run bash -c 'source ./agy-box-manager && get_box_home custom-box'
+  [ "$status" -eq 0 ]
+  [ "$output" = "$HOME/.config/agy-box/homes/custom-box" ]
+}
+
+@test "agy-box-manager: cmd_install_official provisions isolated home for named box and passes flags" {
+  local mock_log="$TEST_DIR/install_mock.log"
+  cat <<EOF2 > "$MOCK_BIN/podman"
+#!/bin/bash
+echo "podman \$*" >> "$mock_log"
+exit 0
+EOF2
+  chmod +x "$MOCK_BIN/podman"
+
+  cat <<EOF2 > "$MOCK_BIN/distrobox"
+#!/bin/bash
+echo "distrobox \$*" >> "$mock_log"
+exit 0
+EOF2
+  chmod +x "$MOCK_BIN/distrobox"
+
+  run ./agy-box-manager install --name agy-box-v060 --image ghcr.io/wtg-codes/agy-box:v0.6.0 -y
+  [ "$status" -eq 0 ]
+  [ -d "$HOME/.config/agy-box/homes/agy-box-v060" ]
+  run grep -F "podman pull ghcr.io/wtg-codes/agy-box:v0.6.0" "$mock_log"
+  [ "$status" -eq 0 ]
+  run grep -F "distrobox create -i ghcr.io/wtg-codes/agy-box:v0.6.0 -n agy-box-v060 --hostname agy-box-v060" "$mock_log"
+  [ "$status" -eq 0 ]
+  run grep -F -e "--home $HOME/.config/agy-box/homes/agy-box-v060" "$mock_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "agy-box-manager: cmd_enter enters specified named container and resolves prefix" {
+  local mock_log="$TEST_DIR/enter_mock.log"
+  create_mock "podman" 'if [ "$1" = "ps" ]; then echo "agy-box-staging"; fi; exit 0'
+  create_mock "distrobox" "echo \"distrobox \$*\" >> '$mock_log'; exit 0"
+
+  # Direct full name
+  run ./agy-box-manager enter agy-box-staging
+  [ "$status" -eq 0 ]
+  run grep -F "distrobox enter agy-box-staging" "$mock_log"
+  [ "$status" -eq 0 ]
+
+  # Shorthand resolving to agy-box-staging
+  run ./agy-box-manager enter staging
+  [ "$status" -eq 0 ]
+  run grep -F "distrobox enter agy-box-staging" "$mock_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "agy-box-manager: cmd_desktop forwards custom port and resolution" {
+  local mock_log="$TEST_DIR/desktop_mock.log"
+  create_mock "podman" 'if [ "$1" = "ps" ]; then echo "agy-box-test"; fi; exit 0'
+  create_mock "distrobox" "echo \"distrobox \$*\" >> '$mock_log'; exit 0"
+
+  run ./agy-box-manager desktop agy-box-test -p 6082 -r 2560x1440
+  [ "$status" -eq 0 ]
+  run grep -F "distrobox enter agy-box-test -- /usr/local/bin/agy-vdi -p 6082 -r 2560x1440" "$mock_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "agy-box-manager: cmd_clean removes named container and purges custom home while keeping primary intact" {
+  local mock_log="$TEST_DIR/clean_mock.log"
+  create_mock "podman" 'if [ "$1" = "ps" ]; then echo -e "agy-box\nagy-box-demo"; fi; exit 0'
+  create_mock "distrobox" "echo \"distrobox \$*\" >> '$mock_log'; exit 0"
+
+  # Create primary and custom home data
+  mkdir -p "$HOME/.config/agy-box/home"
+  echo "primary-data" > "$HOME/.config/agy-box/home/data.txt"
+  mkdir -p "$HOME/.config/agy-box/homes/agy-box-demo"
+  echo "demo-data" > "$HOME/.config/agy-box/homes/agy-box-demo/data.txt"
+
+  run ./agy-box-manager clean agy-box-demo --purge
+  [ "$status" -eq 0 ]
+  run grep -F "distrobox rm --yes agy-box-demo" "$mock_log"
+  [ "$status" -eq 0 ]
+
+  # Custom home was purged, primary home is untouched
+  [ ! -d "$HOME/.config/agy-box/homes/agy-box-demo" ]
+  [ -f "$HOME/.config/agy-box/home/data.txt" ]
+}
+
+@test "agy-box-manager: export_agy_cli protects primary host agy shim when secondary box exports" {
+  local export_dir="$TEST_DIR/export"
+  mkdir -p "$export_dir"
+  # Existing primary shim
+  printf '#!/bin/sh\n# distrobox_binary\n# name: agy-box\n' > "$export_dir/agy"
+
+  # Attempt export from secondary box
+  run bash -c "source ./agy-box-manager && export_agy_cli agy-box-secondary '$TEST_DIR/boxhome' '$export_dir'"
+  [ "$status" -eq 0 ]
+  local cli_out="$output"
+  # Shim is unchanged
+  run grep -F "# name: agy-box" "$export_dir/agy"
+  [ "$status" -eq 0 ]
+  # Output warned about leaving primary shim untouched
+  run grep -F "already exported from primary 'agy-box'" <<< "$cli_out"
+  [ "$status" -eq 0 ]
+}
+
+@test "agy-box-manager: status lists multiple boxes and their homes" {
+  create_mock "distrobox" '
+    if [ "$1" = "list" ]; then
+      echo "ID | NAME | STATUS | IMAGE"
+      echo "111 | agy-box | Up 2 days | ghcr.io/wtg-codes/agy-box:latest"
+      echo "222 | agy-box-v060 | Up 1 hour | ghcr.io/wtg-codes/agy-box:v0.6.0"
+    fi
+  '
+  run ./agy-box-manager status
+  [ "$status" -eq 0 ]
+  run grep -F "agy-box" <<< "$output"
+  [ "$status" -eq 0 ]
+  run grep -F "agy-box-v060" <<< "$output"
+  [ "$status" -eq 0 ]
+  run grep -F "$HOME/.config/agy-box/homes/agy-box-v060" <<< "$output"
+  [ "$status" -eq 0 ]
+}

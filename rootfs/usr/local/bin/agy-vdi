@@ -51,9 +51,9 @@ _load_env_dir "${DISTROBOX_HOST_HOME:+${DISTROBOX_HOST_HOME}/.config/environment
 # Then source the container's isolated home environment.d (overrides host values)
 _load_env_dir "${HOME}/.config/environment.d"
 
-DISPLAY_PORT=99
-VNC_PORT=5900
-WEB_PORT=6080
+DISPLAY_PORT="${DISPLAY_PORT:-99}"
+VNC_PORT="${VNC_PORT:-5900}"
+WEB_PORT="${VDI_PORT:-${WEB_PORT:-6080}}"
 HEALTH_CHECK_RETRIES=5
 HEALTH_CHECK_INTERVAL=1
 
@@ -84,6 +84,7 @@ RESOLUTION="1920x1080"
 usage() {
     echo -e "Usage: $0 [options]"
     echo -e "Options:"
+    echo -e "  -p, --port PORT         Set VDI web port (default: 6080)"
     echo -e "  -r, --resolution WxH    Set VDI resolution (default: 1920x1080)"
     echo -e "  -h, --help              Show this help message"
     exit 0
@@ -91,6 +92,14 @@ usage() {
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        -p|--port)
+            if [[ $# -lt 2 ]]; then
+                echo -e "${RED}[ERROR] --port requires an argument.${NC}" >&2
+                exit 1
+            fi
+            WEB_PORT="$2"
+            shift 2
+            ;;
         -r|--resolution)
             if [[ $# -lt 2 ]]; then
                 echo -e "${RED}[ERROR] --resolution requires an argument.${NC}" >&2
@@ -108,6 +117,13 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Compute port offsets to avoid X11 and VNC collisions when running multiple instances
+if [[ "$WEB_PORT" =~ ^[0-9]+$ ]] && [[ "$WEB_PORT" -ne 6080 ]]; then
+    PORT_OFFSET=$((WEB_PORT - 6080))
+    DISPLAY_PORT=$((99 + PORT_OFFSET))
+    VNC_PORT=$((5900 + PORT_OFFSET))
+fi
 
 # Validate and extract width and height
 if [[ "$RESOLUTION" =~ ^([0-9]+)x([0-9]+)$ ]]; then
@@ -195,11 +211,11 @@ fi
 
 # 1. Start Xvfb (Virtual Framebuffer)
 echo -e "${BLUE}[INFO] Starting Xvfb virtual display :${DISPLAY_PORT} with resolution ${WIDTH}x${HEIGHT}...${NC}"
-Xvfb :${DISPLAY_PORT} -screen 0 "${WIDTH}x${HEIGHT}x24" &
+Xvfb ":${DISPLAY_PORT}" -screen 0 "${WIDTH}x${HEIGHT}x24" &
 sleep 1.5
 
 # Export display for subsequent tools
-export DISPLAY=:${DISPLAY_PORT}
+export DISPLAY=":${DISPLAY_PORT}"
 
 # 2. Start IceWM Session Manager
 echo -e "${BLUE}[INFO] Starting IceWM Session Manager...${NC}"
@@ -208,9 +224,9 @@ sleep 1
 
 # 3. Start x11vnc server
 echo -e "${BLUE}[INFO] Starting x11vnc server (listening on localhost)...${NC}"
-x11vnc -display :${DISPLAY_PORT} \
+x11vnc -display ":${DISPLAY_PORT}" \
        -listen 127.0.0.1 \
-       -rfbport ${VNC_PORT} \
+       -rfbport "${VNC_PORT}" \
        -nopw \
        -forever \
        -shared \
@@ -221,7 +237,7 @@ wait_for_port "${VNC_PORT}" "x11vnc"
 # 4. Start noVNC/websockify bridge
 echo -e "${BLUE}[INFO] Starting noVNC WebSocket bridge...${NC}"
 if [[ -d "/usr/share/novnc" ]]; then
-    websockify --web /usr/share/novnc/ 0.0.0.0:${WEB_PORT} 127.0.0.1:${VNC_PORT} &
+    websockify --web /usr/share/novnc/ "0.0.0.0:${WEB_PORT}" "127.0.0.1:${VNC_PORT}" &
 else
     echo -e "${RED}[ERROR] noVNC directory /usr/share/novnc not found.${NC}"
     exit 1

@@ -273,21 +273,18 @@ You can also bypass the interactive menu by passing commands directly, which is 
 | **Interactive Menu** | `agy-box-manager` | `just agy` |
 | **First-Run Setup Wizard** | `agy-box-manager wizard [--defaults]` | `just agy-wizard` |
 | **Inspect Components & Status** | `agy-box-manager check` | `just agy-check` |
-| **Unified Updater (All/Toolchain/IDEs/OS)** | `agy-box-manager update [prod\|dev] [--all\|--check]` | `just agy-update` |
+| **Unified Updater (All/Toolchain/IDEs/OS)** | `agy-box-manager update [name\|prod\|dev] [--all\|--check]` | `just agy-update` |
 | **Backup Settings & State** | `agy-box-manager backup [file]` | `just agy-backup` |
 | **Restore Settings from Archive** | `agy-box-manager restore <file> [-y]` | `just agy-restore` |
-| **Install Official** | `agy-box-manager install` | `just agy-install` |
+| **Install (Official / Named)** | `agy-box-manager install [-n <name>] [-i <img>]` | `just agy-install` |
 | **Build Dev Env** | `agy-box-manager dev` | `just agy-box-dev` |
-| **Enter Official Env** | `agy-box-manager enter` | `just agy-enter` |
-| **Enter Dev Env** | `agy-box-manager enter dev` | `just agy-enter-dev` |
-| **VDI Desktop (Official)** | `agy-box-manager desktop` | `just agy-desktop` |
-| **VDI Desktop (Dev)** | `agy-box-manager desktop dev` | `just agy-desktop-dev` |
-| **Status** | `agy-box-manager status` | `just agy-status` |
-| **Port Mappings** | `agy-box-manager ports` | *N/A* |
+| **Enter (Official / Dev / Named)** | `agy-box-manager enter [name\|dev]` | `just agy-enter` |
+| **VDI Desktop (Official / Dev / Named)** | `agy-box-manager desktop [name\|dev] [-p port]` | `just agy-desktop` |
+| **Status (All Environments & Storage)** | `agy-box-manager status` | `just agy-status` |
+| **Port Mappings (All Sandboxed Boxes)** | `agy-box-manager ports` | *N/A* |
 | **Doctor Diagnostics** | `agy-box-manager doctor` | *N/A* |
-| **Clean Official Env** | `agy-box-manager clean` | `just agy-clean` |
-| **Clean Dev Env** | `agy-box-manager clean dev` | `just agy-clean-dev` |
-| **Install/Update Toolchain** | `agy-box-manager update-toolchain [dev]` | `just agy-update-toolchain` / `just agy-update-toolchain-dev` |
+| **Clean (Official / Dev / Named)** | `agy-box-manager clean [name\|dev] [--purge]` | `just agy-clean` |
+| **Install/Update Toolchain** | `agy-box-manager update-toolchain [name\|dev]` | `just agy-update-toolchain` |
 | **Global Install** | `agy-box-manager install-global` | `just agy-install-global` |
 | **Global Uninstall** | `agy-box-manager uninstall-global` | `just agy-uninstall-global` |
 | **Run Integration Tests** | `agy-box-manager test` | `just agy-test` |
@@ -297,6 +294,21 @@ You can also bypass the interactive menu by passing commands directly, which is 
 | **Local Workspace Web Dashboard** | *N/A (justfile only)* | `just agy-local-ui` |
 | **Local Web Dashboard (Dev)** | *N/A (justfile only)* | `just agy-local-ui-dev` |
 | **Show Version** | `agy-box-manager version` | *N/A* |
+
+> [!TIP]
+> **Side-by-Side Testing & Multiple Environments**:
+> You can create and test multiple isolated boxes without affecting existing containers or your primary home directory:
+> ```bash
+> # Provision an isolated test box running a specific release
+> agy-box-manager install --name agy-box-test --image ghcr.io/wtg-codes/agy-box:v0.6.0
+>
+> # Enter the test box or start VDI desktop on an alternate port
+> agy-box-manager enter agy-box-test
+> agy-box-manager desktop agy-box-test -p 6081
+>
+> # Clean up the test box and purge its isolated home
+> agy-box-manager clean agy-box-test --purge
+> ```
 
 
 ## Alternative & Cloud Deployments
