@@ -322,3 +322,60 @@ EOF2
   run grep -F "$HOME/.config/agy-box/homes/agy-box-v060" <<< "$output"
   [ "$status" -eq 0 ]
 }
+
+@test "agy-box-manager: cmd_install_official displays status and next steps card after install" {
+  create_mock "podman" 'exit 0'
+  create_mock "distrobox" '
+    if [ "$1" = "list" ]; then
+      echo "ID | NAME | STATUS | IMAGE"
+      echo "111 | agy-box | Up 9 days | ghcr.io/wtg-codes/agy-box:latest"
+      echo "222 | agy-box-staging | Up 10 seconds | ghcr.io/wtg-codes/agy-box:latest"
+    fi
+    exit 0
+  '
+
+  run ./agy-box-manager install -n agy-box-staging --no-enter
+  [ "$status" -eq 0 ]
+  local cli_out="$output"
+  run grep -F "AGY Box Environments Status" <<< "$cli_out"
+  [ "$status" -eq 0 ]
+  run grep -F "Environment 'agy-box-staging' is running and ready!" <<< "$cli_out"
+  [ "$status" -eq 0 ]
+  run grep -F "just agy-enter agy-box-staging" <<< "$cli_out"
+  [ "$status" -eq 0 ]
+  run grep -F "just agy-desktop agy-box-staging -p 6081" <<< "$cli_out"
+  [ "$status" -eq 0 ]
+  run grep -F "just agy-clean agy-box-staging --purge" <<< "$cli_out"
+  [ "$status" -eq 0 ]
+}
+
+@test "agy-box-manager: cmd_install_official --enter automatically invokes cmd_enter for target box" {
+  local mock_log="$TEST_DIR/enter_after_install.log"
+  create_mock "podman" '
+    if [ "$1" = "ps" ]; then
+      if [ -f "'$TEST_DIR'/created" ]; then
+        echo "agy-box-autoenter"
+      fi
+    fi
+    exit 0
+  '
+  cat <<EOF2 > "$MOCK_BIN/distrobox"
+#!/bin/bash
+echo "distrobox \$*" >> "$mock_log"
+if [ "\$1" = "create" ]; then
+  touch "$TEST_DIR/created"
+fi
+if [ "\$1" = "list" ]; then
+  echo "ID | NAME | STATUS | IMAGE"
+  echo "111 | agy-box-autoenter | Up 1 second | ghcr.io/wtg-codes/agy-box:latest"
+fi
+exit 0
+EOF2
+  chmod +x "$MOCK_BIN/distrobox"
+
+  run ./agy-box-manager install -n agy-box-autoenter --enter
+  [ "$status" -eq 0 ]
+  run grep -F "distrobox enter agy-box-autoenter" "$mock_log"
+  [ "$status" -eq 0 ]
+}
+
