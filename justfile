@@ -8,7 +8,7 @@ manager := `if [ -f ./agy-box-manager ]; then echo "./agy-box-manager"; else ech
 agy:
     @{{manager}}
 
-# Pull and install the official stable release (or a named container: just agy-install -n agy-box-test)
+# Pull and install the official release (or a named container: just agy-install test1, with optional --mode sandbox|workstation)
 agy-install *args="":
     @{{manager}} install {{args}}
 
@@ -16,7 +16,7 @@ agy-install *args="":
 agy-box-dev *args="":
     @{{manager}} dev {{args}}
 
-# Enter the official workspace (or a named container: just agy-enter agy-box-test)
+# Enter the official workspace (or a named container: just agy-enter test1)
 agy-enter *args="":
     @{{manager}} enter {{args}}
 
@@ -24,7 +24,7 @@ agy-enter *args="":
 agy-enter-dev *args="":
     @{{manager}} enter dev {{args}}
 
-# Start VDI Desktop inside official workspace (or a named container: just agy-desktop agy-box-test -p 6081)
+# Start VDI Desktop inside official workspace (or a named container: just agy-desktop test1)
 agy-desktop *args="":
     @{{manager}} desktop {{args}}
 
@@ -32,7 +32,7 @@ agy-desktop *args="":
 agy-desktop-dev *args="":
     @{{manager}} desktop dev {{args}}
 
-# Check the status of AGY Boxes
+# Check the status of AGY Boxes and preserved storage directories
 agy-status:
     @{{manager}} status
 
@@ -56,7 +56,7 @@ agy-backup *args="":
 agy-restore *args="":
     @{{manager}} restore {{args}}
 
-# Remove the official workspace (or a named container: just agy-clean agy-box-test)
+# Remove workspace or named box (prompts for data retention, or pass --purge / --keep)
 agy-clean *args="":
     @{{manager}} clean {{args}}
 

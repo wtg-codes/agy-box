@@ -3,6 +3,7 @@
 ## Architectural Goals
 - ~~**Multi-Architecture Support**: Update the CI pipeline and Docker build configuration to support generating multi-arch images (`amd64`, `arm64`) using native parallel GitHub Actions runners and Docker Buildx.~~ ✅ Done (`feat/nvidia-dgx-spark-arm64`): Switched base to `quay.io/toolbx/ubuntu-toolbox:24.04`, added native `ubuntu-24.04-arm` runner job, and auto-detects NVIDIA GPUs (including DGX Spark Grace Blackwell) via `--nvidia`.
 - ~~**Authentic Supply Chain Security (Option A: Batteries-Included Image)**:~~ ✅ Done (PR #29): The complete Antigravity toolchain is pre-baked into `/opt` and `/usr/local/bin` at build time so Syft generates a 100% genuine SBOM that Grype scans prior to release, with `agy-install-toolchain` retained for runtime updates.
+- ~~**Dual-Engine Architecture (Workstation vs. Sandbox)**:~~ ✅ Done: First-class support for isolated sandboxes via rootless Podman/Docker (pristine by default, zero host credential leakage) and integrated workstations via Distrobox (desktop & SSO integration), with name collision resolution, explicit data retention policies, and orphaned storage management.
 
 ## Technical Debt
 - ~~**Containerfile Linting**: Implement `hadolint` in the GitHub Actions workflow to ensure `Containerfile` adheres to best practices.~~ ✅ Done (v0.6.0, `Lint Codebase` job).

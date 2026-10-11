@@ -19,6 +19,7 @@ BLUE=$'\e[0;34m'
 MAGENTA=$'\e[0;35m'
 CYAN=$'\e[0;36m'
 WHITE=$'\e[1;37m'
+DIM=$'\e[2m'
 NC=$'\e[0m' # No Color
 
 # ui_error/ui_warn/ui_ok: gum styling when available (tests run without gum).
@@ -81,6 +82,13 @@ init_defaults() {
 # ==============================================================================
 # Container runtime engine ("podman" or "docker")
 AGY_CONTAINER_MANAGER="${default_runtime}"
+AGY_CONTAINER_ENGINE="${default_runtime}"
+
+# Engine mode for primary 'agy-box' ("distrobox" or "podman" or "docker")
+AGY_PRIMARY_ENGINE="distrobox"
+
+# Engine mode for named/secondary boxes ("podman" or "docker" or "distrobox")
+AGY_NAMED_ENGINE="podman"
 
 # Keyring credential security mode ("host" or "isolated")
 #   host:     Shares host D-Bus Secret Service for seamless single sign-on
@@ -127,6 +135,9 @@ load_config() {
             val="${val#\'}"
             case "$key" in
                 AGY_CONTAINER_MANAGER) AGY_CONTAINER_MANAGER="$val" ;;
+                AGY_CONTAINER_ENGINE)  AGY_CONTAINER_ENGINE="$val" ;;
+                AGY_PRIMARY_ENGINE)    AGY_PRIMARY_ENGINE="$val" ;;
+                AGY_NAMED_ENGINE)      AGY_NAMED_ENGINE="$val" ;;
                 AGY_KEYRING_MODE)      AGY_KEYRING_MODE="$val" ;;
                 AGY_AUTH_METHOD)       AGY_AUTH_METHOD="$val" ;;
                 AGY_DEFAULT_IDE)       AGY_DEFAULT_IDE="$val" ;;
@@ -137,6 +148,9 @@ load_config() {
     fi
 
     : "${AGY_CONTAINER_MANAGER:=podman}"
+    : "${AGY_CONTAINER_ENGINE:=$AGY_CONTAINER_MANAGER}"
+    : "${AGY_PRIMARY_ENGINE:=distrobox}"
+    : "${AGY_NAMED_ENGINE:=podman}"
     : "${AGY_KEYRING_MODE:=host}"
     : "${AGY_AUTH_METHOD:=oauth}"
     : "${AGY_DEFAULT_IDE:=code}"
@@ -378,6 +392,61 @@ check_container_exists() {
     if "$runtime" ps -a --format '{{.Names}}' 2>/dev/null | grep -qw "$name"; then return 0; else return 1; fi
 }
 
+get_box_manager() {
+    local target_name="$1"
+    local runtime
+    runtime=$(get_runtime 2>/dev/null || echo "podman")
+
+    if check_container_exists "$target_name"; then
+        local mgr=""
+        if command -v "$runtime" >/dev/null 2>&1; then
+            mgr=$("$runtime" inspect "$target_name" --format '{{index .Config.Labels "manager"}}' 2>/dev/null || true)
+        fi
+        if [ "$mgr" = "distrobox" ]; then
+            echo "distrobox"
+            return 0
+        elif [ "$mgr" = "agy-box-podman" ] || [ "$mgr" = "agy-box-docker" ]; then
+            echo "$runtime"
+            return 0
+        fi
+        if command -v distrobox >/dev/null 2>&1 && distrobox list --no-color 2>/dev/null | awk -F'|' 'NR>1 {gsub(/^[ \t]+|[ \t]+$/, "", $2); print $2}' | grep -qw "$target_name"; then
+            echo "distrobox"
+            return 0
+        fi
+        if [ -n "$mgr" ]; then
+            echo "$mgr"
+            return 0
+        fi
+        echo "$runtime"
+        return 0
+    fi
+
+    if [ "$target_name" = "$CONTAINER_NAME" ]; then
+        echo "${AGY_PRIMARY_ENGINE:-distrobox}"
+    else
+        echo "${AGY_NAMED_ENGINE:-$runtime}"
+    fi
+}
+
+calculate_box_port_offset() {
+    local target_name="$1"
+    if [ "$target_name" = "$CONTAINER_NAME" ]; then
+        echo 0
+        return 0
+    fi
+    local runtime
+    runtime=$(get_runtime 2>/dev/null || echo "podman")
+    if command -v "$runtime" >/dev/null 2>&1 && check_container_exists "$target_name"; then
+        local host_port
+        host_port=$("$runtime" port "$target_name" 6080 2>/dev/null | head -n 1 | awk -F: '{print $NF}' || true)
+        if [[ "$host_port" =~ ^[0-9]+$ ]] && [ "$host_port" -ge 6080 ]; then
+            echo $((host_port - 6080))
+            return 0
+        fi
+    fi
+    echo 1
+}
+
 get_all_agy_boxes() {
     local boxes=()
     if command -v distrobox >/dev/null 2>&1; then
@@ -385,14 +454,12 @@ get_all_agy_boxes() {
             [ -n "$b" ] && boxes+=("$b")
         done < <(distrobox list --no-color 2>/dev/null | awk -F'|' 'NR>1 {gsub(/^[ \t]+|[ \t]+$/, "", $2); if ($2 ~ /^agy-box/) print $2}')
     fi
-    if [ ${#boxes[@]} -eq 0 ]; then
-        local runtime
-        runtime=$(get_runtime 2>/dev/null || echo "podman")
-        if command -v "$runtime" >/dev/null 2>&1; then
-            while IFS= read -r b; do
-                [ -n "$b" ] && boxes+=("$b")
-            done < <("$runtime" ps -a --format '{{.Names}}' 2>/dev/null | grep -E '^agy-box' || true)
-        fi
+    local runtime
+    runtime=$(get_runtime 2>/dev/null || echo "podman")
+    if command -v "$runtime" >/dev/null 2>&1; then
+        while IFS= read -r b; do
+            [ -n "$b" ] && boxes+=("$b")
+        done < <("$runtime" ps -a --format '{{.Names}}' 2>/dev/null | grep -E '^agy-box' || true)
     fi
     if [ ${#boxes[@]} -eq 0 ]; then
         if check_container_exists "$CONTAINER_NAME"; then
@@ -860,6 +927,13 @@ cmd_install_official() {
     local custom_home=""
     local auto_yes=false
     local enter_after_install=""
+    local custom_mode=""
+    local custom_engine=""
+    local seed_ssh=false
+    local seed_git=false
+    local seed_gcloud=false
+    local fresh_home=false
+    local reuse_home=false
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -874,6 +948,34 @@ cmd_install_official() {
             --home)
                 custom_home="$2"
                 shift 2
+                ;;
+            --mode|-m)
+                custom_mode="$2"
+                shift 2
+                ;;
+            --engine)
+                custom_engine="$2"
+                shift 2
+                ;;
+            --seed-ssh)
+                seed_ssh=true
+                shift
+                ;;
+            --seed-git)
+                seed_git=true
+                shift
+                ;;
+            --seed-gcloud)
+                seed_gcloud=true
+                shift
+                ;;
+            --fresh|--clean-home)
+                fresh_home=true
+                shift
+                ;;
+            --reuse-home)
+                reuse_home=true
+                shift
                 ;;
             -s|--systemd)
                 systemd=true
@@ -898,51 +1000,132 @@ cmd_install_official() {
     done
 
     local runtime
-    runtime=$(get_runtime)
+    if [ -n "$custom_engine" ] && [ "$custom_engine" != "distrobox" ]; then
+        runtime="$custom_engine"
+    else
+        runtime=$(get_runtime)
+    fi
 
+    # --- Container Name Collision Check ---
     if check_container_exists "$target_name"; then
-        if [ "$auto_yes" = "true" ] || ([ -t 0 ] && command -v gum >/dev/null 2>&1 && gum confirm "Container '$target_name' already exists. Recreate it?"); then
-            cmd_clean "$target_name"
+        if [ "$auto_yes" = "true" ]; then
+            cmd_clean "$target_name" --purge
+        elif [ -t 0 ] && command -v gum >/dev/null 2>&1; then
+            echo ""
+            gum style --foreground 214 "⚠️  Container '$target_name' already exists!"
+            local collision_action
+            collision_action=$(gum choose --header "How would you like to proceed?" \
+                "Auto-correct name (Find next available suffix)" \
+                "Enter a new name manually" \
+                "Recreate container '$target_name'" \
+                "Cancel")
+            case "$collision_action" in
+                "Auto-correct name"*)
+                    local idx=1
+                    local candidate="${target_name}-${idx}"
+                    while check_container_exists "$candidate"; do
+                        ((idx++))
+                        candidate="${target_name}-${idx}"
+                    done
+                    target_name="$candidate"
+                    ui_ok "Using auto-corrected name: $target_name"
+                    ;;
+                "Enter a new name manually")
+                    target_name=$(gum input --placeholder "$target_name-new" --header "Enter new unique container name:")
+                    if [ -z "$target_name" ]; then
+                        ui_error "No name entered. Aborting."
+                        exit 1
+                    fi
+                    if check_container_exists "$target_name"; then
+                        ui_error "Container '$target_name' also already exists. Aborting."
+                        exit 1
+                    fi
+                    ;;
+                "Recreate container"*)
+                    cmd_clean "$target_name"
+                    ;;
+                *)
+                    ui_warn "Installation cancelled."
+                    return 0
+                    ;;
+            esac
         else
-            ui_warn "Skipping creation of '$target_name'."
-            return 0
+            ui_error "❌ Error: Container '$target_name' already exists. Pass a unique name with -n, or run 'just agy-clean $target_name' first."
+            exit 1
         fi
     fi
 
-    local dbx_flags=()
     local isolated_home
     if [ -n "$custom_home" ]; then
         isolated_home="$custom_home"
     else
         isolated_home=$(get_box_home "$target_name")
     fi
-    mkdir -p "$isolated_home"
-    dbx_flags+=("--home" "$isolated_home")
 
-    if [ "${AGY_PROFILE_SEEDING:-false}" = "true" ]; then
-        if [ -d "$HOME/.ssh" ]; then
-            dbx_flags+=("--volume" "$HOME/.ssh:$isolated_home/.ssh:ro")
+    # --- Isolated Home Directory Collision Check ---
+    if [ "$target_name" != "$CONTAINER_NAME" ] && [ -d "$isolated_home" ] && [ -n "$(ls -A "$isolated_home" 2>/dev/null)" ]; then
+        if [ "$fresh_home" = "true" ]; then
+            rm -rf "$isolated_home"
+            mkdir -p "$isolated_home"
+            ui_ok "Wiped existing home directory for fresh start: $isolated_home"
+        elif [ "$reuse_home" = "true" ]; then
+            ui_ok "Reusing existing home directory: $isolated_home"
+        elif [ "$auto_yes" = "true" ]; then
+            rm -rf "$isolated_home"
+            mkdir -p "$isolated_home"
+            ui_ok "Wiped existing home directory for fresh start: $isolated_home"
+        elif [ -t 0 ] && command -v gum >/dev/null 2>&1; then
+            echo ""
+            gum style --foreground 214 "⚠️  Existing data directory found at: $isolated_home"
+            local home_action
+            home_action=$(gum choose --header "How would you like to handle existing data?" \
+                "Fresh Start / Wipe (Pristine clean slate - Recommended)" \
+                "Reuse Data (Attach to existing home directory files)" \
+                "Cancel")
+            case "$home_action" in
+                "Fresh Start"*)
+                    rm -rf "$isolated_home"
+                    mkdir -p "$isolated_home"
+                    ui_ok "Wiped existing home directory: $isolated_home"
+                    ;;
+                "Reuse Data"*)
+                    ui_ok "Preserving and reusing existing home directory: $isolated_home"
+                    ;;
+                *)
+                    ui_warn "Installation cancelled."
+                    return 0
+                    ;;
+            esac
+        else
+            ui_error "❌ Error: Existing data directory found at $isolated_home. Pass --fresh to wipe or --reuse-home to reuse."
+            exit 1
         fi
-        if [ -d "$HOME/.config/gcloud" ]; then
-            dbx_flags+=("--volume" "$HOME/.config/gcloud:$isolated_home/.config/gcloud:ro")
-        fi
-        if [ -f "$HOME/.gitconfig" ]; then
-            dbx_flags+=("--volume" "$HOME/.gitconfig:$isolated_home/.gitconfig:ro")
-        fi
+    else
+        mkdir -p "$isolated_home"
     fi
 
-    if [ "${AGY_KEYRING_MODE:-host}" = "isolated" ]; then
-        dbx_flags+=("--additional-flags" "--unsetenv=DBUS_SESSION_BUS_ADDRESS")
-    fi
-
-    if [ "$runtime" = "docker" ]; then
-        dbx_flags+=("--additional-flags" "--user $(id -u):$(id -g)")
-    fi
-    if [[ -n "${SSH_AUTH_SOCK:-}" && -S "$SSH_AUTH_SOCK" ]]; then
-        dbx_flags+=("--additional-flags" "-v $SSH_AUTH_SOCK:/run/ssh-agent -e SSH_AUTH_SOCK=/run/ssh-agent")
-    fi
-    if [ "$systemd" = "true" ]; then
-        dbx_flags+=("--init")
+    # Determine execution mode: workstation (Distrobox) vs sandbox (Podman/Docker)
+    local mode=""
+    if [ -n "$custom_mode" ]; then
+        mode="$custom_mode"
+    elif [ -n "$custom_engine" ]; then
+        if [ "$custom_engine" = "distrobox" ]; then
+            mode="workstation"
+        else
+            mode="sandbox"
+        fi
+    else
+        if [ "$target_name" = "$CONTAINER_NAME" ]; then
+            mode="${AGY_PRIMARY_ENGINE:-distrobox}"
+            if [ "$mode" != "sandbox" ] && [ "$mode" != "workstation" ]; then
+                if [ "$mode" = "distrobox" ]; then mode="workstation"; else mode="sandbox"; fi
+            fi
+        else
+            mode="${AGY_NAMED_ENGINE:-podman}"
+            if [ "$mode" != "sandbox" ] && [ "$mode" != "workstation" ]; then
+                if [ "$mode" = "distrobox" ]; then mode="workstation"; else mode="sandbox"; fi
+            fi
+        fi
     fi
 
     # Resource limits
@@ -968,35 +1151,131 @@ cmd_install_official() {
             fi
         done < "$limits_conf"
     fi
-    if [[ -n "$cpu_limit" ]]; then
-        dbx_flags+=("--additional-flags" "--cpus=$cpu_limit")
-    fi
-    if [[ -n "$memory_limit" ]]; then
-        dbx_flags+=("--additional-flags" "-m $memory_limit")
-    fi
-    if command -v nvidia-smi &>/dev/null && { [ -e /dev/nvidiactl ] || [ -e /dev/nvhost-ctrl ] || [ -e /dev/nvidia0 ]; }; then
-        dbx_flags+=("--nvidia")
+
+    local vdi_port=6080
+    if [ "$target_name" != "$CONTAINER_NAME" ]; then
+        local port_offset
+        port_offset=$(calculate_box_port_offset "$target_name")
+        vdi_port=$((6080 + port_offset))
     fi
 
-    if ! run_step "Pulling container image '$target_image' from GHCR..." "$runtime" pull "$target_image"; then
-        ui_error "❌ Error: Failed to pull container image."
-        exit 1
-    fi
+    if [ "$mode" = "sandbox" ]; then
+        # --- Mode B: Isolated Sandbox (Pure Podman / Docker Runner) ---
+        if ! run_step "Pulling container image '$target_image' from GHCR..." "$runtime" pull "$target_image"; then
+            ui_error "❌ Error: Failed to pull container image."
+            exit 1
+        fi
 
-    if ! run_step "Creating Distrobox environment '$target_name'..." \
-        distrobox create -i "$target_image" -n "$target_name" --hostname "$target_name" "${dbx_flags[@]}" --yes; then
-        ui_error "❌ Error: Failed to create Distrobox environment."
-        exit 1
-    fi
+        # Fix directory permissions for container user agyuser (UID 9000)
+        if [ "$runtime" = "podman" ]; then
+            podman unshare chown -R 9000:9000 "$isolated_home" 2>/dev/null || true
+        fi
 
-    if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
-        podman unshare chown -R 0:0 "$isolated_home" 2>/dev/null || true
-    fi
+        local run_flags=(
+            "-d"
+            "--name" "$target_name"
+            "--hostname" "$target_name"
+            "--label" "manager=agy-box-${runtime}"
+            "--label" "agy-box.mode=sandbox"
+            "-p" "${vdi_port}:6080"
+        )
 
-    # Install the Antigravity toolchain into the box user's ~/.local (it is not
-    # baked into the image), then export the agy CLI to the host ~/.local/bin.
-    if ! install_toolchain_in_box "$target_name" "$isolated_home"; then
-        exit 1
+        if [ "$runtime" = "podman" ]; then
+            run_flags+=("-v" "$isolated_home:/home/agyuser:Z")
+        else
+            run_flags+=("-v" "$isolated_home:/home/agyuser" "--user" "9000:9000")
+        fi
+
+        # Profile seeding (strictly opt-in)
+        if [ "$seed_ssh" = "true" ] || { [ "${AGY_PROFILE_SEEDING:-false}" = "true" ] && [ "$target_name" = "$CONTAINER_NAME" ]; }; then
+            if [ -d "$HOME/.ssh" ]; then
+                run_flags+=("-v" "$HOME/.ssh:/home/agyuser/.ssh:ro")
+            fi
+        fi
+        if [ "$seed_git" = "true" ] || { [ "${AGY_PROFILE_SEEDING:-false}" = "true" ] && [ "$target_name" = "$CONTAINER_NAME" ]; }; then
+            if [ -f "$HOME/.gitconfig" ]; then
+                run_flags+=("-v" "$HOME/.gitconfig:/home/agyuser/.gitconfig:ro")
+            fi
+        fi
+        if [ "$seed_gcloud" = "true" ] || { [ "${AGY_PROFILE_SEEDING:-false}" = "true" ] && [ "$target_name" = "$CONTAINER_NAME" ]; }; then
+            if [ -d "$HOME/.config/gcloud" ]; then
+                run_flags+=("-v" "$HOME/.config/gcloud:/home/agyuser/.config/gcloud:ro")
+            fi
+        fi
+
+        if [[ -n "$cpu_limit" ]]; then
+            run_flags+=("--cpus=$cpu_limit")
+        fi
+        if [[ -n "$memory_limit" ]]; then
+            run_flags+=("-m" "$memory_limit")
+        fi
+        if command -v nvidia-smi &>/dev/null && { [ -e /dev/nvidiactl ] || [ -e /dev/nvhost-ctrl ] || [ -e /dev/nvidia0 ]; }; then
+            run_flags+=("--gpus" "all")
+        fi
+
+        if ! run_step "Creating isolated $runtime sandbox '$target_name'..." \
+            "$runtime" run "${run_flags[@]}" "$target_image" sleep infinity; then
+            ui_error "❌ Error: Failed to create sandbox container."
+            exit 1
+        fi
+    else
+        # --- Mode A: Integrated Workstation (Distrobox) ---
+        local dbx_flags=()
+        dbx_flags+=("--home" "$isolated_home")
+
+        if [ "${AGY_PROFILE_SEEDING:-false}" = "true" ] || [ "$seed_ssh" = "true" ] || [ "$seed_git" = "true" ]; then
+            if [ -d "$HOME/.ssh" ]; then
+                dbx_flags+=("--volume" "$HOME/.ssh:$isolated_home/.ssh:ro")
+            fi
+            if [ -d "$HOME/.config/gcloud" ]; then
+                dbx_flags+=("--volume" "$HOME/.config/gcloud:$isolated_home/.config/gcloud:ro")
+            fi
+            if [ -f "$HOME/.gitconfig" ]; then
+                dbx_flags+=("--volume" "$HOME/.gitconfig:$isolated_home/.gitconfig:ro")
+            fi
+        fi
+
+        if [ "${AGY_KEYRING_MODE:-host}" = "isolated" ]; then
+            dbx_flags+=("--additional-flags" "--unsetenv=DBUS_SESSION_BUS_ADDRESS")
+        fi
+
+        if [ "$runtime" = "docker" ]; then
+            dbx_flags+=("--additional-flags" "--user $(id -u):$(id -g)")
+        fi
+        if [[ -n "${SSH_AUTH_SOCK:-}" && -S "$SSH_AUTH_SOCK" ]]; then
+            dbx_flags+=("--additional-flags" "-v $SSH_AUTH_SOCK:/run/ssh-agent -e SSH_AUTH_SOCK=/run/ssh-agent")
+        fi
+        if [ "$systemd" = "true" ]; then
+            dbx_flags+=("--init")
+        fi
+
+        if [[ -n "$cpu_limit" ]]; then
+            dbx_flags+=("--additional-flags" "--cpus=$cpu_limit")
+        fi
+        if [[ -n "$memory_limit" ]]; then
+            dbx_flags+=("--additional-flags" "-m $memory_limit")
+        fi
+        if command -v nvidia-smi &>/dev/null && { [ -e /dev/nvidiactl ] || [ -e /dev/nvhost-ctrl ] || [ -e /dev/nvidia0 ]; }; then
+            dbx_flags+=("--nvidia")
+        fi
+
+        if ! run_step "Pulling container image '$target_image' from GHCR..." "$runtime" pull "$target_image"; then
+            ui_error "❌ Error: Failed to pull container image."
+            exit 1
+        fi
+
+        if ! run_step "Creating Distrobox environment '$target_name'..." \
+            distrobox create -i "$target_image" -n "$target_name" --hostname "$target_name" "${dbx_flags[@]}" --yes; then
+            ui_error "❌ Error: Failed to create Distrobox environment."
+            exit 1
+        fi
+
+        if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
+            podman unshare chown -R 0:0 "$isolated_home" 2>/dev/null || true
+        fi
+
+        # Export CLI for workstation mode
+        install_toolchain_in_box "$target_name" "$isolated_home" || true
     fi
 
     # Clear setup_done flag so the setup helper runs on first interactive entry
@@ -1009,15 +1288,13 @@ cmd_install_official() {
     echo ""
     cmd_status
 
-    local vdi_port=6080
     local enter_cmd="just agy-enter"
     local desktop_cmd="just agy-desktop"
     local clean_cmd="just agy-clean"
     if [ "$target_name" != "$CONTAINER_NAME" ]; then
-        vdi_port=6081
         enter_cmd="just agy-enter $target_name"
         desktop_cmd="just agy-desktop $target_name -p $vdi_port"
-        clean_cmd="just agy-clean $target_name --purge"
+        clean_cmd="just agy-clean $target_name"
     fi
 
     echo ""
@@ -1309,12 +1586,35 @@ cmd_desktop() {
     isolated_home=$(get_box_home "$target_name")
     local runtime
     runtime=$(get_runtime)
-    if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
-        podman unshare chown -R 0:0 "$isolated_home" 2>/dev/null || true
-    fi
+    local mgr
+    mgr=$(get_box_manager "$target_name")
 
-    echo -e "Starting VDI Virtual Desktop inside ${CYAN}$target_name${NC}..."
-    distrobox enter "$target_name" -- /usr/local/bin/agy-vdi "${vdi_args[@]}"
+    if [ "$mgr" = "distrobox" ]; then
+        if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
+            podman unshare chown -R 0:0 "$isolated_home" 2>/dev/null || true
+        fi
+        echo -e "Starting VDI Virtual Desktop inside ${CYAN}$target_name${NC} (Workstation)..."
+        distrobox enter "$target_name" -- /usr/local/bin/agy-vdi "${vdi_args[@]}"
+    else
+        if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
+            podman unshare chown -R 9000:9000 "$isolated_home" 2>/dev/null || true
+        fi
+        if ! "$runtime" ps --format '{{.Names}}' 2>/dev/null | grep -qw "$target_name"; then
+            run_step "Starting container '$target_name'..." "$runtime" start "$target_name"
+        fi
+        echo -e "Starting VDI Virtual Desktop inside ${CYAN}$target_name${NC} (Sandbox)..."
+        "$runtime" exec -d -u agyuser -w /home/agyuser "$target_name" /usr/local/bin/agy-vdi -p 6080 "${vdi_args[@]}"
+        local vdi_port=6080
+        if [ "$target_name" != "$CONTAINER_NAME" ]; then
+            local port_offset
+            port_offset=$(calculate_box_port_offset "$target_name")
+            vdi_port=$((6080 + port_offset))
+        fi
+        echo -e "VDI Desktop is accessible at: ${GREEN}http://localhost:${vdi_port}${NC}"
+        if [ -t 0 ] && command -v xdg-open >/dev/null 2>&1 && [ -n "${DISPLAY:-${WAYLAND_DISPLAY:-}}" ]; then
+            xdg-open "http://localhost:${vdi_port}" >/dev/null 2>&1 || true
+        fi
+    fi
 }
 
 cmd_enter() {
@@ -1360,12 +1660,29 @@ cmd_enter() {
     isolated_home=$(get_box_home "$target_name")
     local runtime
     runtime=$(get_runtime)
-    if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
-        podman unshare chown -R 0:0 "$isolated_home" 2>/dev/null || true
-    fi
+    local mgr
+    mgr=$(get_box_manager "$target_name")
 
-    echo -e "Entering ${CYAN}$target_name${NC}..."
-    distrobox enter "$target_name" "${enter_args[@]}"
+    if [ "$mgr" = "distrobox" ]; then
+        if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
+            podman unshare chown -R 0:0 "$isolated_home" 2>/dev/null || true
+        fi
+        echo -e "Entering ${CYAN}$target_name${NC} (Workstation)..."
+        distrobox enter "$target_name" "${enter_args[@]}"
+    else
+        if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
+            podman unshare chown -R 9000:9000 "$isolated_home" 2>/dev/null || true
+        fi
+        if ! "$runtime" ps --format '{{.Names}}' 2>/dev/null | grep -qw "$target_name"; then
+            run_step "Starting container '$target_name'..." "$runtime" start "$target_name"
+        fi
+        echo -e "Entering ${CYAN}$target_name${NC} (Sandbox)..."
+        if [ ${#enter_args[@]} -gt 0 ]; then
+            "$runtime" exec -it -u agyuser -w /home/agyuser "$target_name" "${enter_args[@]}"
+        else
+            "$runtime" exec -it -u agyuser -w /home/agyuser "$target_name" /bin/bash
+        fi
+    fi
 }
 
 cmd_update_toolchain() {
@@ -1573,10 +1890,32 @@ cmd_wizard() {
         selected_runtime="docker"
     fi
 
-    # Question 2: Keyring Security Mode
-    echo -e "\n${CYAN}2. Select Keyring Security Mode:${NC}"
+    # Question 2: Primary Workspace Mode
+    echo -e "\n${CYAN}2. Select Primary Workspace Mode ('agy-box'):${NC}"
+    local primary_choice
+    primary_choice=$(gum choose --header "Select mode for your primary daily driver workspace:" \
+        "distrobox (Workstation - Integrated with host desktop, Wayland & SSO) [Recommended]" \
+        "podman (Sandbox - Completely isolated container, pristine environment)")
+    local selected_primary="distrobox"
+    if [[ "$primary_choice" =~ podman ]]; then
+        selected_primary="podman"
+    fi
+
+    # Question 3: Named Boxes Policy
+    echo -e "\n${CYAN}3. Select Named Boxes Policy ('test1', 'dev', etc.):${NC}"
+    local named_choice
+    named_choice=$(gum choose --header "Select default mode for secondary/named test environments:" \
+        "podman (Isolated Sandbox - Clean room, air-gapped credentials) [Recommended]" \
+        "distrobox (Integrated Workstation - Share host desktop integrations)")
+    local selected_named="podman"
+    if [[ "$named_choice" =~ distrobox ]]; then
+        selected_named="distrobox"
+    fi
+
+    # Question 4: Keyring Security Mode
+    echo -e "\n${CYAN}4. Select Keyring Security Mode for Workstations:${NC}"
     local keyring_choice
-    keyring_choice=$(gum choose --header "Choose how authentication credentials are stored:" \
+    keyring_choice=$(gum choose --header "Choose how authentication credentials are stored in workstation mode:" \
         "host (Seamless single sign-on via Host D-Bus Secret Service)" \
         "isolated (Air-gapped credentials via container-local EncryptedKeyring)")
     local selected_keyring="host"
@@ -1584,8 +1923,8 @@ cmd_wizard() {
         selected_keyring="isolated"
     fi
 
-    # Question 3: Preferred IDE
-    echo -e "\n${CYAN}3. Select Default Preferred Editor:${NC}"
+    # Question 5: Preferred IDE
+    echo -e "\n${CYAN}5. Select Default Preferred Editor:${NC}"
     local ide_choice
     ide_choice=$(gum choose --header "Choose the primary IDE to open with 'agy enter' / desktop:" \
         "code (Visual Studio Code pre-baked with Antigravity extension)" \
@@ -1601,8 +1940,8 @@ cmd_wizard() {
         selected_ide="none"
     fi
 
-    # Question 4: Host Profile Seeding
-    echo -e "\n${CYAN}4. Host Profile Seeding:${NC}"
+    # Question 6: Host Profile Seeding
+    echo -e "\n${CYAN}6. Host Profile Seeding:${NC}"
     local seed_choice
     seed_choice=$(gum choose --header "Mount host ~/.gitconfig, ~/.ssh, and ~/.config/gcloud?" \
         "false (Clean isolated sandbox - recommended for privacy)" \
@@ -1617,6 +1956,8 @@ cmd_wizard() {
     gum style --border rounded --padding "1 2" --border-foreground 39 \
         "Configuration Summary:" \
         "  • Container Engine: $selected_runtime" \
+        "  • Primary Mode:     $selected_primary" \
+        "  • Named Box Policy: $selected_named" \
         "  • Keyring Mode:     $selected_keyring" \
         "  • Preferred IDE:    $selected_ide" \
         "  • Profile Seeding:  $selected_seeding" \
@@ -1631,6 +1972,13 @@ cmd_wizard() {
 # ==============================================================================
 # Container runtime engine ("podman" or "docker")
 AGY_CONTAINER_MANAGER="${selected_runtime}"
+AGY_CONTAINER_ENGINE="${selected_runtime}"
+
+# Engine mode for primary 'agy-box' ("distrobox" or "podman" or "docker")
+AGY_PRIMARY_ENGINE="${selected_primary}"
+
+# Engine mode for named/secondary boxes ("podman" or "docker" or "distrobox")
+AGY_NAMED_ENGINE="${selected_named}"
 
 # Keyring credential security mode ("host" or "isolated")
 #   host:     Shares host D-Bus Secret Service for seamless single sign-on
@@ -1962,10 +2310,15 @@ cmd_restore() {
 cmd_clean() {
     local target_name="$CONTAINER_NAME"
     local purge_home=false
+    local keep_home=false
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --purge|-p)
                 purge_home=true
+                shift
+                ;;
+            --keep|-k)
+                keep_home=true
                 shift
                 ;;
             dev)
@@ -1987,23 +2340,65 @@ cmd_clean() {
         target_name="agy-box-$target_name"
     fi
 
-    if check_container_exists "$target_name"; then
-        unexport_agy_cli "$target_name"
-        run_step "Removing environment: $target_name..." distrobox rm --yes "$target_name"
-        ui_ok "✓ Removed $target_name"
+    local box_home
+    box_home=$(get_box_home "$target_name")
+    local container_found=false
 
-        local box_home
-        box_home=$(get_box_home "$target_name")
-        if [ "$target_name" != "$CONTAINER_NAME" ] && [ -d "$box_home" ]; then
-            if [ "$purge_home" = "true" ] || (command -v gum >/dev/null 2>&1 && [ -t 0 ] && gum confirm "Also delete isolated home directory ($box_home)?"); then
+    if check_container_exists "$target_name"; then
+        container_found=true
+        unexport_agy_cli "$target_name"
+        local mgr
+        mgr=$(get_box_manager "$target_name")
+        if [ "$mgr" = "distrobox" ]; then
+            run_step "Removing Distrobox environment: $target_name..." distrobox rm --yes "$target_name"
+        else
+            local runtime
+            runtime=$(get_runtime)
+            run_step "Removing $runtime container: $target_name..." "$runtime" rm -f "$target_name"
+        fi
+        ui_ok "✓ Removed container $target_name"
+    fi
+
+    # Handle isolated home directory
+    if [ "$target_name" != "$CONTAINER_NAME" ] && [ -d "$box_home" ]; then
+        if [ "$purge_home" = "true" ]; then
+            rm -rf "$box_home"
+            ui_ok "✓ Purged isolated home directory: $box_home"
+        elif [ "$keep_home" = "true" ]; then
+            ui_warn "ℹ️  Isolated home preserved at: $box_home"
+        elif [ -t 0 ] && command -v gum >/dev/null 2>&1; then
+            echo ""
+            gum style --foreground 214 "Data Retention Choice for '$target_name':"
+            local clean_action
+            clean_action=$(gum choose --header "What should happen to the isolated home directory ($box_home)?" \
+                "Purge all data (Clean slate - delete all files)" \
+                "Keep data intact (Preserve workspace state & configs)")
+            case "$clean_action" in
+                "Purge"*)
+                    rm -rf "$box_home"
+                    ui_ok "✓ Purged isolated home directory: $box_home"
+                    ;;
+                "Keep"*)
+                    ui_warn "ℹ️  Isolated home preserved at: $box_home"
+                    ;;
+            esac
+        elif [ -t 0 ]; then
+            echo -e "${YELLOW}What should happen to the isolated home directory ($box_home)?${NC}"
+            echo "1) Purge all data (Clean slate)"
+            echo "2) Keep data intact"
+            read -r -p "Select [1 or 2]: " choice
+            if [ "$choice" = "1" ]; then
                 rm -rf "$box_home"
-                ui_ok "✓ Removed isolated home: $box_home"
+                ui_ok "✓ Purged isolated home directory: $box_home"
             else
                 ui_warn "ℹ️  Isolated home preserved at: $box_home"
             fi
+        else
+            ui_error "❌ Error: Non-interactive clean requires an explicit choice. Pass --purge to delete container data or --keep to preserve it."
+            exit 1
         fi
-    else
-        ui_warn "! Warning: $target_name does not exist."
+    elif [ "$container_found" = "false" ]; then
+        ui_warn "! Warning: Neither container '$target_name' nor data directory '$box_home' exists."
     fi
 }
 
@@ -2015,27 +2410,39 @@ cmd_status() {
         echo -e "${MAGENTA}=== AGY Box Environments Status ===${NC}"
     fi
 
+    local runtime
+    runtime=$(get_runtime 2>/dev/null || echo "podman")
+
     local all_boxes=()
     while IFS= read -r b; do
         [ -n "$b" ] && all_boxes+=("$b")
     done < <(get_all_agy_boxes)
 
     if [ ${#all_boxes[@]} -gt 0 ]; then
-        if command -v distrobox >/dev/null 2>&1; then
-            local regex="NAME"
-            for b in "${all_boxes[@]}"; do
-                regex="${regex}|${b}"
-            done
-            distrobox list | grep -E "$regex" || true
-        else
-            printf "%s\n" "${all_boxes[@]}"
-        fi
-        echo ""
-        echo "Storage & Homes:"
+        echo -e "\n${CYAN}Active & Installed Environments:${NC}"
+        printf "  %-22s %-12s %-12s %-10s %s\n" "NAME" "ENGINE" "STATUS" "VDI PORT" "HOME PATH"
+        printf "  %-22s %-12s %-12s %-10s %s\n" "----" "------" "------" "--------" "---------"
+
         for b in "${all_boxes[@]}"; do
+            local mgr
+            mgr=$(get_box_manager "$b")
+            local status="stopped"
+            if "$runtime" ps --format '{{.Names}}' 2>/dev/null | grep -qw "$b"; then
+                status="running"
+            elif [ "$mgr" = "distrobox" ] && command -v distrobox >/dev/null 2>&1 && distrobox list --no-color 2>/dev/null | grep -w "$b" | grep -qi "running"; then
+                status="running"
+            fi
+            
+            local vdi_port="6080"
+            if [ "$b" != "$CONTAINER_NAME" ]; then
+                local port_offset
+                port_offset=$(calculate_box_port_offset "$b")
+                vdi_port=$((6080 + port_offset))
+            fi
+            
             local h
             h=$(get_box_home "$b")
-            printf "  • %-20s -> %s\n" "$b" "$h"
+            printf "  %-22s %-12s %-12s %-10s %s\n" "$b" "$mgr" "$status" "$vdi_port" "$h"
         done
     else
         if command -v gum >/dev/null 2>&1; then
@@ -2043,6 +2450,34 @@ cmd_status() {
         else
             echo "No AGY Boxes found."
         fi
+    fi
+
+    # Check for preserved/orphaned home directories
+    local homes_dir="$HOME/.config/agy-box/homes"
+    local orphaned_homes=()
+    if [ -d "$homes_dir" ]; then
+        for d in "$homes_dir"/*; do
+            if [ -d "$d" ]; then
+                local b_name
+                b_name=$(basename "$d")
+                if ! check_container_exists "$b_name" && ! check_container_exists "agy-box-$b_name"; then
+                    orphaned_homes+=("$b_name")
+                fi
+            fi
+        done
+    fi
+
+    if [ ${#orphaned_homes[@]} -gt 0 ]; then
+        echo -e "\n${YELLOW}Preserved Data Directories (No Active Container):${NC}"
+        printf "  %-22s %-10s %s\n" "BOX NAME" "SIZE" "PATH"
+        printf "  %-22s %-10s %s\n" "--------" "----" "----"
+        for ob in "${orphaned_homes[@]}"; do
+            local d="$homes_dir/$ob"
+            local sz
+            sz=$(du -sh "$d" 2>/dev/null | cut -f1 || echo "N/A")
+            printf "  %-22s %-10s %s\n" "$ob" "$sz" "$d"
+        done
+        echo -e "\n${DIM}Tip: Run 'just agy-clean <name> --purge' or use the TUI menu to remove preserved data.${NC}"
     fi
     echo ""
 }
@@ -2588,6 +3023,7 @@ cmd_interactive() {
                 fi
 
                 manage_options+=("➕ Create New Named Box...")
+                manage_options+=("📁 Manage Preserved Box Data...")
 
                 local custom_boxes=()
                 while IFS= read -r b; do
@@ -2648,16 +3084,68 @@ cmd_interactive() {
                             if [[ "$new_name" != agy-box* ]]; then
                                 new_name="agy-box-$new_name"
                             fi
+                            local mode_choice
+                            mode_choice=$(gum choose --header "Select Container Mode:" \
+                                "sandbox (Isolated Sandbox via Podman/Docker - Clean room, air-gapped credentials) [Recommended]" \
+                                "workstation (Integrated Workstation via Distrobox - Host desktop & SSO)")
+                            local chosen_mode="sandbox"
+                            if [[ "$mode_choice" =~ workstation ]]; then
+                                chosen_mode="workstation"
+                            fi
                             local new_image
                             new_image=$(gum input --value "$IMAGE_NAME" --header "Enter container image to pull (press Enter for default):")
                             : "${new_image:=$IMAGE_NAME}"
-                            cmd_install_official --name "$new_name" --image "$new_image"
+                            cmd_install_official --name "$new_name" --image "$new_image" --mode "$chosen_mode"
                         else
                             ui_warn "Operation cancelled: no name provided."
                         fi
                         echo ""
                         read -n 1 -s -r -p "Press any key to continue..."
                         menu_state="workspaces"
+                        ;;
+                    "📁 Manage Preserved Box Data...")
+                        clear
+                        show_compact_banner
+                        echo -e "${CYAN}Manage Preserved Box Data Directories${NC}\n"
+                        local homes_dir="$HOME/.config/agy-box/homes"
+                        local orphaned=()
+                        if [ -d "$homes_dir" ]; then
+                            for d in "$homes_dir"/*; do
+                                if [ -d "$d" ]; then
+                                    local b_name
+                                    b_name=$(basename "$d")
+                                    if ! check_container_exists "$b_name" && ! check_container_exists "agy-box-$b_name"; then
+                                        local sz
+                                        sz=$(du -sh "$d" 2>/dev/null | cut -f1 || echo "N/A")
+                                        orphaned+=("$b_name ($sz)")
+                                    fi
+                                fi
+                            done
+                        fi
+                        if [ ${#orphaned[@]} -gt 0 ]; then
+                            echo "Select a preserved data directory to purge:"
+                            local selected_orphan
+                            selected_orphan=$(choose_option "${orphaned[@]}" "🗑️  Purge All Preserved Data" "🔙 Cancel")
+                            if [ "$selected_orphan" = "🗑️  Purge All Preserved Data" ]; then
+                                if gum confirm "Are you sure you want to purge ALL preserved box data directories?"; then
+                                    for item in "${orphaned[@]}"; do
+                                        local dir_name="${item%% *}"
+                                        rm -rf "${homes_dir:?}/${dir_name:?}"
+                                    done
+                                    ui_ok "✓ All preserved data directories purged."
+                                fi
+                            elif [ -n "$selected_orphan" ] && [ "$selected_orphan" != "🔙 Cancel" ]; then
+                                local dir_name="${selected_orphan%% *}"
+                                if gum confirm "Permanently delete $homes_dir/$dir_name?"; then
+                                    rm -rf "${homes_dir:?}/${dir_name:?}"
+                                    ui_ok "✓ Removed $homes_dir/$dir_name"
+                                fi
+                            fi
+                        else
+                            gum style --foreground 214 "No preserved or orphaned box data directories found."
+                        fi
+                        echo ""
+                        read -n 1 -s -r -p "Press any key to continue..."
                         ;;
                     "🗑️  Remove Named Box...")
                         clear
