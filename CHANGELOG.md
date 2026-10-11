@@ -29,6 +29,7 @@ Container images are published to `ghcr.io/wtg-codes/agy-box` (`:<version>`, `:<
 - **Supply-chain security**: SPDX SBOM generation with Syft and Grype vulnerability scanning on every build; the SBOM is attached to GitHub Releases ([#19], [#23], [#24]).
 - **Architecture documentation**: Mermaid diagram sources with rendered SVG/PNG, an automatic diagram compilation workflow, and Architecture Decision Records ADR-0001 to ADR-0004 ([#21]).
 - `CHANGELOG.md`, and a "Possible future work" section in `TODO.md`.
+- Added official v0.6.0 high-resolution wallpaper asset (`rootfs/usr/share/agy-box/wallpaper-v0.6.0.png`).
 
 ### Changed
 - **Component separation**: the Antigravity Agent UI, Antigravity IDE, Antigravity CLI (`agy`), Antigravity SDK, Google ADK, and Gemini CLI are no longer baked into the image. They are installed per user into `~/.local` by `scripts/install-agent-toolchain.sh` ([#19]); `agy-box-manager install` runs the installer inside the box via `agy-install-toolchain` (toolchain user-path fix PR).
@@ -49,10 +50,6 @@ Container images are published to `ghcr.io/wtg-codes/agy-box` (`:<version>`, `:<
 ### Fixed
 - `just agy-local-ui` / `agy-local-ui-dev` stored Open WebUI data in a literal `~` directory (quoted tilde in `DATA_DIR`); they now use `$HOME/.config/agy-local-ui[-dev]`.
 - Released images now actually provide the Antigravity toolchain to users (toolchain user-path fix PR); since [#19] it was only installed by the CI test harness.
-
-### Known issues
-- There is no `wallpaper-v0.6.0.png` yet; the image falls back to the newest available wallpaper (`wallpaper-v0.5.0.png`).
-- `agy-box-manager` always prefers Podman when it is installed and ignores `DBX_CONTAINER_MANAGER`.
 
 ## [0.5.0] - 2026-05-27
 

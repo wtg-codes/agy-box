@@ -7,7 +7,7 @@ This directory contains technical specifications and Architectural Decision Reco
 ## 📑 Architecture Documents & References
 
 ### Core Architecture & User Documentation
-- **[System Architecture Guide (`../architecture.md`)](../architecture.md)** — Comprehensive architectural walkthrough: layered topology, host-to-container bridging, D-Bus session keyring pipelines, IPC protocol bridges, interactive setup assistant sequence flows, and CI/CD pipelines.
+- **[System Architecture Guide](system-architecture.md)** — Comprehensive architectural walkthrough: layered topology, host-to-container bridging, D-Bus session keyring pipelines, IPC protocol bridges, interactive setup assistant sequence flows, and CI/CD pipelines.
 - **[Complete User Guide (`../USER_GUIDE.md`)](../USER_GUIDE.md)** — 7-chapter definitive guide covering all four ways to work, modern IDE deep dive, Google AI & local model auth, agentic engineering, and disaster recovery.
 - **[Setup & Troubleshooting Guide (`../SETUP.md`)](../SETUP.md)** — System requirements, host prerequisites (Podman, Docker, Distrobox), and solutions to common obstacles.
 - **[User Settings Schema Reference (`../settings-reference.md`)](../settings-reference.md)** — Comprehensive mapping of configuration files, directories, and environment variables across `~/.config/agy-box/home` and the host.
