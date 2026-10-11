@@ -9,7 +9,13 @@ Container images are published to `ghcr.io/wtg-codes/agy-box` (`:<version>`, `:<
 
 ## [Unreleased]
 
-### Added
+- **Dual-Engine Architecture (Workstation vs. Sandbox)**:
+  - Added native support for **Isolated Sandboxes** directly via rootless Podman or Docker (`--mode sandbox`, default for named boxes like `test1`), running with zero host mounts, isolated encrypted keyring, clean room environment, and no credential leakage.
+  - Retained **Integrated Workstation** mode via Distrobox (`--mode workstation`, default for primary `agy-box`) for seamless host desktop, Wayland/audio, and SSO integration.
+  - Added smart lifecycle delegation in `agy-box-manager` (`enter`, `desktop`, `clean`) that automatically inspects container labels (`manager=agy-box-podman` vs `manager=distrobox`) and dispatches commands to the right engine.
+  - Added container name collision detection with interactive auto-suffixing (`name-1`, `name-2`), manual renaming, or recreate options.
+  - Added isolated home directory preservation policies on deletion: `agy-clean` forces an explicit choice (Purge all data vs Keep data), with non-interactive safety guards requiring `--purge` or `--keep`.
+  - Added preserved storage management in `agy-box-manager status` and an interactive TUI menu item ("📁 Manage Preserved Box Data...") to inspect and reclaim orphaned storage.
 - **Container IDE Support**:
   - Pre-installed **Visual Studio Code** (`code`) and **Zed Editor** (`zed`) in the container image with multi-arch support (`amd64` and `arm64`).
   - Pre-installed/pre-configured **Antigravity extensions**: `Google.antigravity` extension pre-installed in VS Code and auto-installation configured for Zed (`~/.config/zed/settings.json`).

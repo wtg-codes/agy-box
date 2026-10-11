@@ -210,8 +210,30 @@ EOF
   [ "$output" = "$HOME/.config/agy-box/homes/custom-box" ]
 }
 
-@test "agy-box-manager: cmd_install_official provisions isolated home for named box and passes flags" {
+@test "agy-box-manager: cmd_install_official provisions isolated sandbox for named box by default" {
   local mock_log="$TEST_DIR/install_mock.log"
+  cat <<EOF2 > "$MOCK_BIN/podman"
+#!/bin/bash
+echo "podman \$*" >> "$mock_log"
+exit 0
+EOF2
+  chmod +x "$MOCK_BIN/podman"
+
+  create_mock "distrobox" 'exit 0'
+
+  run ./agy-box-manager install --name agy-box-v060 --image ghcr.io/wtg-codes/agy-box:v0.6.0 -y
+  [ "$status" -eq 0 ]
+  [ -d "$HOME/.config/agy-box/homes/agy-box-v060" ]
+  run grep -F "podman pull ghcr.io/wtg-codes/agy-box:v0.6.0" "$mock_log"
+  [ "$status" -eq 0 ]
+  run grep -F "podman run -d --name agy-box-v060 --hostname agy-box-v060 --label manager=agy-box-podman --label agy-box.mode=sandbox" "$mock_log"
+  [ "$status" -eq 0 ]
+  run grep -F -e "-v $HOME/.config/agy-box/homes/agy-box-v060:/home/agyuser:Z" "$mock_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "agy-box-manager: cmd_install_official --mode workstation provisions Distrobox environment" {
+  local mock_log="$TEST_DIR/install_ws_mock.log"
   cat <<EOF2 > "$MOCK_BIN/podman"
 #!/bin/bash
 echo "podman \$*" >> "$mock_log"
@@ -226,49 +248,44 @@ exit 0
 EOF2
   chmod +x "$MOCK_BIN/distrobox"
 
-  run ./agy-box-manager install --name agy-box-v060 --image ghcr.io/wtg-codes/agy-box:v0.6.0 -y
+  run ./agy-box-manager install --name agy-box-ws --image ghcr.io/wtg-codes/agy-box:latest --mode workstation -y
   [ "$status" -eq 0 ]
-  [ -d "$HOME/.config/agy-box/homes/agy-box-v060" ]
-  run grep -F "podman pull ghcr.io/wtg-codes/agy-box:v0.6.0" "$mock_log"
-  [ "$status" -eq 0 ]
-  run grep -F "distrobox create -i ghcr.io/wtg-codes/agy-box:v0.6.0 -n agy-box-v060 --hostname agy-box-v060" "$mock_log"
-  [ "$status" -eq 0 ]
-  run grep -F -e "--home $HOME/.config/agy-box/homes/agy-box-v060" "$mock_log"
+  run grep -F "distrobox create -i ghcr.io/wtg-codes/agy-box:latest -n agy-box-ws --hostname agy-box-ws" "$mock_log"
   [ "$status" -eq 0 ]
 }
 
-@test "agy-box-manager: cmd_enter enters specified named container and resolves prefix" {
+@test "agy-box-manager: cmd_enter enters specified named container in sandbox mode" {
   local mock_log="$TEST_DIR/enter_mock.log"
-  create_mock "podman" 'if [ "$1" = "ps" ]; then echo "agy-box-staging"; fi; exit 0'
+  create_mock "podman" "echo \"podman \$*\" >> '$mock_log'; if [ \"\$1\" = \"ps\" ]; then echo \"agy-box-staging\"; fi; exit 0"
   create_mock "distrobox" "echo \"distrobox \$*\" >> '$mock_log'; exit 0"
 
   # Direct full name
   run ./agy-box-manager enter agy-box-staging
   [ "$status" -eq 0 ]
-  run grep -F "distrobox enter agy-box-staging" "$mock_log"
+  run grep -F "podman exec -it -u agyuser -w /home/agyuser agy-box-staging /bin/bash" "$mock_log"
   [ "$status" -eq 0 ]
 
   # Shorthand resolving to agy-box-staging
   run ./agy-box-manager enter staging
   [ "$status" -eq 0 ]
-  run grep -F "distrobox enter agy-box-staging" "$mock_log"
+  run grep -F "podman exec -it -u agyuser -w /home/agyuser agy-box-staging /bin/bash" "$mock_log"
   [ "$status" -eq 0 ]
 }
 
-@test "agy-box-manager: cmd_desktop forwards custom port and resolution" {
+@test "agy-box-manager: cmd_desktop forwards custom port and resolution in sandbox mode" {
   local mock_log="$TEST_DIR/desktop_mock.log"
-  create_mock "podman" 'if [ "$1" = "ps" ]; then echo "agy-box-test"; fi; exit 0'
+  create_mock "podman" "echo \"podman \$*\" >> '$mock_log'; if [ \"\$1\" = \"ps\" ]; then echo \"agy-box-test\"; fi; exit 0"
   create_mock "distrobox" "echo \"distrobox \$*\" >> '$mock_log'; exit 0"
 
   run ./agy-box-manager desktop agy-box-test -p 6082 -r 2560x1440
   [ "$status" -eq 0 ]
-  run grep -F "distrobox enter agy-box-test -- /usr/local/bin/agy-vdi -p 6082 -r 2560x1440" "$mock_log"
+  run grep -F "podman exec -d -u agyuser -w /home/agyuser agy-box-test /usr/local/bin/agy-vdi -p 6080 -p 6082 -r 2560x1440" "$mock_log"
   [ "$status" -eq 0 ]
 }
 
 @test "agy-box-manager: cmd_clean removes named container and purges custom home while keeping primary intact" {
   local mock_log="$TEST_DIR/clean_mock.log"
-  create_mock "podman" 'if [ "$1" = "ps" ]; then echo -e "agy-box\nagy-box-demo"; fi; exit 0'
+  create_mock "podman" "echo \"podman \$*\" >> '$mock_log'; if [ \"\$1\" = \"ps\" ]; then echo -e \"agy-box\nagy-box-demo\"; fi; exit 0"
   create_mock "distrobox" "echo \"distrobox \$*\" >> '$mock_log'; exit 0"
 
   # Create primary and custom home data
@@ -279,12 +296,25 @@ EOF2
 
   run ./agy-box-manager clean agy-box-demo --purge
   [ "$status" -eq 0 ]
-  run grep -F "distrobox rm --yes agy-box-demo" "$mock_log"
+  run grep -F "podman rm -f agy-box-demo" "$mock_log"
   [ "$status" -eq 0 ]
 
   # Custom home was purged, primary home is untouched
   [ ! -d "$HOME/.config/agy-box/homes/agy-box-demo" ]
   [ -f "$HOME/.config/agy-box/home/data.txt" ]
+}
+
+@test "agy-box-manager: cmd_clean non-interactive without choice fails safely" {
+  create_mock "podman" 'if [ "$1" = "ps" ]; then echo "agy-box-safetest"; fi; exit 0'
+  create_mock "distrobox" 'exit 0'
+  mkdir -p "$HOME/.config/agy-box/homes/agy-box-safetest"
+  echo "test" > "$HOME/.config/agy-box/homes/agy-box-safetest/file"
+
+  run ./agy-box-manager clean agy-box-safetest
+  [ "$status" -ne 0 ]
+  run grep -F "Non-interactive clean requires an explicit choice" <<< "$output"
+  [ "$status" -eq 0 ]
+  [ -d "$HOME/.config/agy-box/homes/agy-box-safetest" ]
 }
 
 @test "agy-box-manager: export_agy_cli protects primary host agy shim when secondary box exports" {
@@ -345,37 +375,50 @@ EOF2
   [ "$status" -eq 0 ]
   run grep -F "just agy-desktop agy-box-staging -p 6081" <<< "$cli_out"
   [ "$status" -eq 0 ]
-  run grep -F "just agy-clean agy-box-staging --purge" <<< "$cli_out"
+  run grep -F "just agy-clean agy-box-staging" <<< "$cli_out"
   [ "$status" -eq 0 ]
 }
 
 @test "agy-box-manager: cmd_install_official --enter automatically invokes cmd_enter for target box" {
   local mock_log="$TEST_DIR/enter_after_install.log"
-  create_mock "podman" '
-    if [ "$1" = "ps" ]; then
-      if [ -f "'$TEST_DIR'/created" ]; then
-        echo "agy-box-autoenter"
-      fi
-    fi
-    exit 0
-  '
-  cat <<EOF2 > "$MOCK_BIN/distrobox"
+  cat <<EOF2 > "$MOCK_BIN/podman"
 #!/bin/bash
-echo "distrobox \$*" >> "$mock_log"
-if [ "\$1" = "create" ]; then
+echo "podman \$*" >> "$mock_log"
+if [ "\$1" = "run" ]; then
   touch "$TEST_DIR/created"
 fi
-if [ "\$1" = "list" ]; then
-  echo "ID | NAME | STATUS | IMAGE"
-  echo "111 | agy-box-autoenter | Up 1 second | ghcr.io/wtg-codes/agy-box:latest"
+if [ "\$1" = "ps" ] && [ -f "$TEST_DIR/created" ]; then
+  echo "agy-box-autoenter"
 fi
 exit 0
 EOF2
-  chmod +x "$MOCK_BIN/distrobox"
+  chmod +x "$MOCK_BIN/podman"
+  create_mock "distrobox" 'exit 0'
 
   run ./agy-box-manager install -n agy-box-autoenter --enter
   [ "$status" -eq 0 ]
-  run grep -F "distrobox enter agy-box-autoenter" "$mock_log"
+  run grep -F "podman exec -it -u agyuser -w /home/agyuser agy-box-autoenter /bin/bash" "$mock_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "agy-box-manager: check_container_exists matches exact container names without substring collisions" {
+  cat <<EOF2 > "$MOCK_BIN/podman"
+#!/bin/bash
+if [ "\$1" = "ps" ]; then
+  echo "agy-box"
+  echo "agy-box-test2"
+fi
+exit 0
+EOF2
+  chmod +x "$MOCK_BIN/podman"
+
+  run bash -c "source ./agy-box-manager && check_container_exists 'test2'"
+  [ "$status" -ne 0 ]
+
+  run bash -c "source ./agy-box-manager && check_container_exists 'agy-box-test2'"
+  [ "$status" -eq 0 ]
+
+  run bash -c "source ./agy-box-manager && check_container_exists 'agy-box'"
   [ "$status" -eq 0 ]
 }
 
