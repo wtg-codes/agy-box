@@ -948,11 +948,11 @@ flowchart LR
                         </button>
                     </div>
                     <p class="text-slate-400 text-xs mb-3">Backup your conversation transcripts, subagent brains, custom skills, and IDE configurations in one archive:</p>
-                    <pre class="bg-slate-900 p-3 rounded-lg border border-slate-800 overflow-x-auto"><code class="text-emerald-400 font-mono text-xs" id="backup-cmd">tar -czvf agy-backup-$(date +%F).tar.gz \
-  ~/.config/agy-box/home/.gemini \
-  ~/.config/agy-box/home/.config/Antigravity* \
-  ~/.config/agy-box/home/.config/zed \
-  ~/.config/agy-box/home/.config/Code</code></pre>
+                    <pre class="bg-slate-900 p-3 rounded-lg border border-slate-800 overflow-x-auto"><code class="text-emerald-400 font-mono text-xs" id="backup-cmd"># Create timestamped backup archive:
+agy-box-manager backup
+
+# Restore settings on any machine:
+agy-box-manager restore agy-box-backup-YYYYMMDD-HHMMSS.tar.gz</code></pre>
                 </div>
             </section>
 
@@ -980,6 +980,31 @@ flowchart LR
                                 <td class="px-4 py-2.5 text-slate-300">Interactive Menu</td>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">agy-box-manager</code></td>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy</code></td>
+                            </tr>
+                            <tr class="hover:bg-slate-800/40 transition-colors">
+                                <td class="px-4 py-2.5 text-slate-300">First-Run Setup Wizard</td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">agy-box-manager wizard [--defaults]</code></td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-wizard</code></td>
+                            </tr>
+                            <tr class="hover:bg-slate-800/40 transition-colors">
+                                <td class="px-4 py-2.5 text-slate-300">Inspect Components &amp; Status</td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">agy-box-manager check</code></td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-check</code></td>
+                            </tr>
+                            <tr class="hover:bg-slate-800/40 transition-colors">
+                                <td class="px-4 py-2.5 text-slate-300">Unified Updater (All/Toolchain/IDEs/OS)</td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">agy-box-manager update [--all|--check]</code></td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-update</code></td>
+                            </tr>
+                            <tr class="hover:bg-slate-800/40 transition-colors">
+                                <td class="px-4 py-2.5 text-slate-300">Backup Settings &amp; State</td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">agy-box-manager backup [file]</code></td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-backup</code></td>
+                            </tr>
+                            <tr class="hover:bg-slate-800/40 transition-colors">
+                                <td class="px-4 py-2.5 text-slate-300">Restore Settings from Archive</td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">agy-box-manager restore &lt;file&gt; [-y]</code></td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-restore</code></td>
                             </tr>
                             <tr class="hover:bg-slate-800/40 transition-colors">
                                 <td class="px-4 py-2.5 text-slate-300">Install Official</td>

@@ -36,6 +36,26 @@ agy-desktop-dev *args="":
 agy-status:
     @{{manager}} status
 
+# Inspect full system, container workspaces, toolchain, IDEs & auth status
+agy-check *args="":
+    @{{manager}} check {{args}}
+
+# Run the first-run configuration setup wizard
+agy-wizard *args="":
+    @{{manager}} wizard {{args}}
+
+# Update toolchain, IDE extensions, and container packages
+agy-update *args="":
+    @{{manager}} update {{args}}
+
+# Back up agy-box configuration and workspace state to a tar.gz archive
+agy-backup *args="":
+    @{{manager}} backup {{args}}
+
+# Restore agy-box configuration and workspace state from a tar.gz archive
+agy-restore *args="":
+    @{{manager}} restore {{args}}
+
 # Remove the official workspace
 agy-clean:
     @{{manager}} clean

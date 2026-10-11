@@ -246,56 +246,75 @@ Subagents run in background branches, update their task logs, and alert you upon
 
 ## 6. Maintenance, Checking & Updating
 
-### Checking Versions
-To inspect your installed components and compare them with system health:
+### First-Run Setup Wizard (`wizard`)
+To configure or reconfigure your container runtime, keyring isolation mode, default IDE, and host profile seeding interactively:
 ```bash
-# Check container status:
-agy-box-manager status
+agy-box-manager wizard
+```
+To initialize standard, rock-solid defaults non-interactively (e.g. in CI or unattended environments):
+```bash
+agy-box-manager wizard --defaults
+```
+All settings are persisted in `~/.config/agy-box/config.env`.
 
-# Run full health diagnostics:
-agy-box-manager doctor
+### Checking System & Component Versions (`check`)
+To inspect your entire environment in a unified, beautifully formatted diagnostic dashboard:
+```bash
+agy-box-manager check
+```
+This inspects:
+* **Host OS & Kernel Architecture**: Distro version, CPU architecture (`x86_64` or `aarch64`).
+* **Container Engine & Distrobox**: Active runtime (Podman vs Docker, rootless vs rootful status) and Distrobox version.
+* **Workspace Containers**: Registration and run states for both `agy-box` (Official) and `agy-box-dev` (Dev).
+* **Antigravity Toolchain**: `agy` CLI version, Python, Node.js, Google Cloud SDK (`gcloud`), and GitHub CLI (`gh`).
+* **IDE Integrations**: Visual Studio Code, Zed Editor, and JetBrains with their Antigravity extension states.
+* **Keyring & Authentication**: Active keyring backend (Host SecretService vs Air-gapped EncryptedKeyring), Google Cloud auth, GitHub login, and Antigravity tokens.
 
-# Run automated validation test suite:
-agy-box-manager test
+### Keyring Modes: Host vs. Isolated
+`agy-box` supports two distinct credential storage profiles:
+* **Host Mode (`AGY_KEYRING_MODE="host"`)**:
+  Shares your host desktop's D-Bus Secret Service (GNOME Keyring / KWallet). Logins and tokens stored on your host machine are seamlessly accessible inside the container without re-authenticating.
+* **Isolated Mode (`AGY_KEYRING_MODE="isolated"`)**:
+  Completely unmaps the host D-Bus session bus (`--unsetenv=DBUS_SESSION_BUS_ADDRESS`) and configures a container-local `EncryptedKeyring` (`keyrings.alt.file.EncryptedKeyring`). All agent credentials, API tokens, and secrets remain securely quarantined inside `~/.config/agy-box/home/`.
+
+### Updating the Environment (`update`)
+Keep your agent toolchain, IDE extensions, and container OS packages up to date with a single command:
+```bash
+# Update everything (Toolchain, IDE extensions, Container packages)
+agy-box-manager update
+
+# Dry-run inspection (checks what would be updated)
+agy-box-manager update --check
+
+# Target specific components
+agy-box-manager update --toolchain    # Updates agy CLI, IDE, UI, SDK, ADK, Gemini CLI
+agy-box-manager update --ides         # Refreshes VS Code and Zed Antigravity extensions
+agy-box-manager update --packages     # Upgrades Chrome, VS Code, and apt packages in box
+
+# Update the dev workspace container instead of official
+agy-box-manager update dev --all
 ```
 
-### Updating the Agent Toolchain
-To update `agy`, the Antigravity IDE, UI, SDK, and Gemini CLI without touching your personal projects:
-* **From host:**
-  ```bash
-  agy-box-manager update-toolchain
-  ```
-* **From inside container:**
-  ```bash
-  agy-install-toolchain
-  ```
+### Backing Up & Restoring Your Settings (`backup` & `restore`)
+Back up all your agent configurations, conversation transcripts, subagent brains, custom skills, rules, and IDE settings into a single compressed archive:
 
-### Updating Container Packages & VS Code
-Because VS Code and core tools are linked to official package repositories:
-* **From host:**
-  ```bash
-  distrobox upgrade agy-box
-  ```
-* **From inside container:**
-  ```bash
-  sudo apt update && sudo apt upgrade -y
-  ```
-
-### Backing Up & Restoring Your Settings
-Your personal data, agent history, and IDE preferences live in these directories:
-* **`~/.gemini/`**: Conversation transcripts, subagent brains, custom skills, and rules.
-* **`~/.config/Antigravity/` & `~/.config/Antigravity-box/`**: IDE settings and extensions.
-* **`~/.config/zed/`**: Zed settings.
-* **`~/.config/Code/`**: VS Code user preferences.
-
-To back them up:
 ```bash
-tar -czvf agy-backup-$(date +%F).tar.gz \
-  ~/.config/agy-box/home/.gemini \
-  ~/.config/agy-box/home/.config/Antigravity* \
-  ~/.config/agy-box/home/.config/zed \
-  ~/.config/agy-box/home/.config/Code
+# Create an automatic timestamped backup (e.g. agy-box-backup-20261010-223000.tar.gz)
+agy-box-manager backup
+
+# Or specify a custom output path
+agy-box-manager backup /path/to/my-backup.tar.gz
 ```
+
+To restore your state on the same or a new machine:
+```bash
+# Restore interactively (with confirmation prompt)
+agy-box-manager restore /path/to/my-backup.tar.gz
+
+# Restore unattended / non-interactively
+agy-box-manager restore /path/to/my-backup.tar.gz -y
+```
+The manager automatically validates archive integrity, restores your files into `~/.config/agy-box/`, and re-synchronizes rootless container permissions.
 
 ---
 
