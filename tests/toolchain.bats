@@ -255,7 +255,9 @@ mock_distrobox() {
 exit 0
 EOF
   chmod +x "$TEST_DIR/mock-podman/podman"
-  run env -i PATH="$TEST_DIR/mock-podman:/bin:/usr/bin" bash -c 'source ./agy-box-manager && detect_runtime'
+  local bash_bin
+  bash_bin="$(command -v bash)"
+  run env -i PATH="$TEST_DIR/mock-podman" "$bash_bin" -c 'source ./agy-box-manager && detect_runtime'
   [ "$status" -eq 0 ]
   [ "$output" = "podman" ]
 }
@@ -267,8 +269,11 @@ EOF
 exit 0
 EOF
   chmod +x "$TEST_DIR/mock-docker/docker"
-  run env -i PATH="$TEST_DIR/mock-docker:/bin:/usr/bin" bash -c 'source ./agy-box-manager && detect_runtime'
+  local bash_bin
+  bash_bin="$(command -v bash)"
+  run env -i PATH="$TEST_DIR/mock-docker" "$bash_bin" -c 'source ./agy-box-manager && detect_runtime'
   [ "$status" -eq 0 ]
   [ "$output" = "docker" ]
 }
+
 
