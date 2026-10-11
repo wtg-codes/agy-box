@@ -8,23 +8,23 @@ manager := `if [ -f ./agy-box-manager ]; then echo "./agy-box-manager"; else ech
 agy:
     @{{manager}}
 
-# Pull and install the official stable release
-agy-install:
-    @{{manager}} install
+# Pull and install the official stable release (or a named container: just agy-install -n agy-box-test)
+agy-install *args="":
+    @{{manager}} install {{args}}
 
 # Build a local development workspace from source
-agy-box-dev:
-    @{{manager}} dev
+agy-box-dev *args="":
+    @{{manager}} dev {{args}}
 
-# Enter the official workspace
-agy-enter:
-    @{{manager}} enter
+# Enter the official workspace (or a named container: just agy-enter agy-box-test)
+agy-enter *args="":
+    @{{manager}} enter {{args}}
 
 # Enter the development workspace
-agy-enter-dev:
-    @{{manager}} enter dev
+agy-enter-dev *args="":
+    @{{manager}} enter dev {{args}}
 
-# Start VDI Desktop inside official workspace
+# Start VDI Desktop inside official workspace (or a named container: just agy-desktop agy-box-test -p 6081)
 agy-desktop *args="":
     @{{manager}} desktop {{args}}
 
@@ -56,21 +56,21 @@ agy-backup *args="":
 agy-restore *args="":
     @{{manager}} restore {{args}}
 
-# Remove the official workspace
-agy-clean:
-    @{{manager}} clean
+# Remove the official workspace (or a named container: just agy-clean agy-box-test)
+agy-clean *args="":
+    @{{manager}} clean {{args}}
 
 # Remove the development workspace
-agy-clean-dev:
-    @{{manager}} clean dev
+agy-clean-dev *args="":
+    @{{manager}} clean dev {{args}}
 
-# Install/update the Antigravity toolchain in the official workspace
-agy-update-toolchain:
-    @{{manager}} update-toolchain
+# Install/update the Antigravity toolchain in the official workspace (or named box)
+agy-update-toolchain *args="":
+    @{{manager}} update-toolchain {{args}}
 
 # Install/update the Antigravity toolchain in the development workspace
-agy-update-toolchain-dev:
-    @{{manager}} update-toolchain dev
+agy-update-toolchain-dev *args="":
+    @{{manager}} update-toolchain dev {{args}}
 
 # Install the CLI tool globally to ~/.local/bin
 agy-install-global:
