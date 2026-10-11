@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>agy-box — Antigravity Dev Box</title>
-    <meta name="description" content="agy-box is the declarative Distrobox workspace container for AI agent development. Four Antigravity products, one container, zero setup friction.">
+    <title>agy-box — Antigravity Dev Box &amp; Interactive User Guide</title>
+    <meta name="description" content="agy-box is the declarative Distrobox workspace container for AI agent development. Four Antigravity products, modern IDEs (VS Code, Zed, JetBrains), and zero setup friction.">
     <meta name="theme-color" content="#0f172a">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📦</text></svg>">
 
@@ -32,6 +32,7 @@
         details summary::-webkit-details-marker { display: none; }
         details summary { list-style: none; }
         .mermaid svg { max-width: 100%; height: auto; }
+        section { scroll-margin-top: 5rem; }
 
         @media print {
             body { background: #0f172a !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -42,17 +43,73 @@
         }
     </style>
 </head>
-<body class="min-h-screen font-sans text-slate-300 antialiased">
+<body class="min-h-screen font-sans text-slate-300 antialiased" id="top">
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <!-- TOP STICKY NAVIGATION BAR                       -->
+    <!-- ═══════════════════════════════════════════════ -->
+    <nav class="sticky top-0 z-50 bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-4 py-3 no-print">
+        <div class="max-w-6xl mx-auto flex items-center justify-between gap-4">
+            <a href="#top" class="flex items-center gap-2 text-white font-bold text-base hover:text-indigo-400 transition-colors flex-shrink-0">
+                <span class="text-xl">📦</span>
+                <span>agy-box</span>
+                <span class="text-xs font-mono font-normal bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded border border-indigo-500/30">v0.6.0</span>
+            </a>
+
+            <!-- Desktop Nav Links -->
+            <div class="hidden lg:flex items-center gap-5 text-xs font-medium text-slate-300">
+                <a href="#quickstart" class="hover:text-indigo-400 transition-colors">Quickstart</a>
+                <a href="#ways-to-work" class="hover:text-indigo-400 transition-colors">4 Ways to Work</a>
+                <a href="#ides" class="hover:text-indigo-400 transition-colors">Modern IDEs</a>
+                <a href="#auth-models" class="hover:text-indigo-400 transition-colors">Auth &amp; Models</a>
+                <a href="#suite" class="hover:text-indigo-400 transition-colors">Antigravity Suite</a>
+                <a href="#architecture" class="hover:text-indigo-400 transition-colors">Architecture</a>
+                <a href="#vdi-desktop" class="hover:text-indigo-400 transition-colors">Web VDI</a>
+                <a href="#agent-guide" class="hover:text-indigo-400 transition-colors">CLI &amp; Agents</a>
+                <a href="#maintenance" class="hover:text-indigo-400 transition-colors">Maintenance</a>
+                <a href="#commands" class="hover:text-indigo-400 transition-colors">Commands</a>
+                <a href="#faq" class="hover:text-indigo-400 transition-colors">FAQ</a>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex items-center gap-2 flex-shrink-0">
+                <a href="USER_GUIDE.md" class="text-xs bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700 hover:border-indigo-500/40 rounded-lg px-3 py-1.5 transition-colors flex items-center gap-1.5" title="View Full Markdown User Guide">
+                    <i data-lucide="book" class="w-3.5 h-3.5"></i>
+                    <span class="hidden sm:inline">User Guide</span>
+                </a>
+                <a href="https://github.com/wtg-codes/agy-box" target="_blank" rel="noopener noreferrer" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg px-3 py-1.5 transition-colors flex items-center gap-1.5" title="View GitHub Repository">
+                    <i data-lucide="github" class="w-3.5 h-3.5"></i>
+                    <span class="hidden sm:inline">GitHub</span>
+                </a>
+                <button onclick="window.print()" class="text-xs text-slate-400 hover:text-slate-200 border border-slate-700 rounded-lg px-2.5 py-1.5 transition-colors" title="Export as PDF">
+                    <i data-lucide="printer" class="w-3.5 h-3.5"></i>
+                </button>
+            </div>
+        </div>
+        <!-- Mobile Nav Pills -->
+        <div class="lg:hidden flex items-center gap-3 overflow-x-auto pt-2 pb-1 text-xs text-slate-400 scrollbar-none">
+            <a href="#quickstart" class="whitespace-nowrap hover:text-indigo-400">Quickstart</a>
+            <a href="#ways-to-work" class="whitespace-nowrap hover:text-indigo-400">4 Ways</a>
+            <a href="#ides" class="whitespace-nowrap hover:text-indigo-400">IDEs</a>
+            <a href="#auth-models" class="whitespace-nowrap hover:text-indigo-400">Auth</a>
+            <a href="#vdi-desktop" class="whitespace-nowrap hover:text-indigo-400">VDI</a>
+            <a href="#agent-guide" class="whitespace-nowrap hover:text-indigo-400">Agents</a>
+            <a href="#maintenance" class="whitespace-nowrap hover:text-indigo-400">Updates</a>
+            <a href="#commands" class="whitespace-nowrap hover:text-indigo-400">Commands</a>
+            <a href="#faq" class="whitespace-nowrap hover:text-indigo-400">FAQ</a>
+        </div>
+    </nav>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <!-- MAIN CONTENT CONTAINER                          -->
+    <!-- ═══════════════════════════════════════════════ -->
     <main class="max-w-4xl mx-auto px-4 py-8 sm:py-12">
-        <div class="card-main bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-3xl shadow-2xl px-6 sm:px-10 py-10 space-y-12 animate-fade-in">
+        <div class="card-main bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-3xl shadow-2xl px-6 sm:px-10 py-10 space-y-14 animate-fade-in">
 
             <!-- ═══════════════════════════════════════════════ -->
             <!-- 1. HERO HEADER                                  -->
             <!-- ═══════════════════════════════════════════════ -->
             <header class="text-center relative">
-                <button onclick="window.print()" class="no-print absolute top-0 right-0 text-xs text-slate-500 hover:text-slate-300 border border-slate-700 rounded-lg px-3 py-1.5 transition-colors" title="Export as PDF">
-                    <i data-lucide="printer" class="w-3.5 h-3.5 inline-block mr-1 align-text-bottom"></i>PDF
-                </button>
                 <div class="flex justify-center mb-4">
                     <div class="w-16 h-16 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center">
                         <i data-lucide="package" class="w-8 h-8 text-indigo-400"></i>
@@ -61,8 +118,8 @@
                 <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
                     Antigravity Dev Box
                 </h1>
-                <p class="text-slate-400 mt-2 text-lg">agy and friends in a box of your choice!</p>
-                <p class="text-slate-500 text-sm mt-2">
+                <p class="text-slate-400 mt-2 text-lg">Interactive User Guide &amp; Container Architecture</p>
+                <p class="text-slate-500 text-sm mt-1">
                     v0.6.0 · by <a href="https://github.com/wtg-codes" class="text-indigo-400 hover:text-indigo-300 transition-colors">wtg-codes</a>
                 </p>
                 <div class="flex flex-wrap justify-center gap-2 mt-4 no-print">
@@ -80,14 +137,17 @@
             <!-- ═══════════════════════════════════════════════ -->
             <!-- 2. QUICK START                                  -->
             <!-- ═══════════════════════════════════════════════ -->
-            <section>
+            <section id="quickstart">
                 <div class="flex items-center gap-3 mb-4">
                     <div class="w-10 h-10 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
                         <i data-lucide="zap" class="w-5 h-5 text-indigo-400"></i>
                     </div>
-                    <h2 class="text-xl font-bold text-white">Quick Start</h2>
+                    <div>
+                        <h2 class="text-xl font-bold text-white">Quick Start (Zero-to-Hero in 60s)</h2>
+                        <p class="text-slate-500 text-xs">No repository cloning required — launch directly from your host shell</p>
+                    </div>
                 </div>
-                <p class="text-slate-400 mb-4">No clone required. Run this single command to get started:</p>
+                <p class="text-slate-400 mb-4 text-sm">Run this single command on your Linux or macOS host terminal to bootstrap the environment:</p>
                 <div class="relative group">
                     <pre class="bg-slate-900 rounded-lg p-4 pr-16 overflow-x-auto border border-slate-700"><code class="text-emerald-400 font-mono text-sm" id="install-cmd">bash -c "$(curl -fsSL https://raw.githubusercontent.com/wtg-codes/agy-box/main/agy-box-manager)"</code></pre>
                     <button id="copy-btn" onclick="copyCommand()" class="absolute top-3 right-3 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg px-3 py-1.5 text-xs font-medium transition-all duration-200 flex items-center gap-1.5 no-print">
@@ -95,13 +155,16 @@
                         <span id="copy-text">Copy</span>
                     </button>
                 </div>
-                <p class="text-slate-500 text-sm mt-3">Then select <span class="text-slate-300 font-medium">"Install CLI Globally"</span> from the interactive menu for permanent access via <code class="text-emerald-400 font-mono text-xs bg-slate-900 px-1.5 py-0.5 rounded">agy-box-manager</code>.</p>
+                <div class="mt-3 flex items-center gap-2 text-slate-400 text-xs bg-slate-900/60 p-3 rounded-lg border border-slate-800">
+                    <i data-lucide="info" class="w-4 h-4 text-indigo-400 flex-shrink-0"></i>
+                    <span>Next step: Select <strong class="text-white">"Install CLI Globally"</strong> in the interactive menu to add <code class="text-emerald-400 font-mono">agy-box-manager</code> and <code class="text-emerald-400 font-mono">agy</code> directly to your host's <code class="text-slate-300 font-mono">~/.local/bin</code>.</span>
+                </div>
             </section>
 
             <!-- ═══════════════════════════════════════════════ -->
             <!-- 3. PREREQUISITES                                -->
             <!-- ═══════════════════════════════════════════════ -->
-            <section>
+            <section id="prerequisites">
                 <div class="flex items-center gap-3 mb-4">
                     <div class="w-10 h-10 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
                         <i data-lucide="clipboard-check" class="w-5 h-5 text-indigo-400"></i>
@@ -111,37 +174,381 @@
                 <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 space-y-3">
                     <div class="flex items-start gap-3">
                         <i data-lucide="cpu" class="w-5 h-5 text-indigo-400 mt-0.5 flex-shrink-0"></i>
-                        <div><span class="text-white font-medium">Host:</span> <span class="text-slate-400">x86_64 (amd64) or aarch64 (arm64) Linux — native support for standard PCs, NVIDIA DGX Spark workstations, Apple Silicon, and ChromeOS Crostini</span></div>
+                        <div><span class="text-white font-medium">Host:</span> <span class="text-slate-400 text-sm">x86_64 (amd64) or aarch64 (arm64) Linux — native support for standard PCs, NVIDIA DGX Spark workstations, Apple Silicon (Asahi/UTM), Raspberry Pi 5, and ChromeOS Crostini</span></div>
                     </div>
                     <div class="flex items-start gap-3">
                         <i data-lucide="box" class="w-5 h-5 text-indigo-400 mt-0.5 flex-shrink-0"></i>
-                        <div><span class="text-white font-medium">Container Runtime:</span> <span class="text-slate-400">Podman (recommended) or Docker</span></div>
+                        <div><span class="text-white font-medium">Container Runtime:</span> <span class="text-slate-400 text-sm">Podman (strongly recommended for unprivileged user namespaces) or Docker</span></div>
                     </div>
                     <div class="flex items-start gap-3">
                         <i data-lucide="layers" class="w-5 h-5 text-indigo-400 mt-0.5 flex-shrink-0"></i>
-                        <div><span class="text-white font-medium">Distrobox:</span> <span class="text-slate-400">Host-integrated container management</span></div>
+                        <div><span class="text-white font-medium">Distrobox:</span> <span class="text-slate-400 text-sm">Host-integrated container manager (auto-installed if missing via host package manager)</span></div>
                     </div>
                     <div class="flex items-start gap-3">
                         <i data-lucide="palette" class="w-5 h-5 text-indigo-400 mt-0.5 flex-shrink-0"></i>
-                        <div><span class="text-white font-medium">Gum:</span> <span class="text-slate-400">Interactive TUI toolkit (auto-installed if missing)</span></div>
+                        <div><span class="text-white font-medium">Gum:</span> <span class="text-slate-400 text-sm">Charm interactive TUI toolkit (auto-downloaded into memory if not present)</span></div>
                     </div>
                 </div>
                 <details class="mt-4 group">
                     <summary class="cursor-pointer text-sm text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-2">
                         <i data-lucide="chevron-right" class="w-4 h-4 transition-transform group-open:rotate-90"></i>
-                        Universal Blue / Bluefin Users
+                        Universal Blue / Bluefin / Aurora Users
                     </summary>
                     <div class="mt-3 bg-slate-800/60 rounded-lg p-4 border border-slate-700 text-sm text-slate-400">
-                        Podman, Distrobox, and Homebrew come pre-configured on Universal Blue images. Just install <code class="text-emerald-400 font-mono bg-slate-900 px-1 py-0.5 rounded">gum</code>:
+                        Podman, Distrobox, and Homebrew come pre-configured out of the box on Universal Blue images. Just install <code class="text-emerald-400 font-mono bg-slate-900 px-1 py-0.5 rounded">gum</code>:
                         <pre class="bg-slate-900 rounded-lg p-3 mt-2 border border-slate-700"><code class="text-emerald-400 font-mono text-sm">brew install gum</code></pre>
                     </div>
                 </details>
             </section>
 
             <!-- ═══════════════════════════════════════════════ -->
-            <!-- 4. WHAT'S IN THE BOX (Feature Cards)            -->
+            <!-- 4. THE 4 WAYS TO WORK (Interactive Guide)       -->
             <!-- ═══════════════════════════════════════════════ -->
-            <section>
+            <section id="ways-to-work">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
+                        <i data-lucide="workflow" class="w-5 h-5 text-indigo-400"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold text-white">The 4 Ways to Work</h2>
+                        <p class="text-slate-500 text-xs">Flexible developer workflows adapted to any host environment</p>
+                    </div>
+                </div>
+                <p class="text-slate-400 text-sm mb-5">
+                    Whether you are developing on a multi-monitor Linux desktop, a headless cloud VM, an iPad in a browser, or a plain SSH terminal, <code class="text-emerald-400 font-mono">agy-box</code> supports four distinct operational paths:
+                </p>
+
+                <!-- Architecture Flowchart -->
+                <div class="bg-slate-900 rounded-xl p-4 border border-slate-700 mb-6">
+                    <div class="mermaid">
+flowchart LR
+    A["agy-box Workspace"] --> B["Way 1: Native Host Windows<br>(Wayland / X11 GUI)"]
+    A --> C["Way 2: Web VDI Desktop<br>(localhost:6080 noVNC)"]
+    A --> D["Way 3: Modern IDEs<br>(VS Code, Zed, JetBrains)"]
+    A --> E["Way 4: Terminal Shim<br>(Direct host ~/.local/bin/agy)"]
+    classDef default fill:#1e293b,stroke:#4f46e5,stroke-width:1.5px,color:#e2e8f0;
+    classDef highlight fill:#312e81,stroke:#6366f1,stroke-width:2px,color:#ffffff;
+    class A highlight;
+                    </div>
+                </div>
+
+                <!-- 4 Cards Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Way 1 -->
+                    <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 hover:border-indigo-500/40 transition-colors flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center gap-2.5 mb-2">
+                                <span class="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 font-bold text-xs flex items-center justify-center border border-indigo-500/30">1</span>
+                                <h3 class="text-white font-semibold">Native Host Window Integration</h3>
+                            </div>
+                            <p class="text-slate-400 text-xs mb-3">
+                                Best for desktop Linux (Fedora, Ubuntu, Arch, Bluefin). Graphical applications (`antigravity`, `code`, `google-chrome`) render seamlessly on your host desktop via Wayland/X11 socket forwarding with GPU acceleration and shared clipboard.
+                            </p>
+                        </div>
+                        <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800 font-mono text-xs text-emerald-400">
+                            agy-box-manager enter
+                        </div>
+                    </div>
+
+                    <!-- Way 2 -->
+                    <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 hover:border-indigo-500/40 transition-colors flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center gap-2.5 mb-2">
+                                <span class="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 font-bold text-xs flex items-center justify-center border border-indigo-500/30">2</span>
+                                <h3 class="text-white font-semibold">Browser-Based Web VDI Desktop</h3>
+                            </div>
+                            <p class="text-slate-400 text-xs mb-3">
+                                Perfect for headless servers, remote cloud instances, ChromeOS, or iPads. Launches an ultra-responsive IceWM desktop accessible from any browser at <code class="text-slate-300 font-mono">http://localhost:6080</code> with no local dependencies.
+                            </p>
+                        </div>
+                        <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800 font-mono text-xs text-emerald-400">
+                            agy-box-manager desktop
+                        </div>
+                    </div>
+
+                    <!-- Way 3 -->
+                    <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 hover:border-indigo-500/40 transition-colors flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center gap-2.5 mb-2">
+                                <span class="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 font-bold text-xs flex items-center justify-center border border-indigo-500/30">3</span>
+                                <h3 class="text-white font-semibold">Modern IDE Integration</h3>
+                            </div>
+                            <p class="text-slate-400 text-xs mb-3">
+                                Code directly inside the container with your editor of choice. Visual Studio Code and Zed are pre-baked with Antigravity extensions; JetBrains IDEs are installable on-demand via <code class="text-slate-300 font-mono">agy-install-ide</code>.
+                            </p>
+                        </div>
+                        <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800 font-mono text-xs text-emerald-400">
+                            code . &nbsp;or&nbsp; zed .
+                        </div>
+                    </div>
+
+                    <!-- Way 4 -->
+                    <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 hover:border-indigo-500/40 transition-colors flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center gap-2.5 mb-2">
+                                <span class="w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 font-bold text-xs flex items-center justify-center border border-indigo-500/30">4</span>
+                                <h3 class="text-white font-semibold">Pure Terminal Workflow &amp; Host Shim</h3>
+                            </div>
+                            <p class="text-slate-400 text-xs mb-3">
+                                You don't need to manually enter the container. `agy-box-manager` exports a lightweight shim to <code class="text-slate-300 font-mono">~/.local/bin/agy</code> so you can invoke agents directly from your normal host shell.
+                            </p>
+                        </div>
+                        <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800 font-mono text-xs text-emerald-400">
+                            agy "Generate unit tests"
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════ -->
+            <!-- 5. MODERN IDE DEEP DIVE                         -->
+            <!-- ═══════════════════════════════════════════════ -->
+            <section id="ides">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
+                        <i data-lucide="code" class="w-5 h-5 text-indigo-400"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold text-white">Modern IDE Deep Dive</h2>
+                        <p class="text-slate-500 text-xs">Pre-baked and on-demand editor integrations with Antigravity plugins</p>
+                    </div>
+                </div>
+
+                <!-- IDE Selector Tabs -->
+                <div class="flex gap-2 border-b border-slate-700 pb-3 mb-4 overflow-x-auto text-xs font-semibold">
+                    <button onclick="switchIde('vscode')" id="tab-ide-vscode" class="ide-tab bg-indigo-600 text-white px-3.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5">
+                        <i data-lucide="code-2" class="w-4 h-4"></i>VS Code
+                    </button>
+                    <button onclick="switchIde('zed')" id="tab-ide-zed" class="ide-tab bg-slate-800 hover:bg-slate-700 text-slate-300 px-3.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5">
+                        <i data-lucide="zap" class="w-4 h-4"></i>Zed Editor
+                    </button>
+                    <button onclick="switchIde('antigravity')" id="tab-ide-antigravity" class="ide-tab bg-slate-800 hover:bg-slate-700 text-slate-300 px-3.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5">
+                        <i data-lucide="sparkles" class="w-4 h-4"></i>Antigravity IDE
+                    </button>
+                    <button onclick="switchIde('jetbrains')" id="tab-ide-jetbrains" class="ide-tab bg-slate-800 hover:bg-slate-700 text-slate-300 px-3.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5">
+                        <i data-lucide="terminal-square" class="w-4 h-4"></i>JetBrains
+                    </button>
+                </div>
+
+                <!-- IDE Content Panes -->
+                <!-- Pane 1: VS Code -->
+                <div id="pane-ide-vscode" class="ide-pane space-y-3 bg-slate-800/70 p-5 rounded-xl border border-slate-700">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-white font-bold text-base flex items-center gap-2">
+                            <i data-lucide="code-2" class="w-5 h-5 text-indigo-400"></i>
+                            Visual Studio Code (Pre-Baked)
+                        </h3>
+                        <span class="text-xs bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/30 font-medium">Bake in Box</span>
+                    </div>
+                    <p class="text-slate-400 text-sm">
+                        Installed directly from Microsoft's official APT repository (<code class="text-slate-300 font-mono">packages.microsoft.com</code>) for both <strong class="text-white">amd64</strong> and <strong class="text-white">arm64</strong>.
+                    </p>
+                    <ul class="text-xs text-slate-300 space-y-1.5 list-disc list-inside">
+                        <li><strong class="text-white">Container Wrapper:</strong> Wrapped with unprivileged container safety flags (<code class="text-emerald-400 font-mono">--disable-dev-shm-usage --no-sandbox</code>) for flawless rendering.</li>
+                        <li><strong class="text-white">Antigravity Extension:</strong> Pre-installed automatically via <code class="text-emerald-400 font-mono">Google.antigravity</code>.</li>
+                        <li><strong class="text-white">Desktop Shortcut:</strong> Pre-configured icon on the IceWM VDI desktop.</li>
+                    </ul>
+                    <div class="bg-slate-900 p-3 rounded-lg border border-slate-800 flex items-center justify-between">
+                        <code class="text-emerald-400 font-mono text-xs">code /path/to/project</code>
+                        <span class="text-slate-500 text-xs font-sans">Launch from container terminal or desktop</span>
+                    </div>
+                </div>
+
+                <!-- Pane 2: Zed -->
+                <div id="pane-ide-zed" class="ide-pane hidden space-y-3 bg-slate-800/70 p-5 rounded-xl border border-slate-700">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-white font-bold text-base flex items-center gap-2">
+                            <i data-lucide="zap" class="w-5 h-5 text-amber-400"></i>
+                            Zed Editor (High Performance Rust IDE)
+                        </h3>
+                        <span class="text-xs bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded border border-emerald-500/30 font-medium">Bake in Box</span>
+                    </div>
+                    <p class="text-slate-400 text-sm">
+                        Ultra-fast native binary directly from Zed Industries release channels, supporting high-DPI Wayland and X11 forwarding.
+                    </p>
+                    <ul class="text-xs text-slate-300 space-y-1.5 list-disc list-inside">
+                        <li><strong class="text-white">Declarative Configuration:</strong> Pre-configured in <code class="text-slate-300 font-mono">~/.config/zed/settings.json</code> with:
+                            <pre class="bg-slate-900 p-2 rounded mt-1 font-mono text-emerald-400 text-xs">{ "auto_install_extensions": { "antigravity": true } }</pre>
+                        </li>
+                        <li><strong class="text-white">Instant Startup:</strong> Near-zero overhead, ideal for low-spec laptops and cloud VMs.</li>
+                    </ul>
+                    <div class="bg-slate-900 p-3 rounded-lg border border-slate-800 flex items-center justify-between">
+                        <code class="text-emerald-400 font-mono text-xs">zed /path/to/project</code>
+                        <span class="text-slate-500 text-xs font-sans">Binary installed in /usr/local/bin/zed</span>
+                    </div>
+                </div>
+
+                <!-- Pane 3: Antigravity IDE -->
+                <div id="pane-ide-antigravity" class="ide-pane hidden space-y-3 bg-slate-800/70 p-5 rounded-xl border border-slate-700">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-white font-bold text-base flex items-center gap-2">
+                            <i data-lucide="sparkles" class="w-5 h-5 text-indigo-400"></i>
+                            Antigravity Classic IDE
+                        </h3>
+                        <span class="text-xs bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/30 font-medium">Official Suite</span>
+                    </div>
+                    <p class="text-slate-400 text-sm">
+                        Pinned official Google release designed specifically for autonomous agent pair programming and course lab development.
+                    </p>
+                    <ul class="text-xs text-slate-300 space-y-1.5 list-disc list-inside">
+                        <li><strong class="text-white">Telemetry Disabled:</strong> Pre-hardened with user telemetry disabled by default.</li>
+                        <li><strong class="text-white">Agent Integration:</strong> Direct socket connection with local Antigravity Agent UI on port 8080.</li>
+                    </ul>
+                    <div class="bg-slate-900 p-3 rounded-lg border border-slate-800 flex items-center justify-between">
+                        <code class="text-emerald-400 font-mono text-xs">antigravity-ide /path/to/workspace</code>
+                        <span class="text-slate-500 text-xs font-sans">Installed in ~/.local/bin/antigravity-ide</span>
+                    </div>
+                </div>
+
+                <!-- Pane 4: JetBrains -->
+                <div id="pane-ide-jetbrains" class="ide-pane hidden space-y-3 bg-slate-800/70 p-5 rounded-xl border border-slate-700">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-white font-bold text-base flex items-center gap-2">
+                            <i data-lucide="terminal-square" class="w-5 h-5 text-rose-400"></i>
+                            JetBrains IDEs (IntelliJ IDEA &amp; PyCharm)
+                        </h3>
+                        <span class="text-xs bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded border border-amber-500/30 font-medium">On-Demand (~2.5 GB saved)</span>
+                    </div>
+                    <p class="text-slate-400 text-sm">
+                        To keep base image download times blazingly fast, JetBrains IDEs are installed on-demand via a dedicated container helper script.
+                    </p>
+                    <ul class="text-xs text-slate-300 space-y-1.5 list-disc list-inside">
+                        <li><strong class="text-white">Automated Setup:</strong> Unpacks directly to <code class="text-slate-300 font-mono">$HOME/.local/share/JetBrains/</code> and creates desktop launcher shortcuts.</li>
+                        <li><strong class="text-white">Plugin Registration:</strong> Automatically registers the Antigravity agent plugin.</li>
+                    </ul>
+                    <div class="space-y-2">
+                        <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800 font-mono text-xs text-emerald-400">
+                            agy-install-ide intellij &nbsp;&nbsp;# Install IntelliJ IDEA Community
+                        </div>
+                        <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800 font-mono text-xs text-emerald-400">
+                            agy-install-ide pycharm &nbsp;&nbsp;&nbsp;# Install PyCharm Community
+                        </div>
+                    </div>
+                </div>
+
+                <!-- IDE Comparison Table -->
+                <div class="mt-4 overflow-x-auto">
+                    <table class="w-full text-xs border-collapse">
+                        <thead>
+                            <tr class="bg-slate-800/90 text-left text-slate-400 font-semibold">
+                                <th class="px-3 py-2.5 rounded-tl-lg">Editor</th>
+                                <th class="px-3 py-2.5">Packaging</th>
+                                <th class="px-3 py-2.5">Startup</th>
+                                <th class="px-3 py-2.5">Antigravity Extension</th>
+                                <th class="px-3 py-2.5 rounded-tr-lg">Launch Command</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-700/60 bg-slate-900/40">
+                            <tr class="hover:bg-slate-800/40">
+                                <td class="px-3 py-2 text-white font-medium">VS Code</td>
+                                <td class="px-3 py-2 text-slate-400">Microsoft APT repo</td>
+                                <td class="px-3 py-2 text-emerald-400">Fast</td>
+                                <td class="px-3 py-2 text-slate-300">Pre-installed</td>
+                                <td class="px-3 py-2 font-mono text-emerald-400">code .</td>
+                            </tr>
+                            <tr class="hover:bg-slate-800/40">
+                                <td class="px-3 py-2 text-white font-medium">Zed Editor</td>
+                                <td class="px-3 py-2 text-slate-400">Native binary</td>
+                                <td class="px-3 py-2 text-emerald-400">Instant (Rust)</td>
+                                <td class="px-3 py-2 text-slate-300">Auto-configured</td>
+                                <td class="px-3 py-2 font-mono text-emerald-400">zed .</td>
+                            </tr>
+                            <tr class="hover:bg-slate-800/40">
+                                <td class="px-3 py-2 text-white font-medium">Antigravity IDE</td>
+                                <td class="px-3 py-2 text-slate-400">Google standalone</td>
+                                <td class="px-3 py-2 text-emerald-400">Fast</td>
+                                <td class="px-3 py-2 text-slate-300">Built-in</td>
+                                <td class="px-3 py-2 font-mono text-emerald-400">antigravity-ide .</td>
+                            </tr>
+                            <tr class="hover:bg-slate-800/40">
+                                <td class="px-3 py-2 text-white font-medium">JetBrains</td>
+                                <td class="px-3 py-2 text-slate-400">On-demand installer</td>
+                                <td class="px-3 py-2 text-amber-400">Moderate (JVM)</td>
+                                <td class="px-3 py-2 text-slate-300">Auto-registered</td>
+                                <td class="px-3 py-2 font-mono text-emerald-400">agy-install-ide</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════ -->
+            <!-- 6. AI MODEL AUTHENTICATION & SETUP              -->
+            <!-- ═══════════════════════════════════════════════ -->
+            <section id="auth-models">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
+                        <i data-lucide="key" class="w-5 h-5 text-indigo-400"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold text-white">AI Model Authentication &amp; Setup</h2>
+                        <p class="text-slate-500 text-xs">Support for all Google AI authentication methods and 100% offline local LLMs</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Auth 1: Personal OAuth -->
+                    <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 space-y-2.5">
+                        <div class="flex items-center gap-2 text-indigo-400 font-semibold text-sm">
+                            <i data-lucide="user-check" class="w-4 h-4"></i>
+                            Personal Google Account (OAuth)
+                        </div>
+                        <p class="text-slate-400 text-xs">
+                            Fastest way to get started with generous free-tier model access. Simply run <code class="text-emerald-400 font-mono">agy</code> inside the box and complete the one-time browser login.
+                        </p>
+                        <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800 text-xs font-mono text-slate-400">
+                            Tokens stored safely in ~/.gemini/
+                        </div>
+                    </div>
+
+                    <!-- Auth 2: Gemini API Key -->
+                    <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 space-y-2.5">
+                        <div class="flex items-center gap-2 text-indigo-400 font-semibold text-sm">
+                            <i data-lucide="key-round" class="w-4 h-4"></i>
+                            Google AI Studio API Key
+                        </div>
+                        <p class="text-slate-400 text-xs">
+                            Direct Gemini API access. Set in your environment or add to <code class="text-slate-300 font-mono">~/.config/environment.d/agy-box.conf</code>:
+                        </p>
+                        <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800 text-xs font-mono text-emerald-400">
+                            export GEMINI_API_KEY="AIzaSy..."
+                        </div>
+                    </div>
+
+                    <!-- Auth 3: GCP Vertex AI -->
+                    <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 space-y-2.5">
+                        <div class="flex items-center gap-2 text-indigo-400 font-semibold text-sm">
+                            <i data-lucide="cloud" class="w-4 h-4"></i>
+                            Enterprise / Vertex AI (GCP ADC)
+                        </div>
+                        <p class="text-slate-400 text-xs">
+                            Authenticate using Google Cloud Application Default Credentials for enterprise projects:
+                        </p>
+                        <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800 text-xs font-mono text-emerald-400">
+                            gcloud auth application-default login
+                        </div>
+                    </div>
+
+                    <!-- Auth 4: Local Offline Models -->
+                    <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 space-y-2.5">
+                        <div class="flex items-center gap-2 text-emerald-400 font-semibold text-sm">
+                            <i data-lucide="shield" class="w-4 h-4"></i>
+                            Local Offline Models (Ollama + WebUI)
+                        </div>
+                        <p class="text-slate-400 text-xs">
+                            100% private, zero internet telemetry. Runs bundled Open WebUI inside the box connected to host Ollama on port 11434.
+                        </p>
+                        <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800 text-xs font-mono text-emerald-400">
+                            just agy-local-ui &nbsp;&nbsp;# Open :8080
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════ -->
+            <!-- 7. WHAT'S IN THE BOX (Feature Cards)            -->
+            <!-- ═══════════════════════════════════════════════ -->
+            <section id="features">
                 <div class="flex items-center gap-3 mb-6">
                     <div class="w-10 h-10 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
                         <i data-lucide="gem" class="w-5 h-5 text-indigo-400"></i>
@@ -209,16 +616,16 @@
             </section>
 
             <!-- ═══════════════════════════════════════════════ -->
-            <!-- 5. THE ANTIGRAVITY SUITE                        -->
+            <!-- 8. THE ANTIGRAVITY SUITE                        -->
             <!-- ═══════════════════════════════════════════════ -->
-            <section>
+            <section id="suite">
                 <div class="flex items-center gap-3 mb-6">
                     <div class="w-10 h-10 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
                         <i data-lucide="rocket" class="w-5 h-5 text-indigo-400"></i>
                     </div>
                     <h2 class="text-xl font-bold text-white">The Antigravity Suite</h2>
                 </div>
-                <p class="text-slate-400 mb-5 text-sm">Four integrated products, one container — the complete AI agent development environment. They are installed per user into <code class="text-emerald-400 font-mono text-xs bg-slate-900 px-1 py-0.5 rounded">~/.local</code> by <code class="text-emerald-400 font-mono text-xs bg-slate-900 px-1 py-0.5 rounded">agy-box-manager install</code>:</p>
+                <p class="text-slate-400 mb-5 text-sm">Four integrated products, one container — the complete AI agent development environment:</p>
                 <div class="space-y-4">
                     <!-- Agent UI -->
                     <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 border-l-4 border-l-indigo-500">
@@ -273,14 +680,14 @@
             </section>
 
             <!-- ═══════════════════════════════════════════════ -->
-            <!-- 6. ARCHITECTURE DIAGRAMS                        -->
+            <!-- 9. ARCHITECTURE DIAGRAMS                        -->
             <!-- ═══════════════════════════════════════════════ -->
-            <section>
+            <section id="architecture">
                 <div class="flex items-center gap-3 mb-6">
                     <div class="w-10 h-10 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
                         <i data-lucide="network" class="w-5 h-5 text-indigo-400"></i>
                     </div>
-                    <h2 class="text-xl font-bold text-white">Architecture</h2>
+                    <h2 class="text-xl font-bold text-white">Architecture &amp; Topologies</h2>
                 </div>
 
                 <!-- Layered Architecture -->
@@ -307,9 +714,9 @@
             </section>
 
             <!-- ═══════════════════════════════════════════════ -->
-            <!-- 7. VDI WEB DESKTOP                              -->
+            <!-- 10. VDI WEB DESKTOP                             -->
             <!-- ═══════════════════════════════════════════════ -->
-            <section>
+            <section id="vdi-desktop">
                 <div class="flex items-center gap-3 mb-4">
                     <div class="w-10 h-10 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
                         <i data-lucide="layout-dashboard" class="w-5 h-5 text-indigo-400"></i>
@@ -346,9 +753,9 @@
             </section>
 
             <!-- ═══════════════════════════════════════════════ -->
-            <!-- 8. SETUP ASSISTANT                              -->
+            <!-- 11. SETUP ASSISTANT                             -->
             <!-- ═══════════════════════════════════════════════ -->
-            <section>
+            <section id="setup-helper">
                 <div class="flex items-center gap-3 mb-4">
                     <div class="w-10 h-10 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
                         <i data-lucide="settings" class="w-5 h-5 text-indigo-400"></i>
@@ -381,16 +788,178 @@
                 <div class="mt-4 bg-indigo-500/10 border border-indigo-500/30 rounded-xl p-4">
                     <div class="flex items-center gap-2 mb-1.5">
                         <i data-lucide="sparkles" class="w-4 h-4 text-indigo-400"></i>
-                        <span class="text-indigo-300 font-semibold text-sm">New: Host Profile Seeding</span>
+                        <span class="text-indigo-300 font-semibold text-sm">Host Profile Seeding</span>
                     </div>
                     <p class="text-slate-400 text-sm">Optionally seed your container with Chrome bookmarks, cookies, and Antigravity settings from your host. One-time copy — changes in the box never affect the host.</p>
                 </div>
             </section>
 
             <!-- ═══════════════════════════════════════════════ -->
-            <!-- 9. COMMAND REFERENCE                            -->
+            <!-- 12. AGENTIC ENGINEERING & CLI MASTERY           -->
             <!-- ═══════════════════════════════════════════════ -->
-            <section>
+            <section id="agent-guide">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
+                        <i data-lucide="bot" class="w-5 h-5 text-indigo-400"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold text-white">Agentic Engineering &amp; CLI Mastery</h2>
+                        <p class="text-slate-500 text-xs">Autonomous workflows, slash commands, and background subagents</p>
+                    </div>
+                </div>
+
+                <!-- CLI Table -->
+                <div class="overflow-x-auto mb-6">
+                    <table class="w-full text-xs border-collapse">
+                        <thead>
+                            <tr class="bg-slate-800/90 text-left text-slate-400 font-semibold">
+                                <th class="px-4 py-2.5 rounded-tl-lg">Command / Flag</th>
+                                <th class="px-4 py-2.5 rounded-tr-lg">Purpose &amp; Description</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-700/60 bg-slate-900/40">
+                            <tr class="hover:bg-slate-800/40">
+                                <td class="px-4 py-2.5 font-mono text-emerald-400">agy</td>
+                                <td class="px-4 py-2.5 text-slate-300">Start an interactive agent terminal chat session</td>
+                            </tr>
+                            <tr class="hover:bg-slate-800/40">
+                                <td class="px-4 py-2.5 font-mono text-emerald-400">agy -p "prompt"</td>
+                                <td class="px-4 py-2.5 text-slate-300">Run a one-shot headless agent prompt and print the response to stdout</td>
+                            </tr>
+                            <tr class="hover:bg-slate-800/40">
+                                <td class="px-4 py-2.5 font-mono text-emerald-400">agy --resume</td>
+                                <td class="px-4 py-2.5 text-slate-300">Resume the most recent conversation and restore context</td>
+                            </tr>
+                            <tr class="hover:bg-slate-800/40">
+                                <td class="px-4 py-2.5 font-mono text-emerald-400">agy --statusline</td>
+                                <td class="px-4 py-2.5 text-slate-300">Customize the interactive terminal status line and active agent display</td>
+                            </tr>
+                            <tr class="hover:bg-slate-800/40">
+                                <td class="px-4 py-2.5 font-mono text-emerald-400">agy --sandbox</td>
+                                <td class="px-4 py-2.5 text-slate-300">Run in read-only sandbox mode (prevents file writes during exploration)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Slash Commands Grid -->
+                <h3 class="text-white font-semibold text-sm mb-3 flex items-center gap-2">
+                    <i data-lucide="sparkles" class="w-4 h-4 text-indigo-400"></i>
+                    Slash Commands Guide (Interactive Session)
+                </h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    <div class="bg-slate-800/70 p-3.5 rounded-xl border border-slate-700">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="font-mono text-indigo-400 font-bold text-xs">/plan</span>
+                            <span class="text-[10px] bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded">Planning</span>
+                        </div>
+                        <p class="text-slate-400 text-xs">Formulates a multi-phase implementation plan before touching code. Recommended for complex refactors.</p>
+                    </div>
+                    <div class="bg-slate-800/70 p-3.5 rounded-xl border border-slate-700">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="font-mono text-purple-400 font-bold text-xs">/boost</span>
+                            <span class="text-[10px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded">Deep Reasoning</span>
+                        </div>
+                        <p class="text-slate-400 text-xs">Activates deep multi-perspective reasoning for complex algorithm design and elusive bugs.</p>
+                    </div>
+                    <div class="bg-slate-800/70 p-3.5 rounded-xl border border-slate-700">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="font-mono text-emerald-400 font-bold text-xs">/teamwork-preview</span>
+                            <span class="text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded">Multi-Agent</span>
+                        </div>
+                        <p class="text-slate-400 text-xs">Orchestrates a team of autonomous subagents working on parallel modules simultaneously.</p>
+                    </div>
+                    <div class="bg-slate-800/70 p-3.5 rounded-xl border border-slate-700">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="font-mono text-amber-400 font-bold text-xs">/learn</span>
+                            <span class="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded">Preferences</span>
+                        </div>
+                        <p class="text-slate-400 text-xs">Teaches the agent a permanent preference or pattern to store in your project rules.</p>
+                    </div>
+                    <div class="bg-slate-800/70 p-3.5 rounded-xl border border-slate-700">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="font-mono text-rose-400 font-bold text-xs">/goal</span>
+                            <span class="text-[10px] bg-rose-500/20 text-rose-300 px-1.5 py-0.5 rounded">Persistent</span>
+                        </div>
+                        <p class="text-slate-400 text-xs">Directs the agent to work persistently until a long-running, multi-step objective is fulfilled.</p>
+                    </div>
+                    <div class="bg-slate-800/70 p-3.5 rounded-xl border border-slate-700">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <span class="font-mono text-cyan-400 font-bold text-xs">/browser</span>
+                            <span class="text-[10px] bg-cyan-500/20 text-cyan-300 px-1.5 py-0.5 rounded">Automation</span>
+                        </div>
+                        <p class="text-slate-400 text-xs">Launches autonomous Chrome CDP session on port 9222 to test web applications and take screenshots.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════ -->
+            <!-- 13. MAINTENANCE, CHECKING & UPDATING            -->
+            <!-- ═══════════════════════════════════════════════ -->
+            <section id="maintenance">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
+                        <i data-lucide="refresh-cw" class="w-5 h-5 text-indigo-400"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold text-white">Maintenance, Checking &amp; Updating</h2>
+                        <p class="text-slate-500 text-xs">Keep your development sandbox, tools, and IDEs healthy and updated</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Diagnostic checks -->
+                    <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 space-y-3">
+                        <h3 class="text-white font-semibold text-sm flex items-center gap-2">
+                            <i data-lucide="activity" class="w-4 h-4 text-indigo-400"></i>
+                            Diagnostics &amp; Health Checks
+                        </h3>
+                        <p class="text-slate-400 text-xs">Run automated assertions on container health, port mappings, and toolchains:</p>
+                        <div class="space-y-1.5 font-mono text-xs text-emerald-400 bg-slate-900 p-3 rounded-lg border border-slate-800">
+                            <div>agy-box-manager status &nbsp;# State &amp; ports</div>
+                            <div>agy-box-manager doctor &nbsp;# Deep diagnostic</div>
+                            <div>agy-box-manager test &nbsp;&nbsp;&nbsp;# 20 Bats assertions</div>
+                        </div>
+                    </div>
+
+                    <!-- Updates -->
+                    <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 space-y-3">
+                        <h3 class="text-white font-semibold text-sm flex items-center gap-2">
+                            <i data-lucide="arrow-up-circle" class="w-4 h-4 text-emerald-400"></i>
+                            Updating Tools &amp; Packages
+                        </h3>
+                        <p class="text-slate-400 text-xs">Upgrade the Antigravity suite or container packages independently:</p>
+                        <div class="space-y-1.5 font-mono text-xs text-emerald-400 bg-slate-900 p-3 rounded-lg border border-slate-800">
+                            <div>agy-box-manager update-toolchain &nbsp;# Suite</div>
+                            <div>distrobox upgrade agy-box &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# APT/VSCode</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Backup & Restore snippet -->
+                <div class="mt-4 bg-slate-800/80 rounded-xl p-5 border border-slate-700">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-white font-semibold text-sm flex items-center gap-2">
+                            <i data-lucide="archive" class="w-4 h-4 text-amber-400"></i>
+                            Settings Backup &amp; Disaster Recovery
+                        </h3>
+                        <button onclick="copyText('backup-cmd')" class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded px-2.5 py-1 transition-colors flex items-center gap-1">
+                            <i data-lucide="clipboard" class="w-3 h-3"></i>Copy
+                        </button>
+                    </div>
+                    <p class="text-slate-400 text-xs mb-3">Backup your conversation transcripts, subagent brains, custom skills, and IDE configurations in one archive:</p>
+                    <pre class="bg-slate-900 p-3 rounded-lg border border-slate-800 overflow-x-auto"><code class="text-emerald-400 font-mono text-xs" id="backup-cmd">tar -czvf agy-backup-$(date +%F).tar.gz \
+  ~/.config/agy-box/home/.gemini \
+  ~/.config/agy-box/home/.config/Antigravity* \
+  ~/.config/agy-box/home/.config/zed \
+  ~/.config/agy-box/home/.config/Code</code></pre>
+                </div>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════ -->
+            <!-- 14. COMMAND REFERENCE                           -->
+            <!-- ═══════════════════════════════════════════════ -->
+            <section id="commands">
                 <div class="flex items-center gap-3 mb-4">
                     <div class="w-10 h-10 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
                         <i data-lucide="book-open" class="w-5 h-5 text-indigo-400"></i>
@@ -402,8 +971,8 @@
                         <thead>
                             <tr class="bg-slate-800/80 text-left">
                                 <th class="px-4 py-3 text-slate-400 font-semibold rounded-tl-lg">Action</th>
-                                <th class="px-4 py-3 text-slate-400 font-semibold">Bash</th>
-                                <th class="px-4 py-3 text-slate-400 font-semibold rounded-tr-lg">Just</th>
+                                <th class="px-4 py-3 text-slate-400 font-semibold">Bash Command</th>
+                                <th class="px-4 py-3 text-slate-400 font-semibold rounded-tr-lg">Just Recipe</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-700">
@@ -418,32 +987,32 @@
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-install</code></td>
                             </tr>
                             <tr class="hover:bg-slate-800/40 transition-colors">
-                                <td class="px-4 py-2.5 text-slate-300">Build Dev</td>
+                                <td class="px-4 py-2.5 text-slate-300">Build Dev Container</td>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">agy-box-manager dev</code></td>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-box-dev</code></td>
                             </tr>
                             <tr class="hover:bg-slate-800/40 transition-colors">
-                                <td class="px-4 py-2.5 text-slate-300">Enter Official</td>
+                                <td class="px-4 py-2.5 text-slate-300">Enter Official Box</td>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">agy-box-manager enter</code></td>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-enter</code></td>
                             </tr>
                             <tr class="hover:bg-slate-800/40 transition-colors">
-                                <td class="px-4 py-2.5 text-slate-300">Enter Dev</td>
+                                <td class="px-4 py-2.5 text-slate-300">Enter Dev Box</td>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">agy-box-manager enter dev</code></td>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-enter-dev</code></td>
                             </tr>
                             <tr class="hover:bg-slate-800/40 transition-colors">
-                                <td class="px-4 py-2.5 text-slate-300">VDI Desktop</td>
+                                <td class="px-4 py-2.5 text-slate-300">Launch VDI Desktop</td>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">agy-box-manager desktop</code></td>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-desktop</code></td>
                             </tr>
                             <tr class="hover:bg-slate-800/40 transition-colors">
-                                <td class="px-4 py-2.5 text-slate-300">Clean Official</td>
+                                <td class="px-4 py-2.5 text-slate-300">Clean Official Box</td>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">agy-box-manager clean</code></td>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-clean</code></td>
                             </tr>
                             <tr class="hover:bg-slate-800/40 transition-colors">
-                                <td class="px-4 py-2.5 text-slate-300">Run Tests</td>
+                                <td class="px-4 py-2.5 text-slate-300">Run Health Tests</td>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">agy-box-manager test</code></td>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-test</code></td>
                             </tr>
@@ -454,7 +1023,7 @@
                             </tr>
                             <tr class="hover:bg-slate-800/40 transition-colors">
                                 <td class="px-4 py-2.5 text-slate-300">Local Web Dashboard</td>
-                                <td class="px-4 py-2.5"><span class="text-slate-500 text-xs">justfile only</span></td>
+                                <td class="px-4 py-2.5"><span class="text-slate-500 text-xs font-mono">distrobox enter agy-box -- /opt/...</span></td>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-local-ui</code></td>
                             </tr>
                         </tbody>
@@ -463,9 +1032,133 @@
             </section>
 
             <!-- ═══════════════════════════════════════════════ -->
-            <!-- 10. CI/CD & SECURITY                            -->
+            <!-- 15. TROUBLESHOOTING & FAQ                       -->
             <!-- ═══════════════════════════════════════════════ -->
-            <section>
+            <section id="faq">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
+                        <i data-lucide="help-circle" class="w-5 h-5 text-indigo-400"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold text-white">Troubleshooting &amp; FAQ</h2>
+                        <p class="text-slate-500 text-xs">Solutions to common edge cases, permissions, and desktop integration</p>
+                    </div>
+                </div>
+
+                <div class="space-y-3">
+                    <details class="group bg-slate-800/70 rounded-xl border border-slate-700 p-4">
+                        <summary class="cursor-pointer text-sm font-semibold text-white hover:text-indigo-300 transition-colors flex items-center justify-between">
+                            <span>Q: "Permission Denied" when creating files on the host</span>
+                            <i data-lucide="chevron-down" class="w-4 h-4 transition-transform group-open:rotate-180 text-indigo-400 flex-shrink-0"></i>
+                        </summary>
+                        <div class="mt-3 text-xs text-slate-300 space-y-2 border-t border-slate-700/60 pt-3">
+                            <p><strong class="text-amber-400">Cause:</strong> Running the Docker daemon as root without user namespace remapping, causing files to be owned by root.</p>
+                            <p><strong class="text-emerald-400">Solution:</strong> Install <strong>Podman</strong> (<code class="text-slate-200 font-mono">sudo dnf install podman</code> or <code class="text-slate-200 font-mono">sudo apt install podman</code>). Podman runs completely rootless and maps your host UID 1:1 inside the container. <code class="text-emerald-400 font-mono">agy-box-manager</code> auto-prioritizes Podman if installed.</p>
+                        </div>
+                    </details>
+
+                    <details class="group bg-slate-800/70 rounded-xl border border-slate-700 p-4">
+                        <summary class="cursor-pointer text-sm font-semibold text-white hover:text-indigo-300 transition-colors flex items-center justify-between">
+                            <span>Q: GUI applications do not appear on host desktop</span>
+                            <i data-lucide="chevron-down" class="w-4 h-4 transition-transform group-open:rotate-180 text-indigo-400 flex-shrink-0"></i>
+                        </summary>
+                        <div class="mt-3 text-xs text-slate-300 space-y-2 border-t border-slate-700/60 pt-3">
+                            <p><strong class="text-amber-400">Cause:</strong> Your Wayland compositor or X11 server is restricting local socket connections from the container.</p>
+                            <p><strong class="text-emerald-400">Solution:</strong> Authorize local container connections on your host by running <code class="text-slate-200 font-mono">xhost +local:</code>. Alternatively, use Way 2 by running <code class="text-slate-200 font-mono">agy-box-manager desktop</code> to view the full desktop inside your browser over noVNC.</p>
+                        </div>
+                    </details>
+
+                    <details class="group bg-slate-800/70 rounded-xl border border-slate-700 p-4">
+                        <summary class="cursor-pointer text-sm font-semibold text-white hover:text-indigo-300 transition-colors flex items-center justify-between">
+                            <span>Q: How do I force Docker instead of Podman?</span>
+                            <i data-lucide="chevron-down" class="w-4 h-4 transition-transform group-open:rotate-180 text-indigo-400 flex-shrink-0"></i>
+                        </summary>
+                        <div class="mt-3 text-xs text-slate-300 space-y-2 border-t border-slate-700/60 pt-3">
+                            <p><code class="text-emerald-400 font-mono">agy-box-manager</code> honors the <code class="text-slate-200 font-mono">DBX_CONTAINER_MANAGER</code> environment variable. Export it before launching:</p>
+                            <pre class="bg-slate-900 p-2.5 rounded font-mono text-emerald-400">export DBX_CONTAINER_MANAGER="docker"
+agy-box-manager install</pre>
+                        </div>
+                    </details>
+
+                    <details class="group bg-slate-800/70 rounded-xl border border-slate-700 p-4">
+                        <summary class="cursor-pointer text-sm font-semibold text-white hover:text-indigo-300 transition-colors flex items-center justify-between">
+                            <span>Q: How do I completely reset the box without losing personal data?</span>
+                            <i data-lucide="chevron-down" class="w-4 h-4 transition-transform group-open:rotate-180 text-indigo-400 flex-shrink-0"></i>
+                        </summary>
+                        <div class="mt-3 text-xs text-slate-300 space-y-2 border-t border-slate-700/60 pt-3">
+                            <p>Run clean followed by install. Your code repositories in <code class="text-slate-200 font-mono">~/</code> and your isolated container configurations in <code class="text-slate-200 font-mono">~/.config/agy-box/home</code> are completely preserved:</p>
+                            <pre class="bg-slate-900 p-2.5 rounded font-mono text-emerald-400">agy-box-manager clean
+agy-box-manager install</pre>
+                        </div>
+                    </details>
+                </div>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════ -->
+            <!-- 16. DOCUMENTATION LIBRARY                       -->
+            <!-- ═══════════════════════════════════════════════ -->
+            <section id="docs-library">
+                <div class="flex items-center gap-3 mb-4">
+                    <div class="w-10 h-10 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
+                        <i data-lucide="library" class="w-5 h-5 text-indigo-400"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold text-white">Documentation Library</h2>
+                        <p class="text-slate-500 text-xs">In-depth Markdown guides and specifications in the repository</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <a href="USER_GUIDE.md" class="bg-slate-800/80 hover:bg-slate-800 p-4 rounded-xl border border-slate-700 hover:border-indigo-500/40 transition-colors block group">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <h3 class="text-white font-semibold text-sm group-hover:text-indigo-400 transition-colors flex items-center gap-2">
+                                <i data-lucide="book-marked" class="w-4 h-4 text-indigo-400"></i>
+                                Complete User Guide
+                            </h3>
+                            <i data-lucide="arrow-right" class="w-4 h-4 text-slate-500 group-hover:text-indigo-400 transition-colors"></i>
+                        </div>
+                        <p class="text-slate-400 text-xs">7-chapter definitive guide covering workflows, auth, subagents, and IDE setups.</p>
+                    </a>
+
+                    <a href="SETUP.md" class="bg-slate-800/80 hover:bg-slate-800 p-4 rounded-xl border border-slate-700 hover:border-indigo-500/40 transition-colors block group">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <h3 class="text-white font-semibold text-sm group-hover:text-indigo-400 transition-colors flex items-center gap-2">
+                                <i data-lucide="wrench" class="w-4 h-4 text-indigo-400"></i>
+                                Setup &amp; Architecture Reference
+                            </h3>
+                            <i data-lucide="arrow-right" class="w-4 h-4 text-slate-500 group-hover:text-indigo-400 transition-colors"></i>
+                        </div>
+                        <p class="text-slate-400 text-xs">Detailed prerequisites, manual installation steps, and host troubleshooting.</p>
+                    </a>
+
+                    <a href="settings-reference.md" class="bg-slate-800/80 hover:bg-slate-800 p-4 rounded-xl border border-slate-700 hover:border-indigo-500/40 transition-colors block group">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <h3 class="text-white font-semibold text-sm group-hover:text-indigo-400 transition-colors flex items-center gap-2">
+                                <i data-lucide="sliders" class="w-4 h-4 text-indigo-400"></i>
+                                Settings Schema Reference
+                            </h3>
+                            <i data-lucide="arrow-right" class="w-4 h-4 text-slate-500 group-hover:text-indigo-400 transition-colors"></i>
+                        </div>
+                        <p class="text-slate-400 text-xs">Comprehensive map of all configuration paths, keys, and environment variables.</p>
+                    </a>
+
+                    <a href="architecture.md" class="bg-slate-800/80 hover:bg-slate-800 p-4 rounded-xl border border-slate-700 hover:border-indigo-500/40 transition-colors block group">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <h3 class="text-white font-semibold text-sm group-hover:text-indigo-400 transition-colors flex items-center gap-2">
+                                <i data-lucide="layers" class="w-4 h-4 text-indigo-400"></i>
+                                Deep Architecture Spec
+                            </h3>
+                            <i data-lucide="arrow-right" class="w-4 h-4 text-slate-500 group-hover:text-indigo-400 transition-colors"></i>
+                        </div>
+                        <p class="text-slate-400 text-xs">System topology, IPC protocols, and supply-chain hardening blueprints.</p>
+                    </a>
+                </div>
+            </section>
+
+            <!-- ═══════════════════════════════════════════════ -->
+            <!-- 17. CI/CD & SECURITY                            -->
+            <!-- ═══════════════════════════════════════════════ -->
+            <section id="security">
                 <div class="flex items-center gap-3 mb-4">
                     <div class="w-10 h-10 rounded-full bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center flex-shrink-0">
                         <i data-lucide="lock" class="w-5 h-5 text-indigo-400"></i>
@@ -479,15 +1172,15 @@
                     </div>
                     <div class="flex items-start gap-3">
                         <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0"></i>
-                        <span class="text-slate-400 text-sm">Bats unit tests for every installation script</span>
+                        <span class="text-slate-400 text-sm">Bats unit tests for every installation script and container health check</span>
                     </div>
                     <div class="flex items-start gap-3">
                         <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0"></i>
-                        <span class="text-slate-400 text-sm">Parallel native multi-arch Docker Buildx builds (amd64 & arm64) with GitHub Actions layer caching — the exact images tested in Distrobox are the ones published</span>
+                        <span class="text-slate-400 text-sm">Parallel native multi-arch Docker Buildx builds (amd64 &amp; arm64) with GitHub Actions layer caching</span>
                     </div>
                     <div class="flex items-start gap-3">
                         <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0"></i>
-                        <span class="text-slate-400 text-sm">Integration tests running inside Distrobox containers</span>
+                        <span class="text-slate-400 text-sm">Integration tests running inside actual Distrobox test containers</span>
                     </div>
                     <div class="flex items-start gap-3">
                         <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0"></i>
@@ -503,15 +1196,15 @@
                     </div>
                     <div class="flex items-start gap-3">
                         <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 mt-0.5 flex-shrink-0"></i>
-                        <span class="text-slate-400 text-sm">Auto-release on version tags with the SBOM attached</span>
+                        <span class="text-slate-400 text-sm">Auto-release on version tags with authentic Syft SBOM attached</span>
                     </div>
                 </div>
             </section>
 
             <!-- ═══════════════════════════════════════════════ -->
-            <!-- 11. SOURCE CODE VIEWER                          -->
+            <!-- 18. SOURCE CODE VIEWER                          -->
             <!-- ═══════════════════════════════════════════════ -->
-            <section class="no-print">
+            <section class="no-print" id="source">
                 <details class="group" id="source-details">
                     <summary onclick="fetchSource()" class="cursor-pointer text-sm font-medium text-white hover:text-indigo-300 transition-colors flex items-center gap-2 bg-slate-800/80 rounded-lg px-4 py-3 border border-slate-700">
                         <i data-lucide="chevron-right" class="w-4 h-4 transition-transform group-open:rotate-90 text-indigo-400"></i>
@@ -529,19 +1222,21 @@
             </section>
 
             <!-- ═══════════════════════════════════════════════ -->
-            <!-- 12. FOOTER                                      -->
+            <!-- 19. FOOTER                                      -->
             <!-- ═══════════════════════════════════════════════ -->
-            <footer class="text-center text-slate-500 text-xs pt-4 border-t border-slate-700/50 space-y-1">
+            <footer class="text-center text-slate-500 text-xs pt-4 border-t border-slate-700/50 space-y-2">
                 <p>
                     📦 <span class="text-slate-400 font-medium">agy-box</span> · 
                     <a href="https://github.com/wtg-codes/agy-box" class="text-indigo-400 hover:text-indigo-300 transition-colors">GitHub</a> · 
-                    <a href="https://github.com/wtg-codes/agy-box#readme" class="text-indigo-400 hover:text-indigo-300 transition-colors">README</a> · 
-                    <a href="https://github.com/wtg-codes/agy-box/blob/main/docs/architecture.md" class="text-indigo-400 hover:text-indigo-300 transition-colors">Architecture</a> · 
+                    <a href="USER_GUIDE.md" class="text-indigo-400 hover:text-indigo-300 transition-colors">User Guide</a> · 
+                    <a href="SETUP.md" class="text-indigo-400 hover:text-indigo-300 transition-colors">Setup</a> · 
+                    <a href="settings-reference.md" class="text-indigo-400 hover:text-indigo-300 transition-colors">Settings</a> · 
+                    <a href="architecture.md" class="text-indigo-400 hover:text-indigo-300 transition-colors">Architecture</a> · 
                     <a href="https://github.com/wtg-codes/agy-box/releases" class="text-indigo-400 hover:text-indigo-300 transition-colors">Releases</a> · 
                     <a href="https://github.com/wtg-codes/agy-box/blob/main/LICENSE" class="text-indigo-400 hover:text-indigo-300 transition-colors">MIT License</a> · 
                     <a href="https://github.com/wtg-codes" class="text-indigo-400 hover:text-indigo-300 transition-colors">wtg-codes</a>
                 </p>
-                <p>Declarative Student Workspace for the wtgOS Cloud-Native Laboratory</p>
+                <p>Declarative AI Agent Workspace for the wtgOS Cloud-Native Laboratory</p>
             </footer>
 
         </div>
@@ -602,7 +1297,6 @@
             navigator.clipboard.writeText(text).then(() => {
                 triggerSuccess(btn, icon, label);
             }).catch(() => {
-                // Fallback for older browsers
                 const ta = document.createElement('textarea');
                 ta.value = text;
                 ta.style.position = 'fixed';
@@ -631,6 +1325,23 @@
                 if (label) label.textContent = 'Copy';
                 lucide.createIcons();
             }, 2500);
+        }
+
+        // Interactive IDE Tab Switcher
+        function switchIde(ideName) {
+            const tabs = ['vscode', 'zed', 'antigravity', 'jetbrains'];
+            tabs.forEach(id => {
+                const tabBtn = document.getElementById('tab-ide-' + id);
+                const pane = document.getElementById('pane-ide-' + id);
+                if (id === ideName) {
+                    tabBtn.className = 'ide-tab bg-indigo-600 text-white px-3.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5';
+                    pane.classList.remove('hidden');
+                } else {
+                    tabBtn.className = 'ide-tab bg-slate-800 hover:bg-slate-700 text-slate-300 px-3.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5';
+                    pane.classList.add('hidden');
+                }
+            });
+            lucide.createIcons();
         }
 
         // Lazy-load source code from GitHub
