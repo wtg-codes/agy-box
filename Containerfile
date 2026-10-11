@@ -1,4 +1,4 @@
-FROM quay.io/toolbx/ubuntu-toolbox:24.04@sha256:1466ed74617c23677fadb0922387ff7267532027c8a8e18c5b101d3f0b6dcb40
+FROM quay.io/toolbx/ubuntu-toolbox:24.04
 
 LABEL org.opencontainers.image.description="Declarative Student Workspace for wtgOS Cloud-Native Laboratory"
 

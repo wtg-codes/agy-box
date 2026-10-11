@@ -8,8 +8,8 @@
   <a href="https://wtg-codes.github.io/agy-box/">
     <img src="https://img.shields.io/badge/website-wtg--codes.github.io%2Fagy--box-6366f1?style=flat-square" alt="Project Website">
   </a>
-  <img src="https://img.shields.io/badge/container%20base-Ubuntu%2026.04%20LTS-orange?style=flat-square" alt="Container Base OS">
-  <img src="https://img.shields.io/badge/platform-linux%2Famd64-lightgrey?style=flat-square" alt="Platform: linux/amd64">
+  <img src="https://img.shields.io/badge/container%20base-Ubuntu%2024.04%20LTS-E95420?style=flat-square" alt="Container Base OS">
+  <img src="https://img.shields.io/badge/platform-amd64%20%7C%20arm64-64748b?style=flat-square" alt="Platform: amd64 | arm64">
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/license-MIT-emerald?style=flat-square" alt="MIT License">
   </a>
@@ -84,7 +84,7 @@ If you plan to use this container locally or build from source, your host system
 
 ## Architecture
 
-The `agy-box` is designed to run via **Distrobox** on the `bluefin-wtg` immutable host OS (or any standard Linux distribution). It leverages an Ubuntu toolbox base image (`quay.io/toolbx/ubuntu-toolbox:24.04`, pinned by digest in the [`Containerfile`](Containerfile); Ubuntu 24.04 LTS, multi-arch `linux/amd64` and `linux/arm64`) and acts as a host-integrated developer sandbox.
+The `agy-box` is designed to run via **Distrobox** on the `bluefin-wtg` immutable host OS (or any standard Linux distribution). It leverages an Ubuntu toolbox base image (`quay.io/toolbx/ubuntu-toolbox:24.04` in the [`Containerfile`](Containerfile); Ubuntu 24.04 LTS, multi-arch `linux/amd64` and `linux/arm64`) and acts as a host-integrated developer sandbox.
 
 ### Host-Integrated Sandbox Model
 

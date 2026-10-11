@@ -10,7 +10,7 @@ Thank you for your interest in contributing to `agy-box`! This guide outlines ho
 
 The repository is structured as a Distrobox overlay template:
 
-- 📄 **[Containerfile](Containerfile)**: Image definition. Based on `quay.io/toolbx/ubuntu-toolbox:24.04` (pinned by digest; Ubuntu 24.04 LTS, multi-arch `linux/amd64` and `linux/arm64`).
+- 📄 **[Containerfile](Containerfile)**: Image definition. Based on `quay.io/toolbx/ubuntu-toolbox:24.04` (Ubuntu 24.04 LTS, multi-arch `linux/amd64` and `linux/arm64`).
 - 📂 **[rootfs/](rootfs)**: Files copied directly into the root filesystem (`/`) of the container during the build.
   - 📂 **[rootfs/etc/profile.d/agy-setup-check.sh](rootfs/etc/profile.d/agy-setup-check.sh)**: Hook that launches the interactive setup helper on first interactive TTY shell login.
   - 📂 **[rootfs/usr/local/bin/agy-setup-helper](rootfs/usr/local/bin/agy-setup-helper)**: Interactive first-time CLI helper verifying API keys, D-Bus, Chrome version, and Git setups. Its `VERSION` variable is the image version (it also selects the versioned wallpaper).
@@ -76,7 +76,7 @@ Edit the Mermaid sources in `docs/diagrams/*.mmd` only. The [`compile-diagrams.y
   - `fix: correct D-Bus keyring validation checks`
   - `docs: update system topology diagram`
   - `style: lint cleanup`
-- **CI Pipelines**: On every pull request, GitHub Actions lints the repository (yamllint, ShellCheck, hadolint), runs the Bats tests, builds the `linux/amd64` image, runs the Distrobox integration test suite against it, and generates an SBOM plus an informational Grype vulnerability scan. Pull requests never push images to GHCR. Make sure all local lints and tests pass before pushing!
+- **CI Pipelines**: On every pull request, GitHub Actions lints the repository (yamllint, ShellCheck, hadolint), runs the Bats tests, builds the `linux/amd64` and `linux/arm64` images on native runners, runs the Distrobox integration test suite against both, and generates an SBOM plus an informational Grype vulnerability scan for each architecture. Pull requests never push images to GHCR. Make sure all local lints and tests pass before pushing!
 - **Releases**: Maintainers bump `VERSION` in `agy-box-manager` and `rootfs/usr/local/bin/agy-setup-helper` (plus the version shown in `docs/index.html`), merge to `main`, and push a `v<version>` tag. See [Releases](README.md#releases).
 
 ---
