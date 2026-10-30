@@ -147,21 +147,60 @@ test-scripts:
         $runtime run --rm -v "$(pwd):/code:z" -w /code docker.io/bats/bats:latest tests/; \
     fi
 
-# Launch Local Workspace Web Dashboard (requires Ollama backend)
+# Launch Local Workspace Web Dashboard (supports OpenAI/LiteLLM/DeepSeek on :4000/:8000 or Ollama on :11434)
 agy-local-ui:
-    @echo "🔍 Auditing local hardware infrastructure..."
-    @if ! curl -s http://localhost:11434/api/tags > /dev/null; then \
-        echo "❌ CONFIG ERROR: Local Ollama backend not accessible on port 11434!"; \
-        echo "💡 Ensure your host accelerator is running via: podman start ollama"; \
+    @echo "🔍 Auditing local inference infrastructure..."
+    @mkdir -p ~/.config/agy-local-ui
+    @if [ -n "${OPENAI_API_BASE_URL:-}" ]; then \
+        echo "✅ OpenAI-compatible backend configured via OPENAI_API_BASE_URL ($OPENAI_API_BASE_URL)"; \
+        export DATA_DIR="$HOME/.config/agy-local-ui" \
+               ENABLE_OLLAMA_API="${ENABLE_OLLAMA_API:-false}" \
+               ENABLE_OPENAI_API="true" \
+               OPENAI_API_KEY="${OPENAI_API_KEY:-sk-spark-local}" \
+               RAG_EMBEDDING_ENGINE="${RAG_EMBEDDING_ENGINE:-openai}" \
+               USE_CUDA_DOCKER="false" \
+               CUDA_VISIBLE_DEVICES="" && \
+        open-webui serve --port "${WEBUI_PORT:-8080}"; \
+    elif curl -sf http://127.0.0.1:4000/health/liveliness > /dev/null 2>&1 || curl -sf http://127.0.0.1:4000/v1/models > /dev/null 2>&1; then \
+        echo "✅ DGX Spark LiteLLM Gateway detected on port 4000 (CPU-only UI mode enabled)!"; \
+        export DATA_DIR="$HOME/.config/agy-local-ui" \
+               ENABLE_OLLAMA_API="false" \
+               ENABLE_OPENAI_API="true" \
+               OPENAI_API_BASE_URL="http://127.0.0.1:4000/v1" \
+               OPENAI_API_KEY="${OPENAI_API_KEY:-sk-spark-master-key}" \
+               RAG_EMBEDDING_ENGINE="openai" \
+               USE_CUDA_DOCKER="false" \
+               CUDA_VISIBLE_DEVICES="" && \
+        open-webui serve --port "${WEBUI_PORT:-8080}"; \
+    elif curl -sf http://127.0.0.1:8000/v1/models > /dev/null 2>&1; then \
+        echo "✅ DGX Spark DeepSeek-V4.1-Flash TP2 Engine detected on port 8000 (CPU-only UI mode enabled)!"; \
+        export DATA_DIR="$HOME/.config/agy-local-ui" \
+               ENABLE_OLLAMA_API="false" \
+               ENABLE_OPENAI_API="true" \
+               OPENAI_API_BASE_URL="http://127.0.0.1:8000/v1" \
+               OPENAI_API_KEY="${OPENAI_API_KEY:-sk-spark-local}" \
+               RAG_EMBEDDING_ENGINE="openai" \
+               USE_CUDA_DOCKER="false" \
+               CUDA_VISIBLE_DEVICES="" && \
+        open-webui serve --port "${WEBUI_PORT:-8080}"; \
+    elif curl -sf http://127.0.0.1:11434/api/tags > /dev/null 2>&1; then \
+        echo "✅ Ollama hardware acceleration node detected on port 11434!"; \
+        export DATA_DIR="$HOME/.config/agy-local-ui" && open-webui serve --port "${WEBUI_PORT:-8080}"; \
+    else \
+        echo "❌ CONFIG ERROR: No local inference backend found on :4000 (LiteLLM), :8000 (DeepSeek), or :11434 (Ollama)!"; \
+        echo "💡 Set OPENAI_API_BASE_URL=http://127.0.0.1:4000/v1 or start your local inference engine."; \
         exit 1; \
     fi
-    @echo "✅ Ollama hardware acceleration node detected!"
-    @echo "🚀 Launching Local Workspace Web Dashboard..."
-    @mkdir -p ~/.config/agy-local-ui
-    @export DATA_DIR="$HOME/.config/agy-local-ui" && open-webui serve --port 8080
 
 # Launch Local Workspace Web Dashboard in isolated dev/testing mode
 agy-local-ui-dev:
     @echo "🧪 Initializing isolated local UI testing layer..."
     @mkdir -p ~/.config/agy-local-ui-dev
-    @export DATA_DIR="$HOME/.config/agy-local-ui-dev" && open-webui serve --port 8081
+    @export DATA_DIR="$HOME/.config/agy-local-ui-dev" \
+            ENABLE_OLLAMA_API="${ENABLE_OLLAMA_API:-false}" \
+            ENABLE_OPENAI_API="${ENABLE_OPENAI_API:-true}" \
+            OPENAI_API_BASE_URL="${OPENAI_API_BASE_URL:-http://127.0.0.1:4000/v1}" \
+            OPENAI_API_KEY="${OPENAI_API_KEY:-sk-spark-local}" \
+            USE_CUDA_DOCKER="false" \
+            CUDA_VISIBLE_DEVICES="" && \
+     open-webui serve --port "${WEBUI_DEV_PORT:-8081}"

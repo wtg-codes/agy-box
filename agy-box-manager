@@ -196,6 +196,21 @@ get_os_name() {
     fi
 }
 
+is_dgx_spark() {
+    if [ "${AGY_ASSUME_DGX_SPARK:-false}" = "true" ]; then
+        return 0
+    fi
+    if [ "$(uname -m 2>/dev/null)" = "aarch64" ]; then
+        if grep -qiE "DGX Spark|Grace Blackwell|GB10" /proc/device-tree/model /sys/devices/virtual/dmi/id/product_name /etc/os-release 2>/dev/null; then
+            return 0
+        fi
+        if command -v nvidia-smi &>/dev/null && nvidia-smi -L 2>/dev/null | grep -qiE "GB10|Grace Blackwell|DGX Spark"; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
 probe_host_capabilities() {
     local mode=${1:-}
     load_config
@@ -958,6 +973,8 @@ cmd_install_official() {
     local seed_gcloud=false
     local fresh_home=false
     local reuse_home=false
+    local cli_memory_limit=""
+    local cli_cpu_limit=""
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -979,6 +996,14 @@ cmd_install_official() {
                 ;;
             --engine)
                 custom_engine="$2"
+                shift 2
+                ;;
+            --memory-limit)
+                cli_memory_limit="$2"
+                shift 2
+                ;;
+            --cpus)
+                cli_cpu_limit="$2"
                 shift 2
                 ;;
             --seed-ssh)
@@ -1177,6 +1202,15 @@ cmd_install_official() {
                 memory_limit="${memory_limit#\'}"
             fi
         done < "$limits_conf"
+    fi
+    if [[ -n "${cli_cpu_limit:-}" ]]; then
+        cpu_limit="$cli_cpu_limit"
+    fi
+    if [[ -n "${cli_memory_limit:-}" ]]; then
+        memory_limit="$cli_memory_limit"
+    elif [[ -z "$memory_limit" ]] && is_dgx_spark; then
+        memory_limit="6g"
+        ui_warn "🛡️  NVIDIA DGX Spark unified memory detected: enforcing default container guardrail (-m 6g)"
     fi
 
     local vdi_port=6080
@@ -1473,6 +1507,15 @@ cmd_build_dev() {
                 memory_limit="${memory_limit#\'}"
             fi
         done < "$limits_conf"
+    fi
+    if [[ -n "${cli_cpu_limit:-}" ]]; then
+        cpu_limit="$cli_cpu_limit"
+    fi
+    if [[ -n "${cli_memory_limit:-}" ]]; then
+        memory_limit="$cli_memory_limit"
+    elif [[ -z "$memory_limit" ]] && is_dgx_spark; then
+        memory_limit="6g"
+        ui_warn "🛡️  NVIDIA DGX Spark unified memory detected: enforcing default container guardrail (-m 6g)"
     fi
     if [[ -n "$cpu_limit" ]]; then
         dbx_flags+=("--additional-flags" "--cpus=$cpu_limit")
