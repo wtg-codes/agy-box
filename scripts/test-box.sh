@@ -148,16 +148,13 @@ if "${RUNTIME}" ps -a --format '{{.Names}}' 2>/dev/null | grep -qw "$CONTAINER_N
     fi
 fi
 
-distrobox create -i "$IMAGE_NAME" -n "$CONTAINER_NAME" --hostname "$CONTAINER_NAME" --home "$TEST_HOME" --yes
-log_success "Created distrobox container '$CONTAINER_NAME'."
-
-# Sleep briefly to ensure Podman container registration is fully synced to disk
-sleep 2
-
-# Probe whether distrobox enter works on this host/runtime (e.g. Docker on Ubuntu 24.04
-# can fail with 'openat dev/ptmx: no such device' when distrobox bind-mounts /dev, or
-# when testing a cross-arch image under QEMU). If so, fall back to Isolated Sandbox mode.
-if distrobox enter "$CONTAINER_NAME" -- true 2>/dev/null; then
+# Probe whether distrobox create + enter works on this host/runtime (e.g. Docker on
+# Ubuntu 24.04 can fail with 'openat dev/ptmx: no such device' when distrobox bind-mounts
+# /dev, or when testing a cross-arch image under QEMU). If so, fall back to Isolated Sandbox mode.
+if distrobox create -i "$IMAGE_NAME" -n "$CONTAINER_NAME" --hostname "$CONTAINER_NAME" --home "$TEST_HOME" --yes && \
+   sleep 2 && \
+   distrobox enter "$CONTAINER_NAME" -- true 2>/dev/null; then
+    log_success "Created distrobox container '$CONTAINER_NAME'."
     # --- Install Toolchain (real user path) ---
     # Runs the in-image /usr/local/bin/agy-install-toolchain inside the box and
     # exports the agy CLI to the host, via the manager's own install_toolchain_in_box.

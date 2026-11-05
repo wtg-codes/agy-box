@@ -1,6 +1,9 @@
 #!/usr/bin/env bats
 
 setup() {
+  # Clean up any leftover artifacts in the working directory before running tests
+  rm -rf k9s* helm* kubectl* checksums.sha256* gpg.key linux-* nodesource* lookup* microsoft* zed*
+
   # Create a unique temp directory
   TEST_DIR="$(mktemp -d)"
   MOCK_BIN="$TEST_DIR/bin"

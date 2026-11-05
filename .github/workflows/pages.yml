@@ -23,7 +23,7 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: [self-hosted, Linux, ARM64, dgx-spark, agy-box]
+    runs-on: [self-hosted, Linux, ARM64, dgx-spark]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/configure-pages@v6

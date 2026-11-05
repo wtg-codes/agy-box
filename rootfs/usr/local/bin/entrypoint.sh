@@ -38,8 +38,12 @@ if [ "$(id -u)" -eq 0 ]; then
         ! -path "/home/agyuser/.gitconfig" \
         ! -path "/home/agyuser/.config/gcloud*" \
         -exec chown -R "$PUID:$PGID" {} + 2>/dev/null || true
-    [ -d /workspace ] && chown -R "$PUID:$PGID" /workspace 2>/dev/null || true
-    [ -d /config ] && chown -R "$PUID:$PGID" /config 2>/dev/null || true
+    if [ -d /workspace ]; then
+        chown -R "$PUID:$PGID" /workspace 2>/dev/null || true
+    fi
+    if [ -d /config ]; then
+        chown -R "$PUID:$PGID" /config 2>/dev/null || true
+    fi
 
     # Execute requested command as agyuser
     exec gosu agyuser "$@"

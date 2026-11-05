@@ -32,7 +32,7 @@ env:
 jobs:
   lint:
     name: Lint Codebase
-    runs-on: [self-hosted, Linux, ARM64, dgx-spark, agy-box]
+    runs-on: [self-hosted, Linux, ARM64, dgx-spark]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -77,7 +77,7 @@ jobs:
 
   test-scripts:
     name: Run Script Tests
-    runs-on: [self-hosted, Linux, ARM64, dgx-spark, agy-box]
+    runs-on: [self-hosted, Linux, ARM64, dgx-spark]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -95,10 +95,10 @@ jobs:
         run: ./node_modules/.bin/bats tests/
 
   # Multi-arch build matrix: both linux/amd64 and linux/arm64 are built on our
-  # DGX Spark cluster runners (spark-01-agy-box and spark-02-agy-box) in parallel.
+  # DGX Spark cluster runners in parallel.
   # The base image (quay.io/toolbx/ubuntu-toolbox:24.04) ships native multi-arch manifests.
   #
-  # Each architecture: builds once, tests it via Distrobox, scans SBOM via Syft/Grype,
+  # Each architecture: builds once, tests it, scans SBOM via Syft/Grype,
   # and (on main/tags) pushes by digest. The Publish & Release job joins the digests
   # into a multi-arch manifest index via `docker buildx imagetools create`.
   build:
@@ -109,9 +109,9 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner: [self-hosted, Linux, ARM64, dgx-spark, agy-box]
+            runner: [self-hosted, Linux, ARM64, dgx-spark]
           - arch: arm64
-            runner: [self-hosted, Linux, ARM64, dgx-spark, agy-box]
+            runner: [self-hosted, Linux, ARM64, dgx-spark]
     permissions:
       contents: read
       packages: write
@@ -285,7 +285,7 @@ jobs:
     name: Publish & Release
     needs: [build, lint, test-scripts]
     if: github.event_name != 'pull_request'
-    runs-on: [self-hosted, Linux, ARM64, dgx-spark, agy-box]
+    runs-on: [self-hosted, Linux, ARM64, dgx-spark]
     permissions:
       contents: write
       packages: write
