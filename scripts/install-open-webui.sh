@@ -2,6 +2,7 @@
 set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
+export PIP_NO_COMPILE=1
 
 echo "Installing Python 3.12 and Open WebUI..."
 
@@ -18,28 +19,56 @@ fi
 # Install Python 3.12 and its venv module
 apt-get install -y --no-install-recommends python3.12 python3.12-venv
 
-# Install uv for high-speed parallel package downloads and wheel caching
-PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install uv
+# Install uv directly from static musl release tarball (avoids slow pipx bootstrap under QEMU)
+arch="$(uname -m)"
+case "$arch" in
+    aarch64|arm64)
+        uv_arch="aarch64"
+        uv_platform="aarch64-unknown-linux-gnu"
+        ;;
+    *)
+        uv_arch="x86_64"
+        uv_platform="x86_64-unknown-linux-gnu"
+        ;;
+esac
 
-# Single-thread uv under QEMU user-mode emulation to avoid allocator/thread segfaults,
-# and fall back cleanly to standard python3.12 -m venv + pip if uv still crashes under QEMU.
-export RAYON_NUM_THREADS=1
-export UV_CONCURRENT_DOWNLOADS=1
-export UV_CONCURRENT_BUILDS=1
-export UV_CONCURRENT_INSTALLS=1
+curl -fsSL --retry 5 --retry-delay 2 --connect-timeout 5 \
+    "https://github.com/astral-sh/uv/releases/latest/download/uv-${uv_arch}-unknown-linux-musl.tar.gz" \
+    | tar -xz -C /usr/local/bin --strip-components=1 \
+        "uv-${uv_arch}-unknown-linux-musl/uv" \
+        "uv-${uv_arch}-unknown-linux-musl/uvx"
+chmod +x /usr/local/bin/uv /usr/local/bin/uvx
 
-if uv venv /opt/open-webui-venv --python python3.12 && \
-   uv pip install --python /opt/open-webui-venv/bin/python --index-url https://download.pytorch.org/whl/cpu torch torchvision && \
-   uv pip install --python /opt/open-webui-venv/bin/python open-webui; then
-    echo "Open WebUI installed via uv."
+UV_BIN="/usr/local/bin/uv"
+if ! "$UV_BIN" --version >/dev/null 2>&1; then
+    echo "Target-arch uv failed (likely x86_64 jemalloc under QEMU on ARM64 host); trying static aarch64 uv..."
+    mkdir -p /tmp/uv-host
+    if curl -fsSL --retry 5 --retry-delay 2 --connect-timeout 5 \
+        "https://github.com/astral-sh/uv/releases/latest/download/uv-aarch64-unknown-linux-musl.tar.gz" \
+        | tar -xz -C /tmp/uv-host --strip-components=1 "uv-aarch64-unknown-linux-musl/uv" && \
+       chmod +x /tmp/uv-host/uv && \
+       /tmp/uv-host/uv --version >/dev/null 2>&1; then
+        echo "Using native host-kernel aarch64 uv for fast cross-arch wheel installation."
+        UV_BIN="/tmp/uv-host/uv"
+    fi
+fi
+
+python3.12 -m venv --without-pip /opt/open-webui-venv
+
+if "$UV_BIN" --version >/dev/null 2>&1 && \
+   "$UV_BIN" pip install --python /opt/open-webui-venv/bin/python --python-platform "$uv_platform" pip && \
+   "$UV_BIN" pip install --python /opt/open-webui-venv/bin/python --python-platform "$uv_platform" --index-url https://download.pytorch.org/whl/cpu torch torchvision && \
+   "$UV_BIN" pip install --python /opt/open-webui-venv/bin/python --python-platform "$uv_platform" open-webui; then
+    echo "Open WebUI installed via uv ($UV_BIN)."
 else
-    echo "uv failed (likely running under QEMU emulation); falling back to python3.12 -m venv + pip..."
+    echo "uv failed; falling back to python3.12 -m venv + pip..."
     rm -rf /opt/open-webui-venv
     python3.12 -m venv /opt/open-webui-venv
-    /opt/open-webui-venv/bin/pip install --no-cache-dir --upgrade pip
-    /opt/open-webui-venv/bin/pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch torchvision
-    /opt/open-webui-venv/bin/pip install --no-cache-dir open-webui
+    /opt/open-webui-venv/bin/pip install --no-compile --upgrade pip
+    /opt/open-webui-venv/bin/pip install --no-compile --index-url https://download.pytorch.org/whl/cpu torch torchvision
+    /opt/open-webui-venv/bin/pip install --no-compile open-webui
 fi
+rm -rf /tmp/uv-host
 
 # Expose open-webui binary on system PATH
 ln -sf /opt/open-webui-venv/bin/open-webui /usr/local/bin/open-webui
