@@ -16,7 +16,7 @@
 #   - Google Antigravity (Agent UI)  /opt/antigravity     -> /usr/local/bin/antigravity
 #   - Antigravity IDE                /opt/antigravity-ide -> /usr/local/bin/antigravity-ide
 #   - Antigravity CLI                /usr/local/bin/agy
-#   - Antigravity SDK                google-antigravity==0.1.0
+#   - Antigravity SDK                google-antigravity==0.1.23
 #   - Google ADK                     google-adk==2.1.0    -> /usr/local/bin/adk
 #   - Gemini CLI                     @google/gemini-cli   -> /usr/local/bin/gemini
 #
@@ -92,7 +92,7 @@ case "$arch" in
     x86_64)
         CLI_ARCH="linux-x64"
         CLI_TARBALL="cli_linux_x64.tar.gz"
-        CLI_SHA512="5ccdcc01fb863c7e8e56473c6c95dba75fed4fd2a242200d80cfc4c7fab811b733f5a7fab25332130aad298e72627e1018e6911a5658f4f059ef6e019f211972"
+        CLI_SHA512="e6031f850929210705d8c2393a5665b82b8c3b19684a6d3c556cafa31f26f77acbf164dfee96ca84a5ae7670ac0cc238a974c981c517b269194bdccff271cbd5"
         HUB_ARCH="linux-x64"
         HUB_SHA256="0727e1f56961b6d2347941f278da69cc6c17de3befe988524848cd167380e9ab"
         IDE_ARCH="linux-x64"
@@ -101,7 +101,7 @@ case "$arch" in
     aarch64|arm64)
         CLI_ARCH="linux-arm"
         CLI_TARBALL="cli_linux_arm64.tar.gz"
-        CLI_SHA512="9797c7955d0e07fc57605f81fab16dfd2f390d43b2508af3ca697b1cfa498e37e43a3a9a55ad8b26eb1353d80bbec522d108eb75a0eb0eb00e979cb579d6e277"
+        CLI_SHA512="509518b2820945db2bea5e013ca43a49df5c78927c3ac341a1115287d52627356e1e9506ac0d2040fb467915fba4dde90061d091fddbddf8ddc212637ae40150"
         HUB_ARCH="linux-arm"
         HUB_SHA256="5af56cc9dda954f369a61045b7da2f348bcb0b3507d272b4c0e9aa7cd6175d9b"
         IDE_ARCH="linux-arm"
@@ -256,10 +256,10 @@ else
 fi
 
 
-# --- 3. Antigravity CLI (1.0.0 Tarball) ---------------------------------------
+# --- 3. Antigravity CLI (1.5.0 Tarball) ---------------------------------------
 step "Installing Antigravity CLI (agy)"
-CLI_VERSION="1.0.0"
-CLI_EXEC_ID="5288553236791296"
+CLI_VERSION="1.5.0"
+CLI_EXEC_ID="5269980577660928"
 CLI_URL="https://storage.googleapis.com/antigravity-public/antigravity-cli/${CLI_VERSION}-${CLI_EXEC_ID}/${CLI_ARCH}/${CLI_TARBALL}"
 
 download_verify "$CLI_URL" sha512 "$CLI_SHA512" "$WORK_DIR/$CLI_TARBALL"
@@ -274,7 +274,7 @@ mv -f "$BIN_DIR/agy.new" "$BIN_DIR/agy"
 if [ "$MODE" = "system" ]; then
     step "Installing Google ADK and Antigravity SDK (system-wide)"
     PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install --force google-adk==2.1.0
-    PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx inject google-adk google-antigravity==0.1.0
+    PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx inject google-adk google-antigravity==0.1.23
     # Enable system python3 to find the packages via .pth file
     for pydir in /usr/local/lib/python*/dist-packages /usr/lib/python*/dist-packages; do
         if [ -d "$pydir" ]; then
@@ -287,7 +287,7 @@ if [ "$MODE" = "system" ]; then
     done
 else
     step "Installing Antigravity SDK"
-    pip3 install --user --break-system-packages --no-cache-dir --retries 10 google-antigravity==0.1.0
+    pip3 install --user --break-system-packages --no-cache-dir --retries 10 google-antigravity==0.1.23
 
     step "Installing Google ADK"
     pip3 install --user --break-system-packages --no-cache-dir --retries 10 google-adk==2.1.0

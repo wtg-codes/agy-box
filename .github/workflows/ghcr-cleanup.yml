@@ -50,7 +50,7 @@ permissions:
 jobs:
   cleanup:
     name: Delete untagged image versions
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64, dgx-spark, agy-box]
     permissions:
       packages: write
     steps:
@@ -95,7 +95,7 @@ jobs:
           delete-untagged: true
           # Drop tagged sha256-* sigstore referrers whose subject no longer exists.
           delete-orphaned-images: true
-          exclude-tags: "latest,main,*.*"
+          exclude-tags: "latest,nightly,main,*.*"
           older-than: ${{ steps.mode.outputs.older_than }}
           dry-run: ${{ steps.mode.outputs.dry_run }}
           # Post-run check that every multi-arch image still has all children.

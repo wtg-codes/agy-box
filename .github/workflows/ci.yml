@@ -10,6 +10,8 @@ name: CI/CD
   pull_request:
     branches:
       - main
+  schedule:
+    - cron: "30 0 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -30,7 +32,7 @@ env:
 jobs:
   lint:
     name: Lint Codebase
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64, dgx-spark, agy-box]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -58,7 +60,7 @@ jobs:
 
   test-scripts:
     name: Run Script Tests
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64, dgx-spark, agy-box]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -69,8 +71,8 @@ jobs:
       - name: Run Bats Tests
         run: ./node_modules/.bin/bats tests/
 
-  # Multi-arch build matrix: both linux/amd64 and linux/arm64 are built on native
-  # runners (ubuntu-24.04 and ubuntu-24.04-arm) in parallel without slow QEMU emulation.
+  # Multi-arch build matrix: both linux/amd64 and linux/arm64 are built on our
+  # DGX Spark cluster runners (spark-01-agy-box and spark-02-agy-box) in parallel.
   # The base image (quay.io/toolbx/ubuntu-toolbox:24.04) ships native multi-arch manifests.
   #
   # Each architecture: builds once, tests it via Distrobox, scans SBOM via Syft/Grype,
@@ -84,9 +86,9 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            runner: ubuntu-24.04
+            runner: [self-hosted, Linux, ARM64, dgx-spark, agy-box]
           - arch: arm64
-            runner: ubuntu-24.04-arm
+            runner: [self-hosted, Linux, ARM64, dgx-spark, agy-box]
     permissions:
       contents: read
       packages: write
@@ -111,6 +113,7 @@ jobs:
           tags: |
             type=ref,event=branch
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=nightly,enable=${{ github.ref == 'refs/heads/main' }}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
           # Keep the Containerfile's description instead of the repo description.
@@ -154,7 +157,12 @@ jobs:
 
       - name: Install Distrobox
         run: |
-          curl -s https://raw.githubusercontent.com/89luca89/distrobox/main/install | sudo sh
+          if ! command -v distrobox >/dev/null 2>&1; then
+            curl -s https://raw.githubusercontent.com/89luca89/distrobox/main/install | sudo -n sh || \
+            curl -s https://raw.githubusercontent.com/89luca89/distrobox/main/install | sh -s -- --prefix "$HOME/.local"
+          fi
+          export PATH="$HOME/.local/bin:$PATH"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Run Distrobox Integration Tests
         env:
@@ -250,7 +258,7 @@ jobs:
     name: Publish & Release
     needs: [build, lint, test-scripts]
     if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, ARM64, dgx-spark, agy-box]
     permissions:
       contents: write
       packages: write
@@ -289,6 +297,7 @@ jobs:
           tags: |
             type=ref,event=branch
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=nightly,enable=${{ github.ref == 'refs/heads/main' }}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
 

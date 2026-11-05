@@ -93,8 +93,8 @@ mock_installer_env() {
   [ ! -e "$HOME/.local/bin/agy.new" ]
   [ ! -e "$HOME/.local/share/antigravity.new" ]
 
-  grep -F 'https://storage.googleapis.com/antigravity-public/antigravity-cli/1.0.0-5288553236791296/linux-x64/cli_linux_x64.tar.gz' "$TEST_LOG"
-  grep -F 'pip3 install --user --break-system-packages --no-cache-dir --retries 10 google-antigravity==0.1.0' "$TEST_LOG"
+  grep -F 'https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.0-5269980577660928/linux-x64/cli_linux_x64.tar.gz' "$TEST_LOG"
+  grep -F 'pip3 install --user --break-system-packages --no-cache-dir --retries 10 google-antigravity==0.1.23' "$TEST_LOG"
   grep -F 'pip3 install --user --break-system-packages --no-cache-dir --retries 10 google-adk==2.1.0' "$TEST_LOG"
   grep -F "npm install -g --prefix $HOME/.local --omit=dev --no-audit --no-fund @google/gemini-cli@0.43.0" "$TEST_LOG"
   refute_grep -F '/usr/bin/agy' "$TEST_LOG"
@@ -118,7 +118,7 @@ mock_installer_env() {
   echo "$output"
   [ "$status" -eq 0 ]
 
-  grep -F 'https://storage.googleapis.com/antigravity-public/antigravity-cli/1.0.0-5288553236791296/linux-arm/cli_linux_arm64.tar.gz' "$TEST_LOG"
+  grep -F 'https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.0-5269980577660928/linux-arm/cli_linux_arm64.tar.gz' "$TEST_LOG"
   grep -F 'https://storage.googleapis.com/antigravity-public/antigravity-hub/2.0.1-6566078776737792/linux-arm/Antigravity.tar.gz' "$TEST_LOG"
   grep -F 'https://edgedl.me.gvt1.com/edgedl/release2/j0qc3/antigravity/stable/1.23.2-4781536860569600/linux-arm/Antigravity.tar.gz' "$TEST_LOG"
   [ -x "$HOME/.local/bin/agy" ]
