@@ -46,6 +46,14 @@ RUN chmod +x /usr/local/bin/entrypoint.sh \
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
+# Pre-create unprivileged sandbox user (agyuser) with passwordless sudo and default password
+RUN groupadd -o -g 9000 agygroup && \
+    useradd -o -u 9000 -g 9000 -G sudo -d /home/agyuser -m -s /bin/bash agyuser && \
+    printf 'agyuser:agyuser\n' | chpasswd && \
+    mkdir -p /etc/sudoers.d && \
+    printf 'agyuser ALL=(ALL:ALL) NOPASSWD:ALL\n' > /etc/sudoers.d/agyuser && \
+    chmod 0440 /etc/sudoers.d/agyuser
+
 # Dynamically link the correct version-specific wallpaper
 RUN VERSION=$(grep -oP '^VERSION="\K[^"]+' /usr/local/bin/agy-setup-helper) && \
     major=$(echo "$VERSION" | cut -d. -f1) && \

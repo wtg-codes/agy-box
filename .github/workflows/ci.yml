@@ -37,6 +37,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
+      - name: Ensure linters are installed
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.local/bin:$PATH"
+          if ! command -v yamllint >/dev/null 2>&1; then
+            python3 -m venv "$HOME/.local/yamllint-venv"
+            "$HOME/.local/yamllint-venv/bin/pip" install --quiet yamllint
+            ln -sf "$HOME/.local/yamllint-venv/bin/yamllint" "$HOME/.local/bin/yamllint"
+          fi
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            sc_arch=$(uname -m)
+            curl -fsSL "https://github.com/koalaman/shellcheck/releases/download/v0.10.0/shellcheck-v0.10.0.linux.${sc_arch}.tar.xz" | tar -xJ -C /tmp
+            mv /tmp/shellcheck-v0.10.0/shellcheck "$HOME/.local/bin/shellcheck"
+            chmod +x "$HOME/.local/bin/shellcheck"
+          fi
+
       - name: Lint YAML
         uses: ibiqlik/action-yamllint@v3.1.1
         with:
@@ -64,6 +81,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
 
       - name: Install Bats
         run: npm install bats
@@ -95,6 +118,10 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+
+      - name: Set up QEMU
+        if: matrix.arch == 'amd64'
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4

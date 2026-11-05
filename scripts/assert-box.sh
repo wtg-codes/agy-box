@@ -35,6 +35,9 @@ assert_cmd() {
 
 errors=0
 
+# Assert System & Sandbox User Privileges
+assert_cmd "Passwordless sudo" "sudo" "sudo -n true" || errors=$((errors+1))
+
 # Assert CNCF Tools
 assert_cmd "kubectl" "kubectl" "kubectl version --client" || errors=$((errors+1))
 assert_cmd "helm" "helm" "helm version" || errors=$((errors+1))

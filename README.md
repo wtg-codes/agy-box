@@ -316,7 +316,7 @@ You can also bypass the interactive menu by passing commands directly, which is 
 While `agy-box` is optimized for local execution via Distrobox, it is built as a standard, OCI-compliant multi-arch container image (`ghcr.io/wtg-codes/agy-box:latest`, `linux/amd64` and `linux/arm64`). This enables deployment across various cloud and remote environments:
 
 > [!NOTE]
-> Outside Distrobox, the image entrypoint only creates an unprivileged user (`agyuser`, UID/GID `9000` by default, override with `PUID`/`PGID`) and runs `sleep infinity`. It does **not** start the VDI desktop or an SSH server automatically. You can start the desktop with `agy-vdi` or update the toolchain with `agy-install-toolchain`.
+> Outside Distrobox, the image entrypoint configures an unprivileged user (`agyuser`, UID/GID `9000` by default, override with `PUID`/`PGID`) with passwordless `sudo` (`/etc/sudoers.d/agyuser`, default password `agyuser`) and runs `sleep infinity`. It does **not** start the VDI desktop or an SSH server automatically. You can start the desktop with `agy-vdi` or update the toolchain with `agy-install-toolchain`.
 
 ### 1. Cloud Virtual Machines (GCP Compute Engine, AWS EC2, Azure VMs, OCI Ampere)
 You can run `agy-box` as a standalone container on any amd64 or arm64 cloud instance running Docker or Podman.

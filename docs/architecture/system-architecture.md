@@ -68,7 +68,7 @@ To support remote development, headless environments (e.g. Google Cloud Shell, V
 
 Because `agy-box` is built as a self-contained, standard OCI image (`ghcr.io/wtg-codes/agy-box`, `linux/amd64` and `linux/arm64`), it can execute without the host-integration layers (such as host home folder bind-mounts or local Wayland compositor sockets) required for distrobox.
 
-When run outside Distrobox, the image entrypoint (`/usr/local/bin/entrypoint.sh`, run under `tini`) only creates an unprivileged `agyuser` (UID/GID from `PUID`/`PGID`, default `9000`), fixes ownership of the `/workspace` and `/config` volumes, and executes the container command (default `sleep infinity`) as that user. No desktop, VNC, or SSH service is started automatically.
+When run outside Distrobox, the image entrypoint (`/usr/local/bin/entrypoint.sh`, run under `tini`) configures an unprivileged `agyuser` (UID/GID from `PUID`/`PGID`, default `9000`) with passwordless `sudo` (`/etc/sudoers.d/agyuser`, default password `agyuser`), seeds `/etc/skel` into `/home/agyuser`, fixes ownership of `/home/agyuser`, `/workspace`, and `/config` volumes, and executes the container command (default `sleep infinity`) as that user. No desktop, VNC, or SSH service is started automatically.
 
 ### A. Standalone Headless Deployment (Cloud VMs)
 When running on standard Cloud VMs (Compute Engine, EC2):
