@@ -13,6 +13,7 @@ export DEBIAN_FRONTEND=noninteractive
 # 1. Install system dependencies
 echo "Installing agent dependencies..."
 apt-get update && apt-get install -y --no-install-recommends \
+    sudo \
     git \
     curl \
     wget \

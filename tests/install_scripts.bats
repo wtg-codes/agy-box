@@ -1,8 +1,10 @@
 #!/usr/bin/env bats
 
 setup() {
-  # Create a unique temp directory
+  export ORIG_PWD="$PWD"
+  # Create a unique temp directory and run inside it so mock files never touch the repo root
   TEST_DIR="$(mktemp -d)"
+  cd "$TEST_DIR"
   MOCK_BIN="$TEST_DIR/bin"
   
   # Create directories before we mock mkdir
@@ -50,9 +52,9 @@ EOF2
     exit 0
   '
   
-  # Mock sha256sum
-  create_mock "sha256sum" 'exit 0'
-  create_mock "sha512sum" 'exit 0'
+  # Mock sha256sum (drain non-tty stdin to prevent SIGPIPE under set -o pipefail)
+  create_mock "sha256sum" '[ ! -t 0 ] && cat >/dev/null || true; exit 0'
+  create_mock "sha512sum" '[ ! -t 0 ] && cat >/dev/null || true; exit 0'
   
   # Mock tar: creates expected files when run
   create_mock "tar" '
@@ -88,8 +90,8 @@ EOF2
   # Mock wget
   create_mock "wget" 'exit 0'
   
-  # Mock gpg
-  create_mock "gpg" 'exit 0'
+  # Mock gpg (drain non-tty stdin to prevent SIGPIPE under set -o pipefail)
+  create_mock "gpg" '[ ! -t 0 ] && cat >/dev/null || true; exit 0'
 
   # Mock ln and cp
   create_mock "ln" 'exit 0'
@@ -103,12 +105,12 @@ EOF2
 teardown() {
   # Restore PATH and clean up temp directory
   export PATH="$ORIGINAL_PATH"
+  cd "$ORIG_PWD" || true
   rm -rf "$TEST_DIR"
-  rm -rf k9s* helm* kubectl* checksums.sha256* gpg.key linux-* nodesource* lookup* microsoft* zed*
 }
 
 @test "install-tools.sh pins and installs correct versions of kubectl, k9s, and helm" {
-  run ./scripts/install-tools.sh
+  run "$ORIG_PWD/scripts/install-tools.sh"
   [ "$status" -eq 0 ]
   
   # Verify kubectl version in curl commands
@@ -141,7 +143,7 @@ teardown() {
       -e "s|/usr/local|$TEST_DIR/usr/local|g" \
       -e "s|/usr/bin|$TEST_DIR/usr/bin|g" \
       -e "s|/var/lib|$TEST_DIR/var/lib|g" \
-      ./scripts/install-agent-deps.sh > "$TEST_DIR/install-agent-deps.sh"
+      "$ORIG_PWD/scripts/install-agent-deps.sh" > "$TEST_DIR/install-agent-deps.sh"
   chmod +x "$TEST_DIR/install-agent-deps.sh"
   
   run "$TEST_DIR/install-agent-deps.sh"
@@ -170,7 +172,7 @@ teardown() {
       -e "s|/usr/local|$TEST_DIR/usr/local|g" \
       -e "s|/usr/bin|$TEST_DIR/usr/bin|g" \
       -e "s|/var/lib|$TEST_DIR/var/lib|g" \
-      ./scripts/install-agent-deps.sh > "$TEST_DIR/install-agent-deps.sh"
+      "$ORIG_PWD/scripts/install-agent-deps.sh" > "$TEST_DIR/install-agent-deps.sh"
   chmod +x "$TEST_DIR/install-agent-deps.sh"
   
   run "$TEST_DIR/install-agent-deps.sh" arm64
@@ -183,7 +185,7 @@ teardown() {
 }
 
 @test "install-tools.sh on arm64 fetches and installs arm64 versions" {
-  run ./scripts/install-tools.sh arm64
+  run "$ORIG_PWD/scripts/install-tools.sh" arm64
   [ "$status" -eq 0 ]
   
   grep -F 'curl -LO --http1.1 --connect-timeout 5 --retry 5 --retry-delay 2 https://dl.k8s.io/release/v1.36.1/bin/linux/arm64/kubectl' "$TEST_LOG"
@@ -192,13 +194,13 @@ teardown() {
 }
 
 @test "agy-install-ide --help displays usage" {
-  run ./rootfs/usr/local/bin/agy-install-ide --help
+  run "$ORIG_PWD/rootfs/usr/local/bin/agy-install-ide" --help
   [ "$status" -eq 0 ]
   [[ "$output" == *"Usage: agy-install-ide"* ]]
 }
 
 @test "agy-install-ide --version displays version" {
-  run ./rootfs/usr/local/bin/agy-install-ide --version
+  run "$ORIG_PWD/rootfs/usr/local/bin/agy-install-ide" --version
   [ "$status" -eq 0 ]
   [[ "$output" == *"agy-install-ide v"* ]]
 }

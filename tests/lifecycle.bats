@@ -310,7 +310,7 @@ EOF2
   mkdir -p "$HOME/.config/agy-box/homes/agy-box-safetest"
   echo "test" > "$HOME/.config/agy-box/homes/agy-box-safetest/file"
 
-  run ./agy-box-manager clean agy-box-safetest
+  run bash -c "./agy-box-manager clean agy-box-safetest < /dev/null"
   [ "$status" -ne 0 ]
   run grep -F "Non-interactive clean requires an explicit choice" <<< "$output"
   [ "$status" -eq 0 ]
@@ -421,4 +421,26 @@ EOF2
   run bash -c "source ./agy-box-manager && check_container_exists 'agy-box'"
   [ "$status" -eq 0 ]
 }
+
+@test "agy-box-manager: docker sandbox passes host PUID/PGID and entrypoint configures passwordless sudo" {
+  local mock_log="$TEST_DIR/docker_sandbox.log"
+  mkdir -p "$HOME/.config/agy-box"
+  echo 'AGY_CONTAINER_MANAGER="docker"' > "$HOME/.config/agy-box/config.env"
+  cat <<EOF2 > "$MOCK_BIN/docker"
+#!/bin/bash
+echo "docker \$*" >> "$mock_log"
+exit 0
+EOF2
+  chmod +x "$MOCK_BIN/docker"
+
+  run ./agy-box-manager install --name agy-box-spark --mode sandbox -y
+  [ "$status" -eq 0 ]
+  run grep -F -e "-e PUID=$(id -u) -e PGID=$(id -g)" "$mock_log"
+  [ "$status" -eq 0 ]
+  run grep -F "NOPASSWD:ALL" rootfs/usr/local/bin/entrypoint.sh
+  [ "$status" -eq 0 ]
+  run grep -F "NOPASSWD:ALL" Containerfile
+  [ "$status" -eq 0 ]
+}
+
 

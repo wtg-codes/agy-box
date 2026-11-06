@@ -17,6 +17,7 @@ COPY scripts/install-open-webui.sh /tmp/
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     --mount=type=cache,target=/root/.cache/uv,sharing=locked \
+    --mount=type=cache,target=/root/.cache/pip,sharing=locked \
     UV_LINK_MODE=copy /tmp/install-open-webui.sh && rm /tmp/install-open-webui.sh
 
 # 3. Install CNCF Tooling
@@ -25,9 +26,10 @@ RUN /tmp/install-tools.sh "${TARGETARCH}" && rm /tmp/install-tools.sh
 
 # 4. Install Antigravity Toolchain (Option A: Batteries-Included Image for authentic SBOM)
 COPY scripts/install-agent-toolchain.sh /tmp/
-RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
+    --mount=type=cache,target=/root/.cache/pip,sharing=locked \
     --mount=type=cache,target=/root/.npm,sharing=locked \
-    /tmp/install-agent-toolchain.sh --system && rm /tmp/install-agent-toolchain.sh
+    UV_LINK_MODE=copy /tmp/install-agent-toolchain.sh --system && rm /tmp/install-agent-toolchain.sh
 
 # 8. Copy rootfs and configure entrypoint
 COPY rootfs/ /
@@ -45,6 +47,14 @@ RUN chmod +x /usr/local/bin/entrypoint.sh \
     chmod -R ugo+rwX /etc/skel
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+# Pre-create unprivileged sandbox user (agyuser) with passwordless sudo and default password
+RUN groupadd -o -g 9000 agygroup && \
+    useradd -o -u 9000 -g 9000 -G sudo -d /home/agyuser -m -s /bin/bash agyuser && \
+    printf 'agyuser:agyuser\n' | chpasswd && \
+    mkdir -p /etc/sudoers.d && \
+    printf 'agyuser ALL=(ALL:ALL) NOPASSWD:ALL\n' > /etc/sudoers.d/agyuser && \
+    chmod 0440 /etc/sudoers.d/agyuser
 
 # Dynamically link the correct version-specific wallpaper
 RUN VERSION=$(grep -oP '^VERSION="\K[^"]+' /usr/local/bin/agy-setup-helper) && \

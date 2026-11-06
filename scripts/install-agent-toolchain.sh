@@ -273,8 +273,36 @@ mv -f "$BIN_DIR/agy.new" "$BIN_DIR/agy"
 # --- 4 & 5. Antigravity SDK & Google ADK --------------------------------------
 if [ "$MODE" = "system" ]; then
     step "Installing Google ADK and Antigravity SDK (system-wide)"
-    PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install --force google-adk==2.1.0
-    PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx inject google-adk google-antigravity==0.1.23
+    export PIP_NO_COMPILE=1
+    case "$arch" in
+        aarch64|arm64) uv_platform="aarch64-unknown-linux-gnu" ;;
+        *) uv_platform="x86_64-unknown-linux-gnu" ;;
+    esac
+    UV_BIN="/usr/local/bin/uv"
+    if ! "$UV_BIN" --version >/dev/null 2>&1; then
+        mkdir -p "$WORK_DIR/uv-host"
+        if curl -fsSL --retry 5 --retry-delay 2 --connect-timeout 5 \
+            "https://github.com/astral-sh/uv/releases/latest/download/uv-aarch64-unknown-linux-musl.tar.gz" \
+            | tar -xz -C "$WORK_DIR/uv-host" --strip-components=1 "uv-aarch64-unknown-linux-musl/uv" && \
+           chmod +x "$WORK_DIR/uv-host/uv" && \
+           "$WORK_DIR/uv-host/uv" --version >/dev/null 2>&1; then
+            UV_BIN="$WORK_DIR/uv-host/uv"
+        fi
+    fi
+
+    mkdir -p /opt/pipx/venvs
+    rm -rf /opt/pipx/venvs/google-adk
+    if "$UV_BIN" --version >/dev/null 2>&1 && \
+       python3 -m venv --without-pip /opt/pipx/venvs/google-adk && \
+       "$UV_BIN" pip install --python /opt/pipx/venvs/google-adk/bin/python \
+           --python-platform "$uv_platform" \
+           pip google-adk==2.1.0 google-antigravity==0.1.23; then
+        ln -sf /opt/pipx/venvs/google-adk/bin/adk /usr/local/bin/adk
+    else
+        rm -rf /opt/pipx/venvs/google-adk
+        PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install --force google-adk==2.1.0
+        PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx inject google-adk google-antigravity==0.1.23
+    fi
     # Enable system python3 to find the packages via .pth file
     for pydir in /usr/local/lib/python*/dist-packages /usr/lib/python*/dist-packages; do
         if [ -d "$pydir" ]; then
@@ -297,7 +325,8 @@ fi
 # --- 6. Gemini CLI ------------------------------------------------------------
 step "Installing Gemini CLI"
 if [ "$MODE" = "system" ]; then
-    npm install -g --prefix /usr/local --omit=dev --no-audit --no-fund @google/gemini-cli@0.43.0
+    NODE_OPTIONS="${NODE_OPTIONS:---jitless}" UV_THREADPOOL_SIZE=1 \
+        npm install -g --prefix /usr/local --omit=dev --no-audit --no-fund @google/gemini-cli@0.43.0
 else
     npm install -g --prefix "$HOME/.local" --omit=dev --no-audit --no-fund @google/gemini-cli@0.43.0
 fi
@@ -307,7 +336,8 @@ fi
 if command -v code >/dev/null 2>&1; then
     step "Installing Antigravity extension for Visual Studio Code"
     if [ "$MODE" = "system" ]; then
-        code --user-data-dir /tmp/vscode-root --extensions-dir /etc/skel/.vscode/extensions --install-extension Google.antigravity --force || true
+        timeout 30s code --user-data-dir /tmp/vscode-root --extensions-dir /etc/skel/.vscode/extensions --install-extension Google.antigravity --force || true
+        rm -rf /tmp/vscode-root
         mkdir -p /root/.vscode
         cp -r /etc/skel/.vscode/extensions /root/.vscode/ 2>/dev/null || true
     else

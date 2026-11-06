@@ -51,7 +51,7 @@ env:
 jobs:
   retag:
     name: Re-tag legacy multi-arch tags to amd64-only
-    runs-on: [self-hosted, Linux, ARM64, dgx-spark, agy-box]
+    runs-on: [self-hosted, Linux, ARM64, dgx-spark]
     permissions:
       packages: write
     steps:

@@ -1210,7 +1210,7 @@ cmd_install_official() {
         if [ "$runtime" = "podman" ]; then
             run_flags+=("-v" "$isolated_home:/home/agyuser:Z")
         else
-            run_flags+=("-v" "$isolated_home:/home/agyuser" "--user" "9000:9000")
+            run_flags+=("-v" "$isolated_home:/home/agyuser" "-e" "PUID=$(id -u)" "-e" "PGID=$(id -g)")
         fi
 
         # Profile seeding (strictly opt-in)
@@ -1735,13 +1735,30 @@ cmd_update_toolchain() {
     isolated_home=$(get_box_home "$target_name")
     local runtime
     runtime=$(get_runtime)
-    if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
-        podman unshare chown -R 0:0 "$isolated_home" 2>/dev/null || true
-    fi
+    local mgr
+    mgr=$(get_box_manager "$target_name")
 
-    # Re-runs the pinned, checksum-verified installer (idempotent) and refreshes the agy export
-    if ! install_toolchain_in_box "$target_name" "$isolated_home"; then
-        exit 1
+    if [ "$mgr" = "distrobox" ]; then
+        if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
+            podman unshare chown -R 0:0 "$isolated_home" 2>/dev/null || true
+        fi
+
+        # Re-runs the pinned, checksum-verified installer (idempotent) and refreshes the agy export
+        if ! install_toolchain_in_box "$target_name" "$isolated_home"; then
+            exit 1
+        fi
+    else
+        if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
+            podman unshare chown -R 9000:9000 "$isolated_home" 2>/dev/null || true
+        fi
+        if ! "$runtime" ps --format '{{.Names}}' 2>/dev/null | grep -qxF "$target_name"; then
+            run_step "Starting container '$target_name'..." "$runtime" start "$target_name"
+        fi
+        if ! run_step "Installing/updating Antigravity toolchain inside '$target_name'..." \
+            "$runtime" exec -u agyuser -w /home/agyuser "$target_name" "$TOOLCHAIN_INSTALLER"; then
+            ui_error "❌ Error: Failed to install/update the Antigravity toolchain inside '$target_name'."
+            exit 1
+        fi
     fi
     ui_ok "✓ Antigravity toolchain installed/updated in '$target_name'."
 }
@@ -1833,8 +1850,14 @@ cmd_update() {
     isolated_home=$(get_box_home "$target_container")
     local runtime
     runtime=$(detect_runtime)
+    local mgr
+    mgr=$(get_box_manager "$target_container")
     if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
-        podman unshare chown -R 0:0 "$isolated_home" 2>/dev/null || true
+        if [ "$mgr" = "distrobox" ]; then
+            podman unshare chown -R 0:0 "$isolated_home" 2>/dev/null || true
+        else
+            podman unshare chown -R 9000:9000 "$isolated_home" 2>/dev/null || true
+        fi
     fi
 
     ui_ok "🚀 Updating environment '$target_container'..."
@@ -1848,8 +1871,14 @@ cmd_update() {
     # 2. IDE extensions update
     if [ "$update_ides" = "true" ]; then
         echo -e "\n${CYAN}==> Updating IDE Extensions...${NC}"
-        if distrobox enter "$target_container" -- command -v code &>/dev/null; then
-            run_step "Updating VS Code Antigravity extension..." distrobox enter "$target_container" -- code --install-extension Google.antigravity --force || ui_warn "! Could not update VS Code extension"
+        if [ "$mgr" = "distrobox" ]; then
+            if distrobox enter "$target_container" -- command -v code &>/dev/null; then
+                run_step "Updating VS Code Antigravity extension..." distrobox enter "$target_container" -- code --install-extension Google.antigravity --force || ui_warn "! Could not update VS Code extension"
+            fi
+        else
+            if "$runtime" exec -u agyuser -w /home/agyuser "$target_container" sh -c "command -v code" &>/dev/null; then
+                run_step "Updating VS Code Antigravity extension..." "$runtime" exec -u agyuser -w /home/agyuser "$target_container" code --install-extension Google.antigravity --force || ui_warn "! Could not update VS Code extension"
+            fi
         fi
         local zed_settings="$isolated_home/.config/zed/settings.json"
         if [ -f "$zed_settings" ]; then
@@ -1863,8 +1892,13 @@ cmd_update() {
     # 3. Packages update
     if [ "$update_packages" = "true" ]; then
         echo -e "\n${CYAN}==> Updating Container OS Packages & IDEs...${NC}"
-        run_step "Updating apt package lists..." distrobox enter "$target_container" -- sudo apt-get update || true
-        run_step "Upgrading core packages (Google Chrome, VS Code)..." distrobox enter "$target_container" -- sudo apt-get --only-upgrade install -y google-chrome-stable code 2>/dev/null || true
+        if [ "$mgr" = "distrobox" ]; then
+            run_step "Updating apt package lists..." distrobox enter "$target_container" -- sudo apt-get update || true
+            run_step "Upgrading core packages (Google Chrome, VS Code)..." distrobox enter "$target_container" -- sudo apt-get --only-upgrade install -y google-chrome-stable code 2>/dev/null || true
+        else
+            run_step "Updating apt package lists..." "$runtime" exec -u agyuser -w /home/agyuser "$target_container" sudo apt-get update || true
+            run_step "Upgrading core packages (Google Chrome, VS Code)..." "$runtime" exec -u agyuser -w /home/agyuser "$target_container" sudo apt-get --only-upgrade install -y google-chrome-stable code 2>/dev/null || true
+        fi
         ui_ok "✓ Container packages upgraded."
     fi
 
