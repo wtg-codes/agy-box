@@ -1,6 +1,6 @@
 # Antigravity Settings & Configuration Reference
 
-This document provides a comprehensive reference for user settings schemas, configuration file locations, and customization mechanisms for the **Google Antigravity IDE**, the **Antigravity CLI (`agy`)**, and the **Gemini Agent Engine** in `agy-box`.
+This document provides a comprehensive reference for user settings schemas, configuration file locations, and customization mechanisms for the **Google Antigravity (Agent UI)** app, **VS Code / Zed**, the **Antigravity CLI (`agy`)**, and the **Gemini Agent Engine** in `agy-box`.
 
 ---
 
@@ -114,9 +114,9 @@ Model Context Protocol (MCP) servers allow the agent to connect to local tools a
 
 ---
 
-## 4. Antigravity IDE Settings (`~/.config/Antigravity/User/settings.json`)
+## 4. Google Antigravity App & VS Code Settings (`~/.config/Antigravity/User/settings.json`)
 
-Antigravity IDE is built on a VS Code base and follows the standard VS Code settings format, extended with Antigravity-specific configuration namespaces.
+The Google Antigravity App (`antigravity`) and Visual Studio Code (`code`) follow the standard VS Code settings format, extended with Antigravity-specific configuration namespaces.
 
 ### Example Configuration
 

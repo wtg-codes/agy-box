@@ -17,7 +17,7 @@ export GALLIUM_DRIVER=llvmpipe
 unset WAYLAND_DISPLAY
 unset XDG_SESSION_TYPE
 
-# The Antigravity toolchain (antigravity, antigravity-ide, agy, gemini, adk) is
+# The Antigravity toolchain (antigravity, agy, gemini, adk) is
 # installed per user into ~/.local/bin by agy-install-toolchain. agy-vdi is
 # started via `distrobox enter -- agy-vdi` (non-login shell, host PATH), so add
 # it here; IceWM, its menu/toolbar, desktop icons and xterms inherit this PATH.
@@ -192,11 +192,10 @@ _cleanup_stale_chrome_locks() {
     fi
 }
 
-# Clean locks for Chrome and Electron-based apps (Antigravity, Antigravity IDE)
+# Clean locks for Chrome and Electron-based apps (Antigravity)
 for chrome_profile in \
     "${HOME}/.config/google-chrome" \
     "${HOME}/.config/Antigravity-box" \
-    "${HOME}/.config/Antigravity-ide-box" \
     "${HOME}/.config/Antigravity"; do
     _cleanup_stale_chrome_locks "$chrome_profile"
 done
@@ -270,19 +269,10 @@ echo ""
 echo -e "${YELLOW}Press [Ctrl+C] to stop the virtual desktop session.${NC}"
 
 # 5. Set up the desktop environment
-# 5a. Launch a terminal on the desktop
+# Launch a terminal on the desktop (users launch Antigravity App, VS Code, or Zed via desktop/toolbar icons)
 if command -v xterm &>/dev/null; then
     echo -e "${BLUE}[INFO] Launching terminal...${NC}"
     xterm -fa 'Monospace' -fs 12 -bg '#1a1b2e' -fg '#e0e0e0' -geometry 100x35+50+50 -T 'agy-box Terminal' &
-fi
-
-# 5b. Launch default desktop applications inside the VDI display
-if command -v antigravity-ide &>/dev/null; then
-    echo -e "${BLUE}[INFO] Automatically starting Antigravity IDE...${NC}"
-    antigravity-ide &
-elif command -v antigravity &>/dev/null; then
-    echo -e "${BLUE}[INFO] Automatically starting Google Antigravity...${NC}"
-    antigravity &
 fi
 
 # Block and keep shell open while monitoring all critical services

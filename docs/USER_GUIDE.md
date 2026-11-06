@@ -12,7 +12,7 @@ Whether you are building autonomous agents with the **Antigravity SDK**, hacking
 2. [The 4 Ways to Work](#2-the-4-ways-to-work)
    - [Way 1: Native Host Window Integration](#way-1-native-host-window-integration)
    - [Way 2: Browser-Based Web Desktop (noVNC VDI)](#way-2-browser-based-web-desktop-novnc-vdi)
-   - [Way 3: Modern IDE Integration (VS Code, Zed, Antigravity IDE, JetBrains)](#way-3-modern-ide-integration)
+   - [Way 3: Modern IDE Integration (VS Code, Zed, JetBrains)](#way-3-modern-ide-integration)
    - [Way 4: Pure Terminal Workflow & Host Shim](#way-4-pure-terminal-workflow--host-shim)
 3. [AI Model Authentication & Setup](#3-ai-model-authentication--setup)
    - [Personal Google Account (OAuth)](#personal-google-account-oauth)
@@ -22,7 +22,6 @@ Whether you are building autonomous agents with the **Antigravity SDK**, hacking
 4. [Modern IDE Deep Dive](#4-modern-ide-deep-dive)
    - [Visual Studio Code & VSCodium](#visual-studio-code--vscodium)
    - [Zed Editor](#zed-editor)
-   - [Google Antigravity Classic IDE](#google-antigravity-classic-ide)
    - [JetBrains IDEs (IntelliJ IDEA, PyCharm)](#jetbrains-ides-intellij-idea-pycharm)
 5. [Agentic Engineering & CLI Mastery](#5-agentic-engineering--cli-mastery)
    - [The `agy` Command Reference](#the-agy-command-reference)
@@ -90,11 +89,11 @@ agy-box-manager desktop
 ```
 Open **`http://localhost:6080`** in any web browser. You will see a complete, lightweight IceWM desktop environment featuring:
 * Antigravity wallpaper and dark theme
-* Desktop shortcuts for **VS Code**, **Zed**, **Antigravity IDE**, **Agent UI**, **Terminal**, and **Chrome**
+* Desktop shortcuts for **Google Antigravity (Agent UI)**, **VS Code**, **Zed**, **Antigravity CLI (`agy`)**, **Terminal**, and **Chrome**
 * Taskbar with application menus and system tray
 
 ### Way 3: Modern IDE Integration
-Open your project files with your favorite editor directly inside the container:
+Open your project files with your favorite editor or the Google Antigravity App directly inside the container:
 ```bash
 # Launch VS Code with Google.antigravity pre-installed
 code .
@@ -102,8 +101,8 @@ code .
 # Launch Zed Editor (high performance Rust editor)
 zed .
 
-# Launch classic Antigravity IDE
-antigravity-ide .
+# Launch Google Antigravity (Agent UI 2.0)
+antigravity
 ```
 
 ### Way 4: Pure Terminal Workflow & Host Shim
@@ -184,13 +183,6 @@ If you want to run models 100% locally and privately:
 * **Launch:** Click **Zed** on the VDI Desktop or run:
   ```bash
   zed .
-  ```
-
-### Google Antigravity Classic IDE
-* **Package Origin:** Pinned official Google distribution with telemetry disabled by default.
-* **Launch:** Click **Antigravity IDE** on the Desktop or run:
-  ```bash
-  antigravity-ide .
   ```
 
 ### JetBrains IDEs (IntelliJ IDEA, PyCharm)

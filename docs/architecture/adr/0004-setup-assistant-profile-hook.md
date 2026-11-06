@@ -22,7 +22,7 @@ We implement a login-hook architecture that separates system setup execution fro
    - If interactive, it invokes the setup assistant `/usr/local/bin/agy-setup-helper`.
 2. **Setup Assistant Wizard**:
    - Checks D-Bus, keyrings, Google Chrome health, Git credentials, and API keys.
-   - Provides an interactive "Host Profile Seeding" menu using `gum` to optionally copy host profiles for Chrome, Google Antigravity, and Antigravity IDE (with version-specific path patching in `settings.json`) to the isolated sandbox environment.
+   - Provides an interactive "Host Profile Seeding" menu using `gum` to optionally copy host profiles for Chrome and Google Antigravity (with version-specific path patching in `settings.json`) to the isolated sandbox environment.
    - Runs an optional security audit and permissions hardening check.
    - Writes the `.setup_done` flag file upon completion or explicit skip to prevent subsequent login prompts.
 

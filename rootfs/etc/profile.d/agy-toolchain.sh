@@ -14,7 +14,7 @@ if ! command -v agy >/dev/null 2>&1 && [ ! -x "${HOME}/.local/bin/agy" ]; then
     case "$-" in
         *i*)
             if [ -t 1 ]; then
-                echo "agy-box: the Antigravity toolchain (agy, antigravity, antigravity-ide, SDK, ADK, gemini) is not installed."
+                echo "agy-box: the Antigravity toolchain (agy, antigravity, SDK, ADK, gemini) is not installed."
                 echo "         Install it with: agy-install-toolchain   (or on the host: agy-box-manager update-toolchain)"
             fi
             ;;

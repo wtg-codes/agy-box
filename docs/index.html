@@ -322,9 +322,6 @@ flowchart LR
                     <button onclick="switchIde('zed')" id="tab-ide-zed" class="ide-tab bg-slate-800 hover:bg-slate-700 text-slate-300 px-3.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5">
                         <i data-lucide="zap" class="w-4 h-4"></i>Zed Editor
                     </button>
-                    <button onclick="switchIde('antigravity')" id="tab-ide-antigravity" class="ide-tab bg-slate-800 hover:bg-slate-700 text-slate-300 px-3.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5">
-                        <i data-lucide="sparkles" class="w-4 h-4"></i>Antigravity IDE
-                    </button>
                     <button onclick="switchIde('jetbrains')" id="tab-ide-jetbrains" class="ide-tab bg-slate-800 hover:bg-slate-700 text-slate-300 px-3.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5">
                         <i data-lucide="terminal-square" class="w-4 h-4"></i>JetBrains
                     </button>
@@ -378,29 +375,7 @@ flowchart LR
                     </div>
                 </div>
 
-                <!-- Pane 3: Antigravity IDE -->
-                <div id="pane-ide-antigravity" class="ide-pane hidden space-y-3 bg-slate-800/70 p-5 rounded-xl border border-slate-700">
-                    <div class="flex items-center justify-between">
-                        <h3 class="text-white font-bold text-base flex items-center gap-2">
-                            <i data-lucide="sparkles" class="w-5 h-5 text-indigo-400"></i>
-                            Antigravity Classic IDE
-                        </h3>
-                        <span class="text-xs bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded border border-indigo-500/30 font-medium">Official Suite</span>
-                    </div>
-                    <p class="text-slate-400 text-sm">
-                        Pinned official Google release designed specifically for autonomous agent pair programming and course lab development.
-                    </p>
-                    <ul class="text-xs text-slate-300 space-y-1.5 list-disc list-inside">
-                        <li><strong class="text-white">Telemetry Disabled:</strong> Pre-hardened with user telemetry disabled by default.</li>
-                        <li><strong class="text-white">Agent Integration:</strong> Direct socket connection with local Antigravity Agent UI on port 8080.</li>
-                    </ul>
-                    <div class="bg-slate-900 p-3 rounded-lg border border-slate-800 flex items-center justify-between">
-                        <code class="text-emerald-400 font-mono text-xs">antigravity-ide /path/to/workspace</code>
-                        <span class="text-slate-500 text-xs font-sans">Installed in ~/.local/bin/antigravity-ide</span>
-                    </div>
-                </div>
-
-                <!-- Pane 4: JetBrains -->
+                <!-- Pane 3: JetBrains -->
                 <div id="pane-ide-jetbrains" class="ide-pane hidden space-y-3 bg-slate-800/70 p-5 rounded-xl border border-slate-700">
                     <div class="flex items-center justify-between">
                         <h3 class="text-white font-bold text-base flex items-center gap-2">
@@ -452,13 +427,6 @@ flowchart LR
                                 <td class="px-3 py-2 text-emerald-400">Instant (Rust)</td>
                                 <td class="px-3 py-2 text-slate-300">Auto-configured</td>
                                 <td class="px-3 py-2 font-mono text-emerald-400">zed .</td>
-                            </tr>
-                            <tr class="hover:bg-slate-800/40">
-                                <td class="px-3 py-2 text-white font-medium">Antigravity IDE</td>
-                                <td class="px-3 py-2 text-slate-400">Google standalone</td>
-                                <td class="px-3 py-2 text-emerald-400">Fast</td>
-                                <td class="px-3 py-2 text-slate-300">Built-in</td>
-                                <td class="px-3 py-2 font-mono text-emerald-400">antigravity-ide .</td>
                             </tr>
                             <tr class="hover:bg-slate-800/40">
                                 <td class="px-3 py-2 text-white font-medium">JetBrains</td>
@@ -631,25 +599,13 @@ flowchart LR
                     <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 border-l-4 border-l-indigo-500">
                         <div class="flex items-center gap-2.5 mb-2">
                             <i data-lucide="sparkles" class="w-5 h-5 text-indigo-400"></i>
-                            <h3 class="text-white font-semibold">Google Antigravity (Agent UI)</h3>
+                            <h3 class="text-white font-semibold">Google Antigravity (Agent UI 2.0)</h3>
                         </div>
-                        <p class="text-slate-400 text-sm mb-3">Agent-first experience with canvas workspace, integrated terminal, course labs, and Gemini-powered AI assistant. The flagship product for agentic development.</p>
+                        <p class="text-slate-400 text-sm mb-3">Agent-first desktop application with canvas workspace, integrated terminal, course labs, and Gemini-powered AI assistant. The flagship product for agentic development.</p>
                         <div class="flex flex-wrap gap-3 text-xs">
-                            <span class="bg-slate-900 text-slate-400 px-2 py-1 rounded font-mono">~/.local/bin/antigravity</span>
-                            <span class="bg-slate-900 text-slate-400 px-2 py-1 rounded font-mono">Port 8080</span>
+                            <span class="bg-slate-900 text-slate-400 px-2 py-1 rounded font-mono">/usr/local/bin/antigravity</span>
+                            <span class="bg-slate-900 text-slate-400 px-2 py-1 rounded font-mono">v2.0.1</span>
                             <span class="bg-slate-900 text-slate-400 px-2 py-1 rounded font-mono">CDP → Chrome</span>
-                        </div>
-                    </div>
-                    <!-- IDE -->
-                    <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 border-l-4 border-l-violet-500">
-                        <div class="flex items-center gap-2.5 mb-2">
-                            <i data-lucide="code-2" class="w-5 h-5 text-violet-400"></i>
-                            <h3 class="text-white font-semibold">Antigravity IDE</h3>
-                        </div>
-                        <p class="text-slate-400 text-sm mb-3">VS Code-based classic developer environment with Antigravity extensions pre-loaded. For those who prefer a traditional IDE workflow.</p>
-                        <div class="flex flex-wrap gap-3 text-xs">
-                            <span class="bg-slate-900 text-slate-400 px-2 py-1 rounded font-mono">~/.local/bin/antigravity-ide</span>
-                            <span class="bg-slate-900 text-slate-400 px-2 py-1 rounded font-mono">Stable 1.23.2</span>
                         </div>
                     </div>
                     <!-- CLI -->
@@ -658,9 +614,10 @@ flowchart LR
                             <i data-lucide="terminal" class="w-5 h-5 text-emerald-400"></i>
                             <h3 class="text-white font-semibold">Antigravity CLI (agy)</h3>
                         </div>
-                        <p class="text-slate-400 text-sm mb-3">Command-line utility for lab management, submission, and agent status monitoring. Communicates with Agent UI via WebSocket.</p>
+                        <p class="text-slate-400 text-sm mb-3">Native command-line agent utility for interactive coding, lab management, and subagent orchestration. Automatically exported as a host shim (`~/.local/bin/agy`).</p>
                         <div class="flex flex-wrap gap-3 text-xs">
-                            <span class="bg-slate-900 text-slate-400 px-2 py-1 rounded font-mono">~/.local/bin/agy</span>
+                            <span class="bg-slate-900 text-slate-400 px-2 py-1 rounded font-mono">/usr/local/bin/agy</span>
+                            <span class="bg-slate-900 text-slate-400 px-2 py-1 rounded font-mono">v1.5.0 · Host Shim</span>
                             <span class="bg-slate-900 text-slate-400 px-2 py-1 rounded font-mono">WebSocket ↔ Agent UI</span>
                         </div>
                     </div>
@@ -670,10 +627,22 @@ flowchart LR
                             <i data-lucide="braces" class="w-5 h-5 text-amber-400"></i>
                             <h3 class="text-white font-semibold">Antigravity SDK (Python)</h3>
                         </div>
-                        <p class="text-slate-400 text-sm mb-3">Python package for programmatic agent orchestration. API calls to local Agent UI on Port 8080 with Google Cloud auth via ADC.</p>
+                        <p class="text-slate-400 text-sm mb-3">Python package for programmatic agent orchestration, multi-agent systems, and API calls to local Agent UI on Port 8080 with Google Cloud auth via ADC.</p>
                         <div class="flex flex-wrap gap-3 text-xs">
-                            <span class="bg-slate-900 text-slate-400 px-2 py-1 rounded font-mono">pip3 install --user google-antigravity</span>
-                            <span class="bg-slate-900 text-slate-400 px-2 py-1 rounded font-mono">PyPI · v0.1.0</span>
+                            <span class="bg-slate-900 text-slate-400 px-2 py-1 rounded font-mono">google-antigravity==0.1.23</span>
+                            <span class="bg-slate-900 text-slate-400 px-2 py-1 rounded font-mono">PyPI · Pre-baked</span>
+                        </div>
+                    </div>
+                    <!-- Google ADK & Gemini CLI -->
+                    <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 border-l-4 border-l-violet-500">
+                        <div class="flex items-center gap-2.5 mb-2">
+                            <i data-lucide="cpu" class="w-5 h-5 text-violet-400"></i>
+                            <h3 class="text-white font-semibold">Google ADK &amp; Gemini CLI</h3>
+                        </div>
+                        <p class="text-slate-400 text-sm mb-3">Pre-baked Google Agent Development Kit (`adk`) and Gemini CLI (`gemini`) alongside VS Code, Zed, and on-demand JetBrains IDE integrations.</p>
+                        <div class="flex flex-wrap gap-3 text-xs">
+                            <span class="bg-slate-900 text-slate-400 px-2 py-1 rounded font-mono">google-adk==2.1.0</span>
+                            <span class="bg-slate-900 text-slate-400 px-2 py-1 rounded font-mono">@google/gemini-cli@0.43.0</span>
                         </div>
                     </div>
                 </div>
@@ -1476,7 +1445,7 @@ just agy-wizard --defaults</pre>
 
         // Interactive IDE Tab Switcher
         function switchIde(ideName) {
-            const tabs = ['vscode', 'zed', 'antigravity', 'jetbrains'];
+            const tabs = ['vscode', 'zed', 'jetbrains'];
             tabs.forEach(id => {
                 const tabBtn = document.getElementById('tab-ide-' + id);
                 const pane = document.getElementById('pane-ide-' + id);
