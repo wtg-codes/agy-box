@@ -7,6 +7,11 @@ name: CI/CD
       - main
     tags:
       - "v*"
+    # Docs-only pushes (e.g. diagram renders) do not rebuild the image. PRs are
+    # never path-filtered: their checks are required by the main ruleset.
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
   pull_request:
     branches:
       - main
@@ -14,9 +19,11 @@ name: CI/CD
     - cron: "30 0 * * *"
   workflow_dispatch:
 
+# Only PR runs are cancelled by newer pushes. Runs on main/tags are never
+# cancelled mid-publish (between push-by-digest and tagging).
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Least privilege by default; jobs that need more override this.
 permissions:
@@ -30,12 +37,30 @@ env:
   DOCKER_BUILD_RECORD_UPLOAD: "false"
 
 jobs:
+  # Self-hosted runners never execute code from fork PRs (public repo): those
+  # jobs fall back to GitHub-hosted runners.
   lint:
     name: Lint Codebase
-    runs-on: [self-hosted, Linux, ARM64, dgx-spark]
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","ARM64","dgx-spark"]') }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # A skip directive in any PR commit message ends up in the squash-merge
+      # commit on main and silently suppresses the push-triggered CI/CD run.
+      - name: Reject CI skip directives in PR commits
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          pattern='\[(skip ci|ci skip|no ci|skip actions|actions skip)\]|skip-checks: *true'
+          if git log --format='%h %B' "${BASE_SHA}..${HEAD_SHA}" | grep -inE "$pattern"; then
+            echo "::error::A commit message in this PR contains a CI skip directive. Reword it, otherwise the merge to main will not run CI/CD."
+            exit 1
+          fi
 
       - name: Ensure linters are installed
         run: |
@@ -53,13 +78,16 @@ jobs:
             mv /tmp/shellcheck-v0.10.0/shellcheck "$HOME/.local/bin/shellcheck"
             chmod +x "$HOME/.local/bin/shellcheck"
           fi
+          if ! command -v actionlint >/dev/null 2>&1; then
+            al_arch=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
+            curl -fsSL "https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_${al_arch}.tar.gz" | tar -xz -C "$HOME/.local/bin" actionlint
+          fi
 
       - name: Lint YAML
-        uses: ibiqlik/action-yamllint@v3.1.1
-        with:
-          file_or_dir: .
-          config_file: .yamllint.yml
-          strict: true
+        run: yamllint -s -c .yamllint.yml .
+
+      - name: Lint GitHub Actions workflows
+        run: actionlint -color
 
       - name: Run ShellCheck
         run: |
@@ -77,7 +105,7 @@ jobs:
 
   test-scripts:
     name: Run Script Tests
-    runs-on: [self-hosted, Linux, ARM64, dgx-spark]
+    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-24.04' || fromJSON('["self-hosted","Linux","ARM64","dgx-spark"]') }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -94,16 +122,17 @@ jobs:
       - name: Run Bats Tests
         run: ./node_modules/.bin/bats tests/
 
-  # Multi-arch build matrix: both linux/amd64 and linux/arm64 are built on our
-  # DGX Spark cluster runners in parallel.
-  # The base image (quay.io/toolbx/ubuntu-toolbox:24.04) ships native multi-arch manifests.
+  # Multi-arch build matrix, native on both architectures (no QEMU):
+  # linux/amd64 on GitHub-hosted ubuntu-24.04, linux/arm64 on the DGX Spark
+  # self-hosted runners (persistent dgx-spark-builder cache). Fork PRs build
+  # arm64 on GitHub-hosted ubuntu-24.04-arm instead. The base image (quay.io/toolbx/ubuntu-toolbox:24.04) ships native multi-arch manifests.
   #
   # Each architecture: builds once, tests it, scans SBOM via Syft/Grype,
   # and (on main/tags) pushes by digest. The Publish & Release job joins the digests
   # into a multi-arch manifest index via `docker buildx imagetools create`.
   build:
     name: Build & Validate Image (${{ matrix.arch }})
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ (github.event.pull_request.head.repo.fork && matrix.fork_runner) || matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
@@ -113,25 +142,28 @@ jobs:
           # Spark self-hosted runners with their persistent BuildKit cache.
           - arch: amd64
             runner: ubuntu-24.04
-            builder: gha
+            fork_runner: ubuntu-24.04
           - arch: arm64
             runner: [self-hosted, Linux, ARM64, dgx-spark]
-            builder: dgx-spark-builder
+            fork_runner: ubuntu-24.04-arm
     permissions:
       contents: read
       packages: write
+    env:
+      # Persistent BuildKit builder on the Spark runners; ephemeral elsewhere.
+      BUILDER: ${{ (matrix.arch == 'arm64' && !github.event.pull_request.head.repo.fork) && 'dgx-spark-builder' || 'gha' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
       - name: Set up Docker Buildx (GitHub-hosted)
-        if: matrix.builder == 'gha'
+        if: env.BUILDER == 'gha'
         uses: docker/setup-buildx-action@v4
         with:
           name: gha
 
       - name: Set up persistent Docker Buildx builder (DGX Spark)
-        if: matrix.builder == 'dgx-spark-builder'
+        if: env.BUILDER == 'dgx-spark-builder'
         run: |
           for b in $(docker buildx ls | awk '$1 ~ /^builder-[0-9a-f-]+$/ {print $1}'); do
             docker buildx rm -f "$b" || true
@@ -164,7 +196,7 @@ jobs:
       - name: Build and load image into Docker
         uses: docker/build-push-action@v7
         with:
-          builder: ${{ matrix.builder }}
+          builder: ${{ env.BUILDER }}
           context: .
           file: ./Containerfile
           load: true
@@ -172,7 +204,7 @@ jobs:
           tags: localhost/agy-box:test
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.arch }}
-          cache-to: ${{ matrix.builder == 'gha' && format('type=gha,mode=max,scope={0}', matrix.arch) || '' }}
+          cache-to: ${{ env.BUILDER == 'gha' && format('type=gha,mode=max,scope={0}', matrix.arch) || '' }}
 
       - name: Install Syft
         id: syft
@@ -192,8 +224,11 @@ jobs:
           GRYPE: ${{ steps.grype.outputs.cmd }}
         run: |
           mkdir -p "${RUNNER_TEMP}/scan"
+          # Single quotes are intentional: expanded by the inner bash.
+          # shellcheck disable=SC2016
           nohup bash -c '"$SYFT" scan docker:localhost/agy-box:test -o spdx-json=sbom.spdx.json \
             > "$RUNNER_TEMP/scan/syft.log" 2>&1; echo $? > "$RUNNER_TEMP/scan/syft.rc"' > /dev/null 2>&1 &
+          # shellcheck disable=SC2016
           nohup bash -c '"$GRYPE" db update \
             > "$RUNNER_TEMP/scan/grype-db.log" 2>&1; echo $? > "$RUNNER_TEMP/scan/grype-db.rc"' > /dev/null 2>&1 &
 
@@ -216,6 +251,7 @@ jobs:
 
       - name: Wait for SBOM
         run: |
+          # shellcheck disable=SC2016 # single quotes are intentional (expanded by the inner bash)
           timeout 1200 bash -c 'until [ -f "$RUNNER_TEMP/scan/syft.rc" ]; do sleep 2; done'
           cat "${RUNNER_TEMP}/scan/syft.log"
           rc=$(cat "${RUNNER_TEMP}/scan/syft.rc")
@@ -236,6 +272,7 @@ jobs:
         env:
           GRYPE: ${{ steps.grype.outputs.cmd }}
         run: |
+          # shellcheck disable=SC2016 # single quotes are intentional (expanded by the inner bash)
           if ! timeout 600 bash -c 'until [ -f "$RUNNER_TEMP/scan/grype-db.rc" ]; do sleep 2; done'; then
             echo "::warning::Background Grype DB update did not finish within 10 min"
           fi
@@ -270,7 +307,7 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: docker/build-push-action@v7
         with:
-          builder: ${{ matrix.builder }}
+          builder: ${{ env.BUILDER }}
           context: .
           file: ./Containerfile
           platforms: linux/${{ matrix.arch }}
@@ -344,9 +381,8 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
 
-      # Tags the pushed digest(s). With a single (amd64) source this copies the
-      # image index produced by the build as-is; the loop over digest files keeps
-      # it ready for additional architectures later.
+      # Joins the per-arch digests (amd64 + arm64) into one multi-arch image
+      # index and applies the tags.
       - name: Tag and push image manifest
         id: manifest
         working-directory: ${{ runner.temp }}/digests

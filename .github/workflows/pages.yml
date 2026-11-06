@@ -1,13 +1,14 @@
 name: Deploy to GitHub Pages
 
+# Deploy when docs change on main (including the diagram bot's render
+# commits, which are pushed with a deploy key and therefore trigger `push`).
 on:
   push:
     branches: [main]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/pages.yml'
   workflow_dispatch:
-  workflow_run:
-    workflows: ["CI/CD", "Compile Diagrams"]
-    types: [completed]
-    branches: [main]
 
 permissions:
   contents: read

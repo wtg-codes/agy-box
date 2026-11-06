@@ -48,7 +48,7 @@ assert_cmd "Toolchain installer (agy-install-toolchain)" "agy-install-toolchain"
 assert_cmd "Gemini CLI" "gemini" "gemini --help" || errors=$((errors+1))
 assert_cmd "Google ADK" "adk" "adk --help" || errors=$((errors+1))
 assert_cmd "Antigravity CLI (agy)" "agy" "agy --version" || errors=$((errors+1))
-assert_cmd "Antigravity SDK" "python3" "python3 -c \"import google.antigravity\"" || errors=$((errors+1))
+assert_cmd "Antigravity SDK (Agent + LocalAgentConfig, offline)" "python3" "python3 -c \"from google.antigravity import Agent, LocalAgentConfig; LocalAgentConfig(api_key='ci-offline-check')\"" || errors=$((errors+1))
 # Login shells find the toolchain on PATH
 assert_cmd "Toolchain on login-shell PATH (profile.d)" "sh" "env PATH=/usr/local/bin:/usr/bin:/bin sh -c '. /etc/profile.d/agy-toolchain.sh && test -n \"\$(command -v agy)\"'" || errors=$((errors+1))
 
