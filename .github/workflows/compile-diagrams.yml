@@ -1,7 +1,6 @@
 name: Compile Diagrams
 
-# Renders only on main so PR heads are never replaced by a [skip ci] bot
-# commit (which would leave the PR without checks).
+# Renders only on main, so bot commits never land on PR branches.
 on:
   push:
     branches:
@@ -52,5 +51,7 @@ jobs:
       - name: Commit and push changes
         uses: stefanzweifel/git-auto-commit-action@v7
         with:
-          commit_message: "chore: auto-compile diagrams to SVG/PNG [skip ci]"
+          # GITHUB_TOKEN commits never trigger other workflows, so no skip directive
+          # is needed (and it would leak into squash-merge messages).
+          commit_message: "chore: auto-compile diagrams to SVG/PNG"
           file_pattern: "docs/diagrams/rendered/*"

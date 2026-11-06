@@ -9,6 +9,13 @@ Container images are published to `ghcr.io/wtg-codes/agy-box` (`:<version>`, `:<
 
 ## [Unreleased]
 
+- **CI/CD audit fixes**:
+  - Fixed CI/CD not running on merges to `main`: a skip directive quoted in PR commit messages was copied into the squash-merge commit. The lint job now rejects PRs containing skip directives, and the diagram bot no longer uses one.
+  - Fork PRs never run on the self-hosted DGX Spark runners; they fall back to GitHub-hosted `ubuntu-24.04` / `ubuntu-24.04-arm`.
+  - Runs on `main`/tags are no longer cancelled mid-publish by a newer run (only PR runs are cancelled).
+  - Pages deploys only when `docs/` changes or after a successful diagram render, not three times per merge or after failed runs.
+  - Added `actionlint`; yamllint runs as a CLI instead of a third-party action; stale workflow comments fixed.
+  - The image's Antigravity SDK check now imports `Agent` and builds an offline `LocalAgentConfig`.
 - **Simplification & cleanup**:
   - **Removed Open WebUI** (`scripts/install-open-webui.sh`, `just agy-local-ui` / `agy-local-ui-dev`, and the TUI dashboard entry). It is not core to agy-box; run the official `ghcr.io/open-webui/open-webui` container next to the box if you want a local chat UI.
   - Removed the Archify interactive diagrams (`docs/diagrams/interactive/`, `docs/diagrams/sources/`) and the obsolete one-off `ghcr-retag-amd64-only.yml` workflow. `compile-diagrams.yml` renders Mermaid only, and only on pushes to `main`.

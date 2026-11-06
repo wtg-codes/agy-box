@@ -39,7 +39,7 @@ name: GHCR cleanup (untagged images)
         type: string
         default: "1 day"
 
-# Never run concurrently with the re-tag workflow (or another cleanup run).
+# Never run two cleanup runs concurrently.
 concurrency:
   group: ghcr-maintenance
   cancel-in-progress: false
