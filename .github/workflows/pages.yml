@@ -1,7 +1,7 @@
 name: Deploy to GitHub Pages
 
-# Deploy when docs change on main, and again after the diagram renderer has
-# committed fresh SVGs (its GITHUB_TOKEN commit cannot trigger `push`).
+# Deploy when docs change on main (including the diagram bot's render
+# commits, which are pushed with a deploy key and therefore trigger `push`).
 on:
   push:
     branches: [main]
@@ -9,10 +9,6 @@ on:
       - 'docs/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
-  workflow_run:
-    workflows: ["Compile Diagrams"]
-    types: [completed]
-    branches: [main]
 
 permissions:
   contents: read
@@ -25,7 +21,6 @@ concurrency:
 
 jobs:
   deploy:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

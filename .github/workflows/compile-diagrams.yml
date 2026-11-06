@@ -20,8 +20,13 @@ jobs:
   compile:
     runs-on: [self-hosted, Linux, ARM64, dgx-spark]
     steps:
+      # The deploy key is the only non-admin actor allowed to bypass the "main:
+      # require CI" ruleset, and (unlike GITHUB_TOKEN) its push triggers the
+      # Pages deploy for the fresh renders.
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          ssh-key: ${{ secrets.DIAGRAMS_DEPLOY_KEY }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v7
@@ -51,7 +56,7 @@ jobs:
       - name: Commit and push changes
         uses: stefanzweifel/git-auto-commit-action@v7
         with:
-          # GITHUB_TOKEN commits never trigger other workflows, so no skip directive
-          # is needed (and it would leak into squash-merge messages).
+          # CI/CD ignores docs-only pushes, so no skip directive is needed (and
+          # one would leak into squash-merge messages).
           commit_message: "chore: auto-compile diagrams to SVG/PNG"
           file_pattern: "docs/diagrams/rendered/*"

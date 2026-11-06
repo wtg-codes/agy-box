@@ -7,6 +7,11 @@ name: CI/CD
       - main
     tags:
       - "v*"
+    # Docs-only pushes (e.g. diagram renders) do not rebuild the image. PRs are
+    # never path-filtered: their checks are required by the main ruleset.
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
   pull_request:
     branches:
       - main
@@ -219,8 +224,11 @@ jobs:
           GRYPE: ${{ steps.grype.outputs.cmd }}
         run: |
           mkdir -p "${RUNNER_TEMP}/scan"
+          # Single quotes are intentional: expanded by the inner bash.
+          # shellcheck disable=SC2016
           nohup bash -c '"$SYFT" scan docker:localhost/agy-box:test -o spdx-json=sbom.spdx.json \
             > "$RUNNER_TEMP/scan/syft.log" 2>&1; echo $? > "$RUNNER_TEMP/scan/syft.rc"' > /dev/null 2>&1 &
+          # shellcheck disable=SC2016
           nohup bash -c '"$GRYPE" db update \
             > "$RUNNER_TEMP/scan/grype-db.log" 2>&1; echo $? > "$RUNNER_TEMP/scan/grype-db.rc"' > /dev/null 2>&1 &
 
@@ -243,6 +251,7 @@ jobs:
 
       - name: Wait for SBOM
         run: |
+          # shellcheck disable=SC2016 # single quotes are intentional (expanded by the inner bash)
           timeout 1200 bash -c 'until [ -f "$RUNNER_TEMP/scan/syft.rc" ]; do sleep 2; done'
           cat "${RUNNER_TEMP}/scan/syft.log"
           rc=$(cat "${RUNNER_TEMP}/scan/syft.rc")
@@ -263,6 +272,7 @@ jobs:
         env:
           GRYPE: ${{ steps.grype.outputs.cmd }}
         run: |
+          # shellcheck disable=SC2016 # single quotes are intentional (expanded by the inner bash)
           if ! timeout 600 bash -c 'until [ -f "$RUNNER_TEMP/scan/grype-db.rc" ]; do sleep 2; done'; then
             echo "::warning::Background Grype DB update did not finish within 10 min"
           fi

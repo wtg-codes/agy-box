@@ -1,0 +1,94 @@
+---
+name: Antigravity SDK smoke test
+
+# Live, budget-capped agent turns against real models using the SDK version
+# pinned in scripts/install-agent-toolchain.sh. Never runs on pull requests
+# (it uses secrets and the private cluster endpoint).
+"on":
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/install-agent-toolchain.sh'
+      - 'tests/sdk/**'
+      - '.github/workflows/sdk-smoke.yml'
+  schedule:
+    - cron: "17 6 * * 1"  # weekly, Monday 06:17 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: sdk-smoke
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  # Local inference on the DGX Spark cluster (OpenAI-compatible vLLM endpoint):
+  # no cloud credentials. Override with repository variables
+  # SDK_SMOKE_BASE_URL / SDK_SMOKE_MODEL.
+  spark-cluster:
+    name: SDK → DGX Spark cluster (LocalOpenAIAgentConfig)
+    runs-on: [self-hosted, Linux, ARM64, dgx-spark]
+    timeout-minutes: 15
+    env:
+      SDK_SMOKE_BASE_URL: ${{ vars.SDK_SMOKE_BASE_URL || 'http://10.0.0.1:8000/v1' }}
+      SDK_SMOKE_MODEL: ${{ vars.SDK_SMOKE_MODEL || 'deepseek-v4.1-flash' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Check cluster endpoint
+        id: probe
+        run: |
+          if curl -fsS -m 10 "${SDK_SMOKE_BASE_URL}/models" > /dev/null; then
+            echo "up=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "up=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Cluster endpoint ${SDK_SMOKE_BASE_URL} is not reachable; skipping the live cluster test."
+          fi
+
+      - name: Install pinned Antigravity SDK
+        if: steps.probe.outputs.up == 'true'
+        run: |
+          version=$(grep -oP 'google-antigravity==\K[0-9.]+' scripts/install-agent-toolchain.sh | head -n1)
+          echo "Installing google-antigravity==${version}"
+          python3 -m venv "${RUNNER_TEMP}/sdk-venv"
+          "${RUNNER_TEMP}/sdk-venv/bin/pip" install --quiet "google-antigravity==${version}"
+
+      - name: Run smoke test
+        if: steps.probe.outputs.up == 'true'
+        run: '"${RUNNER_TEMP}/sdk-venv/bin/python" tests/sdk/smoke.py openai'
+
+  # Hosted Gemini. Skipped (with a notice) until the GEMINI_API_KEY repository
+  # secret is added.
+  gemini:
+    name: SDK → Gemini API (LocalAgentConfig)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Check for API key
+        id: key
+        run: |
+          if [ -n "${GEMINI_API_KEY}" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::GEMINI_API_KEY secret is not set; skipping the hosted Gemini test. Create a key at https://aistudio.google.com/app/api-keys and add it as a repository secret."
+          fi
+
+      - name: Install pinned Antigravity SDK
+        if: steps.key.outputs.present == 'true'
+        run: |
+          version=$(grep -oP 'google-antigravity==\K[0-9.]+' scripts/install-agent-toolchain.sh | head -n1)
+          echo "Installing google-antigravity==${version}"
+          python3 -m venv "${RUNNER_TEMP}/sdk-venv"
+          "${RUNNER_TEMP}/sdk-venv/bin/pip" install --quiet "google-antigravity==${version}"
+
+      - name: Run smoke test
+        if: steps.key.outputs.present == 'true'
+        run: '"${RUNNER_TEMP}/sdk-venv/bin/python" tests/sdk/smoke.py gemini'

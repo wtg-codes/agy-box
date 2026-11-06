@@ -13,9 +13,11 @@ Container images are published to `ghcr.io/wtg-codes/agy-box` (`:<version>`, `:<
   - Fixed CI/CD not running on merges to `main`: a skip directive quoted in PR commit messages was copied into the squash-merge commit. The lint job now rejects PRs containing skip directives, and the diagram bot no longer uses one.
   - Fork PRs never run on the self-hosted DGX Spark runners; they fall back to GitHub-hosted `ubuntu-24.04` / `ubuntu-24.04-arm`.
   - Runs on `main`/tags are no longer cancelled mid-publish by a newer run (only PR runs are cancelled).
-  - Pages deploys only when `docs/` changes or after a successful diagram render, not three times per merge or after failed runs.
+  - Pages deploys only when `docs/` changes on `main`, not three times per merge or after failed runs.
   - Added `actionlint`; yamllint runs as a CLI instead of a third-party action; stale workflow comments fixed.
   - The image's Antigravity SDK check now imports `Agent` and builds an offline `LocalAgentConfig`.
+  - New `sdk-smoke.yml`: live, budget-capped Antigravity SDK agent turns against the DGX Spark cluster (`LocalOpenAIAgentConfig`, no cloud key) and the Gemini API (`LocalAgentConfig`, once the `GEMINI_API_KEY` secret is set).
+  - `main` is now protected by the `main: require CI` ruleset (required checks, no force push or deletion). Squash merges use the PR title only. The diagram bot pushes with a deploy key, and docs-only pushes no longer rebuild the image.
 - **Simplification & cleanup**:
   - **Removed Open WebUI** (`scripts/install-open-webui.sh`, `just agy-local-ui` / `agy-local-ui-dev`, and the TUI dashboard entry). It is not core to agy-box; run the official `ghcr.io/open-webui/open-webui` container next to the box if you want a local chat UI.
   - Removed the Archify interactive diagrams (`docs/diagrams/interactive/`, `docs/diagrams/sources/`) and the obsolete one-off `ghcr-retag-amd64-only.yml` workflow. `compile-diagrams.yml` renders Mermaid only, and only on pushes to `main`.
