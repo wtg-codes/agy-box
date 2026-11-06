@@ -1,15 +1,15 @@
 flowchart LR
-    subgraph Sandbox ["agy-box Distrobox Container"]
+    subgraph Sandbox ["agy-box Distrobox / Sandbox Container"]
         SDK["fa:fa-cubes Antigravity Python SDK<br>('google-antigravity')"]
         CLI["fa:fa-terminal Antigravity CLI<br>('~/.local/bin/agy')"]
-        IDE["fa:fa-code Antigravity IDE<br>('~/.local/bin/antigravity-ide')"]
-        AgentUI["fa:fa-window-restore Google Antigravity (Agent UI)<br>('~/.local/bin/antigravity')"]
+        Editors["fa:fa-code VS Code, Zed & JetBrains<br>('code', 'zed', 'agy-install-ide')"]
+        AgentUI["fa:fa-window-restore Google Antigravity (Agent UI)<br>('/usr/local/bin/antigravity')"]
         Chrome["fa:fa-chrome Google Chrome<br>('google-chrome-stable')"]
         
         SDK -->|"Local Host API Calls (Port 8080)"| AgentUI
         CLI -->|"WebSocket Communication"| AgentUI
+        Editors -->|"Antigravity Extension / Plugin"| AgentUI
         AgentUI -->|"Chrome DevTools Protocol (CDP)"| Chrome
-        IDE -->|"Chrome DevTools Protocol (CDP)"| Chrome
     end
     
     subgraph External ["External Services"]
@@ -18,7 +18,7 @@ flowchart LR
     end
 
     AgentUI --> GCS
-    IDE --> GCS
+    Editors --> GCS
     SDK --> GCS
     CLI --> GH
 
@@ -26,5 +26,5 @@ flowchart LR
     classDef sandbox sandbox;
     classDef external external;
 
-    class SDK,CLI,IDE,AgentUI,Chrome sandbox;
+    class SDK,CLI,Editors,AgentUI,Chrome sandbox;
     class GCS,GH external;

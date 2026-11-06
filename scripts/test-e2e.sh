@@ -130,14 +130,12 @@ distrobox enter "${CONTAINER_NAME}" -- agy --version >/dev/null
 log_pass "Antigravity CLI (agy) functional"
 
 # Antigravity Agent UI wrapper
-distrobox enter "${CONTAINER_NAME}" -- test -x "${TEST_HOME}/.local/bin/antigravity"
-distrobox enter "${CONTAINER_NAME}" -- test -d "${TEST_HOME}/.local/share/antigravity"
+distrobox enter "${CONTAINER_NAME}" -- sh -c "test -x /usr/local/bin/antigravity || test -x '${TEST_HOME}/.local/bin/antigravity'"
 log_pass "Antigravity Agent UI installed and wrapper executable"
 
-# Antigravity IDE wrapper
-distrobox enter "${CONTAINER_NAME}" -- test -x "${TEST_HOME}/.local/bin/antigravity-ide"
-distrobox enter "${CONTAINER_NAME}" -- test -d "${TEST_HOME}/.local/share/antigravity-ide"
-log_pass "Antigravity IDE installed and wrapper executable"
+# Verify legacy Antigravity IDE is not installed
+distrobox enter "${CONTAINER_NAME}" -- sh -c "! test -e /usr/local/bin/antigravity-ide && ! test -e '${TEST_HOME}/.local/bin/antigravity-ide'"
+log_pass "Legacy antigravity-ide cleanly omitted"
 
 # Antigravity Python SDK
 sdk_check=$(distrobox enter "${CONTAINER_NAME}" -- python3 -c "import google.antigravity; print('SDK OK')")

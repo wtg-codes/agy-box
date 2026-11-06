@@ -330,22 +330,6 @@ run_profile_seeding() {
         fi
     fi
 
-    # --- Antigravity IDE ---
-    local host_antigravity_ide="${host_home}/.config/Antigravity-ide"
-    local container_antigravity_ide="${HOME}/.config/Antigravity-ide-box"
-    if [[ -d "${host_antigravity_ide}/User" ]]; then
-        if gum confirm "Seed container Antigravity IDE settings from host?  (themes, keybindings, extensions)"; then
-            if gum spin --spinner dot --title "Copying Antigravity IDE settings from host..." -- bash -c "$(declare -f seed_antigravity_profile); seed_antigravity_profile '$host_antigravity_ide' '$container_antigravity_ide'"; then
-                gum style --foreground 46 "✓ Antigravity IDE settings seeded from host (chromeBinaryPath patched for container)."
-                any_seeded=true
-            else
-                gum style --foreground 196 "✗ Failed to seed Antigravity IDE settings."
-            fi
-        else
-            gum style --foreground 214 "Skipping Antigravity IDE settings seeding."
-        fi
-    fi
-
     # Write flag file so we don't prompt again
     mkdir -p "$HOME/.config/agy-box"
     if [[ "$any_seeded" == "true" ]]; then
@@ -423,14 +407,14 @@ run_audit_checks() {
         # D. Developer Skills Pack Checks
         echo "Skills Check:"
 
-        # Antigravity toolchain (per-user install in ~/.local/bin, not baked into the image)
+        # Antigravity toolchain
         local missing_toolchain=0
         local tool
-        for tool in agy antigravity antigravity-ide gemini adk; do
-            if [[ -x "$HOME/.local/bin/$tool" ]]; then
+        for tool in agy antigravity gemini adk; do
+            if command -v "$tool" &>/dev/null || [[ -x "$HOME/.local/bin/$tool" ]]; then
                 echo "OK:Antigravity toolchain component '$tool' is installed."
             else
-                echo "WARN:Antigravity toolchain component '$tool' not found in ~/.local/bin."
+                echo "WARN:Antigravity toolchain component '$tool' not found."
                 missing_toolchain=$((missing_toolchain + 1))
             fi
         done

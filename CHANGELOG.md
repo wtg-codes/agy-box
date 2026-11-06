@@ -9,6 +9,13 @@ Container images are published to `ghcr.io/wtg-codes/agy-box` (`:<version>`, `:<
 
 ## [Unreleased]
 
+- **Antigravity Toolchain & IDE Streamlining**:
+  - **Removed legacy `antigravity-ide` (`1.23.2`)** from the container image, installer (`scripts/install-agent-toolchain.sh`), VDI desktop, and documentation in favor of the **Google Antigravity App (`antigravity` v2.0.1)**, **Antigravity CLI (`agy` v1.5.0)**, **VS Code (`code`)**, **Zed (`zed`)**, and **JetBrains IDEs (`agy-install-ide`)**.
+  - Added automatic cleanup of legacy `antigravity-ide` binaries, share directories, desktop shortcuts, and config directories when running `agy-install-toolchain` / `update-toolchain`.
+  - Updated `agy-vdi` browser VDI desktop startup to launch only the **Terminal (`xterm`)** automatically so users can launch Google Antigravity, VS Code, or Zed on demand from the desktop/toolbar icons.
+- **Sandbox Sudo, UID/GID Alignment & Self-Hosted DGX Spark CI**:
+  - Added passwordless `sudo` (`NOPASSWD:ALL`) for the container's `agyuser` (`rootfs/etc/sudoers.d/agyuser`) and dynamic `PUID`/`PGID` alignment inside isolated `--mode sandbox` containers so bind-mounted workspaces and package installation work seamlessly without permission errors ([#43]).
+  - Added self-hosted ARM64 (`dgx-spark`) GitHub Actions runner orchestration with persistent `dgx-spark-builder` BuildKit cache and fast static `uv` wheel installation ([#42], [#43]).
 - **Dual-Engine Architecture (Workstation vs. Sandbox)**:
   - Added native support for **Isolated Sandboxes** directly via rootless Podman or Docker (`--mode sandbox`, default for named boxes like `test1`), running with zero host mounts, isolated encrypted keyring, clean room environment, and no credential leakage.
   - Retained **Integrated Workstation** mode via Distrobox (`--mode workstation`, default for primary `agy-box`) for seamless host desktop, Wayland/audio, and SSO integration.

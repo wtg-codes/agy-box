@@ -6,7 +6,7 @@ Accepted
 ## Context
 When developers use `agy-box` in headless environments (such as remote VMs, Google Cloud Shell, or SSH sessions), direct host-integrated display forwarding (X11/Wayland socket sharing) is unavailable. 
 
-To support these workflows, the sandbox environment must provide a way to launch graphical applications (e.g., Google Chrome, Google Antigravity Agent UI, Antigravity IDE) and interact with them visually. Installing a VNC client on the host computer introduces friction, so a clientless (web-browser-accessible) solution is required.
+To support these workflows, the sandbox environment must provide a way to launch graphical applications (e.g., Google Chrome, Google Antigravity Agent UI, VS Code, Zed) and interact with them visually. Installing a VNC client on the host computer introduces friction, so a clientless (web-browser-accessible) solution is required.
 
 Furthermore, running these graphic tools under container runtimes without physical GPU devices often results in crashes or errors during hardware driver probes.
 

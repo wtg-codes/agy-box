@@ -2,7 +2,7 @@
 # ==============================================================================
 # agy-install-toolchain  (source: scripts/install-agent-toolchain.sh)
 #
-# Installs or updates the Antigravity agent toolchain (Agent UI, IDE, agy CLI,
+# Installs or updates the Antigravity agent toolchain (Agent UI, agy CLI,
 # SDK, ADK, Gemini CLI).
 #
 # Modes:
@@ -14,7 +14,6 @@
 #
 # It installs (all versions pinned, downloads verified by checksum):
 #   - Google Antigravity (Agent UI)  /opt/antigravity     -> /usr/local/bin/antigravity
-#   - Antigravity IDE                /opt/antigravity-ide -> /usr/local/bin/antigravity-ide
 #   - Antigravity CLI                /usr/local/bin/agy
 #   - Antigravity SDK                google-antigravity==0.1.23
 #   - Google ADK                     google-adk==2.1.0    -> /usr/local/bin/adk
@@ -33,7 +32,7 @@ usage() {
     cat <<EOF
 Usage: ${PROG} [--system] [-h|--help]
 
-Install or update the Antigravity agent toolchain (Agent UI, IDE, agy CLI,
+Install or update the Antigravity agent toolchain (Agent UI, agy CLI,
 SDK, ADK, Gemini CLI).
   --system   Install system-wide into /opt and /usr/local/bin (requires root).
              Used during image build so Syft produces an authentic SBOM.
@@ -95,8 +94,6 @@ case "$arch" in
         CLI_SHA512="e6031f850929210705d8c2393a5665b82b8c3b19684a6d3c556cafa31f26f77acbf164dfee96ca84a5ae7670ac0cc238a974c981c517b269194bdccff271cbd5"
         HUB_ARCH="linux-x64"
         HUB_SHA256="0727e1f56961b6d2347941f278da69cc6c17de3befe988524848cd167380e9ab"
-        IDE_ARCH="linux-x64"
-        IDE_SHA256="5232a4048ff4fa15685d9a981ba4fba573e297f3efc9b76f638e794baf775725"
         ;;
     aarch64|arm64)
         CLI_ARCH="linux-arm"
@@ -104,8 +101,6 @@ case "$arch" in
         CLI_SHA512="509518b2820945db2bea5e013ca43a49df5c78927c3ac341a1115287d52627356e1e9506ac0d2040fb467915fba4dde90061d091fddbddf8ddc212637ae40150"
         HUB_ARCH="linux-arm"
         HUB_SHA256="5af56cc9dda954f369a61045b7da2f348bcb0b3507d272b4c0e9aa7cd6175d9b"
-        IDE_ARCH="linux-arm"
-        IDE_SHA256="64d11085f17edc691adbe8952d59887f257d58448705dc2a19dfa23890d36df1"
         ;;
     *)
         die "unsupported architecture '${arch}': must be x86_64 or aarch64."
@@ -225,34 +220,17 @@ else
 fi
 
 
-# --- 2. Antigravity IDE (Stable 1.23.2 Tarball) -------------------------------
-step "Installing Antigravity IDE"
-IDE_VERSION="1.23.2"
-IDE_URL="https://edgedl.me.gvt1.com/edgedl/release2/j0qc3/antigravity/stable/${IDE_VERSION}-4781536860569600/${IDE_ARCH}/Antigravity.tar.gz"
-install_app_tarball "$IDE_URL" "$IDE_SHA256" "$SHARE_DIR/antigravity-ide"
-
-ide_exec="$SHARE_DIR/antigravity-ide/antigravity"
-write_file_atomic "$BIN_DIR/antigravity-ide" 0755 << EOF
-#!/bin/bash
-if [ -e /run/.containerenv ] || [ -e /run/.toolboxenv ]; then
-    mkdir -p "\$HOME/.config/Antigravity-ide-box/User"
-    if [ ! -f "\$HOME/.config/Antigravity-ide-box/User/settings.json" ]; then
-        echo '{"antigravity.account.enableTelemetry": false, "antigravity.browser.chromeBinaryPath": "/usr/bin/google-chrome-stable", "window.titleBarStyle": "native"}' > "\$HOME/.config/Antigravity-ide-box/User/settings.json"
-    elif command -v jq &>/dev/null; then
-        jq '.["antigravity.browser.chromeBinaryPath"] = "/usr/bin/google-chrome-stable" | .["window.titleBarStyle"] = "native"' "\$HOME/.config/Antigravity-ide-box/User/settings.json" > "\$HOME/.config/Antigravity-ide-box/User/settings.json.tmp" && mv "\$HOME/.config/Antigravity-ide-box/User/settings.json.tmp" "\$HOME/.config/Antigravity-ide-box/User/settings.json"
-    fi
-    exec "$ide_exec" --user-data-dir "\$HOME/.config/Antigravity-ide-box" --disable-dev-shm-usage --disable-gpu --disable-crash-reporter --no-sandbox "\$@"
-else
-    exec "$ide_exec" --disable-dev-shm-usage --disable-gpu --disable-crash-reporter --no-sandbox "\$@"
-fi
-EOF
-
-# Disable telemetry for IDE (only when no settings exist yet)
+# --- 2. Clean Up Legacy Antigravity IDE (Removed) ----------------------------
+# Antigravity IDE (antigravity-ide) has been retired in favor of Google Antigravity App (antigravity),
+# Antigravity CLI (agy), VS Code, Zed, and JetBrains IDEs. Clean up any legacy installation artifacts.
+rm -f "$BIN_DIR/antigravity-ide" 2>/dev/null || true
+rm -rf "$SHARE_DIR/antigravity-ide" 2>/dev/null || true
 if [ "$MODE" = "system" ]; then
-    ensure_default_settings "/etc/skel/.config/Antigravity-ide/User/settings.json"
-    ensure_default_settings "/etc/skel/.config/Antigravity-ide-box/User/settings.json"
-else
-    ensure_default_settings "$HOME/.config/Antigravity-ide/User/settings.json"
+    rm -f "/etc/skel/Desktop/AntigravityIDE.desktop" 2>/dev/null || true
+    rm -rf "/etc/skel/.config/Antigravity-ide" "/etc/skel/.config/Antigravity-ide-box" 2>/dev/null || true
+elif [ -n "${HOME:-}" ]; then
+    rm -f "$HOME/Desktop/AntigravityIDE.desktop" 2>/dev/null || true
+    rm -rf "$HOME/.config/Antigravity-ide" "$HOME/.config/Antigravity-ide-box" 2>/dev/null || true
 fi
 
 
@@ -363,7 +341,7 @@ fi
 # --- Verify -------------------------------------------------------------------
 step "Verifying installation"
 missing=0
-for bin in antigravity antigravity-ide agy adk gemini; do
+for bin in antigravity agy adk gemini; do
     if [ ! -x "$BIN_DIR/$bin" ]; then
         echo "${PROG}: ERROR: expected executable $BIN_DIR/$bin is missing." >&2
         missing=$((missing + 1))

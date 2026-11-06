@@ -62,7 +62,7 @@ assert_cmd "Toolchain on login-shell PATH (profile.d)" "sh" "env PATH=/usr/local
 # Assert Desktop Apps (Checking path & permissions)
 assert_cmd "Google Chrome" "google-chrome-stable" "google-chrome-stable --version" || errors=$((errors+1))
 assert_cmd "Google Antigravity (Agent UI)" "antigravity" "{ test -x /usr/local/bin/antigravity && test -d /opt/antigravity; } || { test -x \"$HOME/.local/bin/antigravity\" && test -d \"$HOME/.local/share/antigravity\"; }" || errors=$((errors+1))
-assert_cmd "Antigravity IDE" "antigravity-ide" "{ test -x /usr/local/bin/antigravity-ide && test -d /opt/antigravity-ide; } || { test -x \"$HOME/.local/bin/antigravity-ide\" && test -d \"$HOME/.local/share/antigravity-ide\"; }" || errors=$((errors+1))
+assert_cmd "No legacy Antigravity IDE" "sh" "! test -e /usr/local/bin/antigravity-ide && ! test -d /opt/antigravity-ide" || errors=$((errors+1))
 assert_cmd "Visual Studio Code" "code" "code --version" || errors=$((errors+1))
 assert_cmd "Zed" "zed" "zed --version" || errors=$((errors+1))
 assert_cmd "JetBrains IDE Installer" "agy-install-ide" "test -x /usr/local/bin/agy-install-ide" || errors=$((errors+1))

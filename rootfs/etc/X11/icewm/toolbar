@@ -3,7 +3,6 @@
 prog "Terminal" "utilities-terminal" xterm -fa 'Monospace' -fs 12 -bg '#1a1b2e' -fg '#e0e0e0' -geometry 100x35
 prog "Google Chrome" "google-chrome" google-chrome-stable
 prog "Antigravity 2.0 (Agent First Experience)" "system-run" antigravity
-prog "Antigravity IDE (Classic VSCode UI)" "accessories-text-editor" antigravity-ide
 prog "Visual Studio Code" "vscode" code
 prog "Zed" "zed" zed
 prog "Antigravity CLI (agy)" "utilities-terminal" xterm -fa 'Monospace' -fs 12 -bg '#1a1b2e' -fg '#e0e0e0' -geometry 100x35 -e agy

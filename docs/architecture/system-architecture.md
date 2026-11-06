@@ -100,7 +100,7 @@ The image is built on a multi-arch Ubuntu base with a batteries-included develop
 | System deps | `scripts/install-agent-deps.sh` | git, curl, jq, Python/pipx, Node.js 22 LTS (NodeSource), `libsecret-1-0` + Python keyring, `tini`, `gosu`, Gum, Google Chrome (amd64) / Chromium (arm64 via xtradeb), Xvfb, x11vnc, IceWM, PCManFM, noVNC, websockify, xterm. |
 | Local Web Dashboard | `scripts/install-open-webui.sh` | Python 3.12 + `uv`, Open WebUI in `/opt/open-webui-venv` with CPU-only PyTorch. |
 | CNCF tools | `scripts/install-tools.sh` | `kubectl`, `helm`, `k9s` (pinned versions, checksum-verified for both amd64 and arm64). |
-| Pre-baked toolchain (Option A) | `scripts/install-agent-toolchain.sh --system` | Antigravity Agent UI, Antigravity IDE, Antigravity CLI (`agy`), Antigravity SDK, Google ADK, Gemini CLI in `/usr/local/bin` and `/opt`. |
+| Pre-baked toolchain (Option A) | `scripts/install-agent-toolchain.sh --system` | Google Antigravity (Agent UI), Antigravity CLI (`agy`), Antigravity SDK, Google ADK, Gemini CLI in `/usr/local/bin` and `/opt`, plus VS Code/Zed Antigravity extensions. |
 | rootfs overlay | `rootfs/` | `agy-setup-helper`, `agy-vdi`, `entrypoint.sh`, profile hook, IceWM config, desktop icons, versioned wallpaper. |
 | Runtime toolchain utility | `scripts/install-agent-toolchain.sh` | Shipped to `/usr/local/bin/agy-install-toolchain` for runtime per-user customizations. |
 
