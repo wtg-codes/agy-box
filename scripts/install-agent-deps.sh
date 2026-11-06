@@ -20,7 +20,6 @@ apt-get update && apt-get install -y --no-install-recommends \
     jq \
     gnupg \
     python3-pip \
-    pipx \
     python3-keyring \
     python3-keyrings.alt \
     apt-transport-https \

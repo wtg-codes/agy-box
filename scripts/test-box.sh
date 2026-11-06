@@ -1,5 +1,16 @@
 #!/bin/bash
 # test-box.sh - Integration test runner for agy-box container and distrobox environment
+#
+# Environment:
+#   IMAGE_NAME   image to test (default: localhost/agy-box:dev, built from source)
+#   SKIP_BUILD   "true" to use IMAGE_NAME as-is (no local build)
+#   FORCE_BUILD  "true" to rebuild even if sources are unchanged
+#   PULL         "true" to pull IMAGE_NAME from its registry first (implies SKIP_BUILD)
+#   VDI_TEST     "true" to also start agy-vdi and probe noVNC on port 6080
+#   RUNTIME      podman | docker (default: auto-detect)
+#
+# Test a published release end to end:
+#   PULL=true VDI_TEST=true IMAGE_NAME=ghcr.io/wtg-codes/agy-box:latest ./scripts/test-box.sh
 set -euo pipefail
 
 # --- Color configuration ---
@@ -108,6 +119,13 @@ calculate_build_hash() {
     echo "${files_hash:-empty}"
 }
 
+# --- Pull published image (release E2E) ---
+if [[ "${PULL:-false}" = "true" ]]; then
+    log_info "Pulling $IMAGE_NAME..."
+    "$RUNTIME" pull "$IMAGE_NAME"
+    SKIP_BUILD=true
+fi
+
 # --- Build Container ---
 STATE_FILE="$HOME/.config/agy-box/.last_build_hash"
 CURRENT_HASH=$(calculate_build_hash)
@@ -150,7 +168,7 @@ fi
 
 # Probe whether distrobox create + enter works on this host/runtime (e.g. Docker on
 # Ubuntu 24.04 can fail with 'openat dev/ptmx: no such device' when distrobox bind-mounts
-# /dev, or when testing a cross-arch image under QEMU). If so, fall back to Isolated Sandbox mode.
+# /dev). If so, fall back to Isolated Sandbox mode.
 if distrobox create -i "$IMAGE_NAME" -n "$CONTAINER_NAME" --hostname "$CONTAINER_NAME" --home "$TEST_HOME" --yes && \
    sleep 2 && \
    distrobox enter "$CONTAINER_NAME" -- true 2>/dev/null; then
@@ -201,6 +219,29 @@ if distrobox create -i "$IMAGE_NAME" -n "$CONTAINER_NAME" --hostname "$CONTAINER
         exit 1
     fi
     log_success "Exported agy shim removed."
+
+    # --- Optional: headless VDI desktop (noVNC on :6080) ---
+    if [[ "${VDI_TEST:-false}" = "true" ]]; then
+        log_info "Starting agy-vdi and waiting for noVNC on http://127.0.0.1:6080 ..."
+        distrobox enter "$CONTAINER_NAME" -- /usr/local/bin/agy-vdi > "$TEST_ROOT/vdi.log" 2>&1 &
+        vdi_pid=$!
+        vdi_ready=false
+        for _ in {1..30}; do
+            if curl -s -f http://127.0.0.1:6080/vnc.html >/dev/null 2>&1; then
+                vdi_ready=true
+                break
+            fi
+            sleep 1
+        done
+        kill "$vdi_pid" 2>/dev/null || true
+        distrobox enter "$CONTAINER_NAME" -- pkill -f "websockify|x11vnc|Xvfb" 2>/dev/null || true
+        if [[ "$vdi_ready" != "true" ]]; then
+            log_error "noVNC did not respond within 30 seconds:"
+            cat "$TEST_ROOT/vdi.log" >&2 || true
+            exit 1
+        fi
+        log_success "VDI web desktop responded on port 6080."
+    fi
 else
     log_warn "distrobox enter unavailable on this host/arch (${RUNTIME}); validating via Isolated Sandbox mode (agyuser)..."
     distrobox rm --yes "$CONTAINER_NAME" >/dev/null 2>&1 || true

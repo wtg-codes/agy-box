@@ -112,7 +112,7 @@ for cmd in curl tar sha256sum sha512sum python3 npm; do
 done
 
 if [ "$MODE" = "system" ]; then
-    command -v pipx >/dev/null 2>&1 || die "required command 'pipx' not found in PATH for system install."
+    :  # system mode bootstraps its own pinned uv below
 else
     command -v pip3 >/dev/null 2>&1 || die "required command 'pip3' not found in PATH for user install."
     # Ensure user directories in HOME are writable. When distrobox initializes,
@@ -252,39 +252,28 @@ mv -f "$BIN_DIR/agy.new" "$BIN_DIR/agy"
 if [ "$MODE" = "system" ]; then
     step "Installing Google ADK and Antigravity SDK (system-wide)"
     export PIP_NO_COMPILE=1
+    # Pinned, statically linked uv for the build architecture.
+    UV_VERSION="0.13.7"
     case "$arch" in
-        aarch64|arm64) uv_platform="aarch64-unknown-linux-gnu" ;;
-        *) uv_platform="x86_64-unknown-linux-gnu" ;;
+        aarch64|arm64) uv_triple="aarch64-unknown-linux-musl" ;;
+        *) uv_triple="x86_64-unknown-linux-musl" ;;
     esac
-    UV_BIN="/usr/local/bin/uv"
-    if ! "$UV_BIN" --version >/dev/null 2>&1; then
-        mkdir -p "$WORK_DIR/uv-host"
-        if curl -fsSL --retry 5 --retry-delay 2 --connect-timeout 5 \
-            "https://github.com/astral-sh/uv/releases/latest/download/uv-aarch64-unknown-linux-musl.tar.gz" \
-            | tar -xz -C "$WORK_DIR/uv-host" --strip-components=1 "uv-aarch64-unknown-linux-musl/uv" && \
-           chmod +x "$WORK_DIR/uv-host/uv" && \
-           "$WORK_DIR/uv-host/uv" --version >/dev/null 2>&1; then
-            UV_BIN="$WORK_DIR/uv-host/uv"
-        fi
-    fi
+    mkdir -p "$WORK_DIR/uv"
+    curl -fsSL --retry 5 --retry-delay 2 --connect-timeout 5 \
+        "https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-${uv_triple}.tar.gz" \
+        | tar -xz -C "$WORK_DIR/uv" --strip-components=1 "uv-${uv_triple}/uv"
+    UV_BIN="$WORK_DIR/uv/uv"
 
-    mkdir -p /opt/pipx/venvs
-    rm -rf /opt/pipx/venvs/google-adk
-    if "$UV_BIN" --version >/dev/null 2>&1 && \
-       python3 -m venv --without-pip /opt/pipx/venvs/google-adk && \
-       "$UV_BIN" pip install --python /opt/pipx/venvs/google-adk/bin/python \
-           --python-platform "$uv_platform" \
-           pip google-adk==2.1.0 google-antigravity==0.1.23; then
-        ln -sf /opt/pipx/venvs/google-adk/bin/adk /usr/local/bin/adk
-    else
-        rm -rf /opt/pipx/venvs/google-adk
-        PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx install --force google-adk==2.1.0
-        PIPX_HOME=/opt/pipx PIPX_BIN_DIR=/usr/local/bin pipx inject google-adk google-antigravity==0.1.23
-    fi
+    PY_VENV="/opt/agy-python"
+    rm -rf "$PY_VENV"
+    python3 -m venv --without-pip "$PY_VENV"
+    "$UV_BIN" pip install --python "$PY_VENV/bin/python" \
+        pip google-adk==2.1.0 google-antigravity==0.1.23
+    ln -sf "$PY_VENV/bin/adk" /usr/local/bin/adk
     # Enable system python3 to find the packages via .pth file
     for pydir in /usr/local/lib/python*/dist-packages /usr/lib/python*/dist-packages; do
         if [ -d "$pydir" ]; then
-            for site in /opt/pipx/venvs/google-adk/lib/python*/site-packages; do
+            for site in "$PY_VENV"/lib/python*/site-packages; do
                 if [ -d "$site" ]; then
                     echo "$site" > "$pydir/agy-toolchain.pth"
                 fi

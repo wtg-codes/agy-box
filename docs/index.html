@@ -182,11 +182,11 @@
                     </div>
                     <div class="flex items-start gap-3">
                         <i data-lucide="layers" class="w-5 h-5 text-indigo-400 mt-0.5 flex-shrink-0"></i>
-                        <div><span class="text-white font-medium">Distrobox:</span> <span class="text-slate-400 text-sm">Host-integrated container manager (auto-installed if missing via host package manager)</span></div>
+                        <div><span class="text-white font-medium">Distrobox:</span> <span class="text-slate-400 text-sm">Host-integrated container manager (preinstalled on Bluefin / Universal Blue; install it with your distro package manager elsewhere)</span></div>
                     </div>
                     <div class="flex items-start gap-3">
                         <i data-lucide="palette" class="w-5 h-5 text-indigo-400 mt-0.5 flex-shrink-0"></i>
-                        <div><span class="text-white font-medium">Gum:</span> <span class="text-slate-400 text-sm">Charm interactive TUI toolkit (auto-downloaded into memory if not present)</span></div>
+                        <div><span class="text-white font-medium">Gum:</span> <span class="text-slate-400 text-sm">Charm interactive TUI toolkit (installed via Homebrew when available, otherwise install instructions are shown)</span></div>
                     </div>
                 </div>
                 <details class="mt-4 group">
@@ -450,7 +450,7 @@ flowchart LR
                     </div>
                     <div>
                         <h2 class="text-xl font-bold text-white">AI Model Authentication &amp; Setup</h2>
-                        <p class="text-slate-500 text-xs">Support for all Google AI authentication methods and 100% offline local LLMs</p>
+                        <p class="text-slate-500 text-xs">Support for all Google AI authentication methods with host or isolated credential storage</p>
                     </div>
                 </div>
 
@@ -497,17 +497,17 @@ flowchart LR
                         </div>
                     </div>
 
-                    <!-- Auth 4: Local Offline Models -->
+                    <!-- Auth 4: Isolated Keyring -->
                     <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 space-y-2.5">
                         <div class="flex items-center gap-2 text-emerald-400 font-semibold text-sm">
                             <i data-lucide="shield" class="w-4 h-4"></i>
-                            Local Offline Models (Ollama + WebUI)
+                            Isolated Keyring Mode
                         </div>
                         <p class="text-slate-400 text-xs">
-                            100% private, zero internet telemetry. Runs bundled Open WebUI inside the box connected to host Ollama on port 11434.
+                            Keep agent tokens and API keys quarantined in a container-local encrypted keyring instead of your host D-Bus Secret Service.
                         </p>
                         <div class="bg-slate-900 p-2.5 rounded-lg border border-slate-800 text-xs font-mono text-emerald-400">
-                            just agy-local-ui &nbsp;&nbsp;# Open :8080
+                            AGY_KEYRING_MODE="isolated" &nbsp;&nbsp;# ~/.config/agy-box/config.env
                         </div>
                     </div>
                 </div>
@@ -568,10 +568,10 @@ flowchart LR
                     </div>
                     <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 hover:border-indigo-500/40 transition-colors">
                         <div class="flex items-center gap-2.5 mb-2">
-                            <i data-lucide="message-square" class="w-5 h-5 text-indigo-400"></i>
-                            <h3 class="text-white font-semibold">Local Web Dashboard</h3>
+                            <i data-lucide="cpu" class="w-5 h-5 text-indigo-400"></i>
+                            <h3 class="text-white font-semibold">Native amd64 &amp; arm64</h3>
                         </div>
-                        <p class="text-slate-400 text-sm">Open WebUI (CPU-only PyTorch) for your local Ollama models. Launch with <code class="text-emerald-400 font-mono text-xs bg-slate-900 px-1 py-0.5 rounded">just agy-local-ui</code>.</p>
+                        <p class="text-slate-400 text-sm">Multi-arch image built natively for x86_64 and ARM64 (DGX Spark, Apple Silicon), with automatic NVIDIA GPU passthrough via <code class="text-emerald-400 font-mono text-xs bg-slate-900 px-1 py-0.5 rounded">--nvidia</code>.</p>
                     </div>
                     <div class="bg-slate-800/80 rounded-xl p-5 border border-slate-700 hover:border-indigo-500/40 transition-colors">
                         <div class="flex items-center gap-2.5 mb-2">
@@ -659,21 +659,20 @@ flowchart LR
                         </div>
                         <div>
                             <h2 class="text-xl font-bold text-white">Architecture &amp; Topologies</h2>
-                            <p class="text-slate-400 text-xs">Interactive visual models of container bridging, inter-process communication, and first-run workflows</p>
+                            <p class="text-slate-400 text-xs">Visual models of container bridging, inter-process communication, and first-run workflows</p>
                         </div>
                     </div>
                     <div class="flex items-center gap-2">
-                        <a id="arch-fullscreen-btn" href="diagrams/interactive/system-topology.html" target="_blank" rel="noopener noreferrer" class="bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 hover:text-white border border-indigo-500/40 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 shadow-sm">
+                        <a id="arch-fullscreen-btn" href="diagrams/rendered/system-topology.svg" target="_blank" rel="noopener noreferrer" class="bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 hover:text-white border border-indigo-500/40 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 shadow-sm">
                             <i data-lucide="maximize-2" class="w-3.5 h-3.5"></i>
-                            <span>Explore in Fullscreen / New Tab</span>
+                            <span>Open Full Size</span>
                         </a>
                     </div>
                 </div>
 
-                <!-- Interactive Viewer Container -->
+                <!-- Diagram Viewer (rendered from docs/diagrams/*.mmd) -->
                 <div class="bg-slate-900 rounded-xl border border-slate-700 overflow-hidden shadow-2xl mb-6">
-                    <!-- Diagram Navigation Tabs -->
-                    <div class="bg-slate-800/90 border-b border-slate-700 px-4 py-2.5 flex items-center justify-between flex-wrap gap-2">
+                    <div class="bg-slate-800/90 border-b border-slate-700 px-4 py-2.5 flex items-center flex-wrap gap-2">
                         <div class="flex gap-2 overflow-x-auto text-xs font-semibold">
                             <button onclick="switchArchDiagram('system-topology')" id="tab-arch-system-topology" class="arch-tab bg-indigo-600 text-white px-3.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm">
                                 <i data-lucide="layers" class="w-4 h-4"></i>System Topology
@@ -685,39 +684,11 @@ flowchart LR
                                 <i data-lucide="git-merge" class="w-4 h-4"></i>Setup Assistant Flow
                             </button>
                         </div>
-                        <div class="text-[11px] text-slate-400 items-center gap-1.5 hidden sm:flex">
-                            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                            Live Interactive Canvas
-                        </div>
                     </div>
-
-                    <!-- Diagram iframe Viewport -->
-                    <div class="relative w-full bg-slate-950 min-h-[560px] md:min-h-[660px]">
-                        <iframe id="arch-diagram-frame" src="diagrams/interactive/system-topology.html?embed=1" title="Interactive Architecture Diagram" class="w-full h-[560px] md:h-[660px] border-0" loading="lazy"></iframe>
+                    <div class="w-full bg-slate-950 p-4">
+                        <img id="arch-diagram-img" src="diagrams/rendered/system-topology.svg" alt="System Topology &amp; Host Isolation" class="w-full max-w-5xl mx-auto" loading="lazy">
                     </div>
                 </div>
-
-                <!-- Static SVG Fallbacks (Accessibility & Print) -->
-                <details class="group mb-4">
-                    <summary class="cursor-pointer text-xs font-medium text-slate-400 hover:text-indigo-300 transition-colors flex items-center gap-2 bg-slate-800/50 rounded-lg px-4 py-2.5 border border-slate-700/80">
-                        <i data-lucide="chevron-right" class="w-3.5 h-3.5 transition-transform group-open:rotate-90 text-indigo-400"></i>
-                        Static SVG Fallbacks (Accessibility &amp; Offline Reference)
-                    </summary>
-                    <div class="mt-3 space-y-4">
-                        <div class="bg-slate-900 rounded-xl p-4 border border-slate-700">
-                            <h4 class="text-xs font-semibold text-slate-300 mb-2">Layered Architecture — Host Integration Bridge</h4>
-                            <img src="diagrams/rendered/system-topology.svg" alt="Layered Architecture — Host Integration Bridge" class="w-full max-w-4xl mx-auto rounded-lg shadow-lg border border-slate-700" loading="lazy">
-                        </div>
-                        <div class="bg-slate-900 rounded-xl p-4 border border-slate-700">
-                            <h4 class="text-xs font-semibold text-slate-300 mb-2">Product Communication — The Antigravity Suite</h4>
-                            <img src="diagrams/rendered/product-communication.svg" alt="Product Communication — The Antigravity Suite" class="w-full max-w-4xl mx-auto rounded-lg shadow-lg border border-slate-700" loading="lazy">
-                        </div>
-                        <div class="bg-slate-900 rounded-xl p-4 border border-slate-700">
-                            <h4 class="text-xs font-semibold text-slate-300 mb-2">Setup Assistant Sequence Flow</h4>
-                            <img src="diagrams/rendered/setup-assistant.svg" alt="Setup Assistant Sequence Flow" class="w-full max-w-4xl mx-auto rounded-lg shadow-lg border border-slate-700" loading="lazy">
-                        </div>
-                    </div>
-                </details>
             </section>
 
             <!-- ═══════════════════════════════════════════════ -->
@@ -923,9 +894,8 @@ flowchart LR
                         </h3>
                         <p class="text-slate-400 text-xs">Run automated assertions on container health, port mappings, and toolchains:</p>
                         <div class="space-y-1.5 font-mono text-xs text-emerald-400 bg-slate-900 p-3 rounded-lg border border-slate-800">
-                            <div>agy-box-manager check   &nbsp;# Status &amp; component inspect</div>
+                            <div>agy-box-manager doctor  &nbsp;# Health checks &amp; component inventory (alias: check)</div>
                             <div>agy-box-manager status  &nbsp;# Container state &amp; ports</div>
-                            <div>agy-box-manager doctor  &nbsp;# Host diagnostics &amp; hints</div>
                             <div>agy-box-manager test    &nbsp;&nbsp;&nbsp;# 32 Bats unit assertions</div>
                         </div>
                     </div>
@@ -996,8 +966,8 @@ agy-box-manager restore agy-box-backup-YYYYMMDD-HHMMSS.tar.gz</code></pre>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-wizard</code></td>
                             </tr>
                             <tr class="hover:bg-slate-800/40 transition-colors">
-                                <td class="px-4 py-2.5 text-slate-300">Inspect Components &amp; Status</td>
-                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">agy-box-manager check</code></td>
+                                <td class="px-4 py-2.5 text-slate-300">Health Checks &amp; Component Inventory</td>
+                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">agy-box-manager doctor</code></td>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-check</code></td>
                             </tr>
                             <tr class="hover:bg-slate-800/40 transition-colors">
@@ -1049,11 +1019,6 @@ agy-box-manager restore agy-box-backup-YYYYMMDD-HHMMSS.tar.gz</code></pre>
                                 <td class="px-4 py-2.5 text-slate-300">Install Globally</td>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">agy-box-manager install-global</code></td>
                                 <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-install-global</code></td>
-                            </tr>
-                            <tr class="hover:bg-slate-800/40 transition-colors">
-                                <td class="px-4 py-2.5 text-slate-300">Local Web Dashboard</td>
-                                <td class="px-4 py-2.5"><span class="text-slate-500 text-xs font-mono">distrobox enter agy-box -- /opt/...</span></td>
-                                <td class="px-4 py-2.5"><code class="text-emerald-400 font-mono text-xs">just agy-local-ui</code></td>
                             </tr>
                         </tbody>
                     </table>
@@ -1144,7 +1109,7 @@ agy-box-manager install</pre>
                             <p>By default, <code class="text-emerald-400 font-mono">AGY_KEYRING_MODE="host"</code> shares your host D-Bus secret service so you don't need to re-authenticate. If you are on a shared system or prefer air-gapped credentials, set <code class="text-emerald-400 font-mono">AGY_KEYRING_MODE="isolated"</code> in <code class="text-slate-200 font-mono">~/.config/agy-box/config.env</code>:</p>
                             <pre class="bg-slate-900 p-2.5 rounded font-mono text-emerald-400"># Switch to container-local encrypted file keyring:
 echo 'AGY_KEYRING_MODE="isolated"' >> ~/.config/agy-box/config.env
-agy-box-manager check</pre>
+agy-box-manager doctor</pre>
                             <p>This stores credentials securely inside an encrypted local keyring at <code class="text-slate-200 font-mono">~/.config/agy-box/home/.config/python_keyring/keyringrc.cfg</code>.</p>
                         </div>
                     </details>
@@ -1397,48 +1362,29 @@ just agy-wizard --defaults</pre>
             }, 2500);
         }
 
-        // Interactive Architecture Diagram Switcher
+        // Architecture Diagram Switcher
         function switchArchDiagram(diagramKey) {
-            const diagrams = {
-                'system-topology': {
-                    url: 'diagrams/interactive/system-topology.html?embed=1',
-                    rawUrl: 'diagrams/interactive/system-topology.html',
-                    title: 'System Topology & Host Isolation'
-                },
-                'product-communication': {
-                    url: 'diagrams/interactive/product-communication.html?embed=1',
-                    rawUrl: 'diagrams/interactive/product-communication.html',
-                    title: 'Product Communication Architecture'
-                },
-                'setup-assistant': {
-                    url: 'diagrams/interactive/setup-assistant.html?embed=1',
-                    rawUrl: 'diagrams/interactive/setup-assistant.html',
-                    title: 'Setup Assistant Flow'
-                }
+            const titles = {
+                'system-topology': 'System Topology & Host Isolation',
+                'product-communication': 'Product Communication Architecture',
+                'setup-assistant': 'Setup Assistant Flow'
             };
-            const info = diagrams[diagramKey];
-            if (!info) return;
-
-            const iframe = document.getElementById('arch-diagram-frame');
-            if (iframe) {
-                iframe.src = info.url;
-                iframe.title = info.title;
+            if (!titles[diagramKey]) return;
+            const src = 'diagrams/rendered/' + diagramKey + '.svg';
+            const img = document.getElementById('arch-diagram-img');
+            if (img) {
+                img.src = src;
+                img.alt = titles[diagramKey];
             }
-
             const fsBtn = document.getElementById('arch-fullscreen-btn');
-            if (fsBtn) {
-                fsBtn.href = info.rawUrl;
-            }
+            if (fsBtn) fsBtn.href = src;
 
-            ['system-topology', 'product-communication', 'setup-assistant'].forEach(key => {
+            Object.keys(titles).forEach(key => {
                 const btn = document.getElementById('tab-arch-' + key);
-                if (btn) {
-                    if (key === diagramKey) {
-                        btn.className = 'arch-tab bg-indigo-600 text-white px-3.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm';
-                    } else {
-                        btn.className = 'arch-tab bg-slate-800 hover:bg-slate-700 text-slate-300 px-3.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5';
-                    }
-                }
+                if (!btn) return;
+                btn.className = key === diagramKey
+                    ? 'arch-tab bg-indigo-600 text-white px-3.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm'
+                    : 'arch-tab bg-slate-800 hover:bg-slate-700 text-slate-300 px-3.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5';
             });
             if (window.lucide) lucide.createIcons();
         }

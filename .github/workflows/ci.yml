@@ -108,10 +108,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Native builds on both architectures (no QEMU): amd64 on a
+          # GitHub-hosted runner (free for public repos), arm64 on the DGX
+          # Spark self-hosted runners with their persistent BuildKit cache.
           - arch: amd64
-            runner: [self-hosted, Linux, ARM64, dgx-spark]
+            runner: ubuntu-24.04
+            builder: gha
           - arch: arm64
             runner: [self-hosted, Linux, ARM64, dgx-spark]
+            builder: dgx-spark-builder
     permissions:
       contents: read
       packages: write
@@ -119,11 +124,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Set up QEMU
-        if: matrix.arch == 'amd64'
-        uses: docker/setup-qemu-action@v4
+      - name: Set up Docker Buildx (GitHub-hosted)
+        if: matrix.builder == 'gha'
+        uses: docker/setup-buildx-action@v4
+        with:
+          name: gha
 
-      - name: Set up persistent Docker Buildx builder
+      - name: Set up persistent Docker Buildx builder (DGX Spark)
+        if: matrix.builder == 'dgx-spark-builder'
         run: |
           for b in $(docker buildx ls | awk '$1 ~ /^builder-[0-9a-f-]+$/ {print $1}'); do
             docker buildx rm -f "$b" || true
@@ -156,7 +164,7 @@ jobs:
       - name: Build and load image into Docker
         uses: docker/build-push-action@v7
         with:
-          builder: dgx-spark-builder
+          builder: ${{ matrix.builder }}
           context: .
           file: ./Containerfile
           load: true
@@ -164,6 +172,7 @@ jobs:
           tags: localhost/agy-box:test
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: ${{ matrix.builder == 'gha' && format('type=gha,mode=max,scope={0}', matrix.arch) || '' }}
 
       - name: Install Syft
         id: syft
@@ -261,7 +270,7 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: docker/build-push-action@v7
         with:
-          builder: dgx-spark-builder
+          builder: ${{ matrix.builder }}
           context: .
           file: ./Containerfile
           platforms: linux/${{ matrix.arch }}

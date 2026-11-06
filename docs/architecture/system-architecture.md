@@ -2,18 +2,13 @@
 
 This document provides a deep dive into the inner workings of the `agy-box` developer sandbox, detailing how it achieves seamless host integration, manages graphical rendering, secures credentials, and facilitates first-time configuration.
 
-> 🌐 **Interactive Architecture Visualizations (Archify Live Canvases):**
-> - 🚀 **[Explore Interactive System Architecture (Live Canvas)](https://wtg-codes.github.io/agy-box/diagrams/interactive/system-topology.html)**
-> - 🚀 **[Explore Interactive Product Communication (Live Canvas)](https://wtg-codes.github.io/agy-box/diagrams/interactive/product-communication.html)**
-> - 🚀 **[Explore Interactive Setup Assistant Flow (Live Canvas)](https://wtg-codes.github.io/agy-box/diagrams/interactive/setup-assistant.html)**
+> 🖼️ **Diagrams:** all figures below are rendered from the Mermaid sources in [`docs/diagrams/*.mmd`](../diagrams/) into [`docs/diagrams/rendered/`](../diagrams/rendered/) (SVG and PNG) automatically after merge to `main`.
 
 ---
 
 ## 1. System Topology & Bridging
 
 Unlike typical sandbox runtimes that completely isolate applications, `agy-box` uses **Distrobox** (on top of Podman or Docker) to act as a **host-integrated developer environment**.
-
-🚀 **[Explore Interactive System Architecture (Live Canvas)](https://wtg-codes.github.io/agy-box/diagrams/interactive/system-topology.html)**
 
 ![agy-box System Topology](../diagrams/rendered/system-topology.svg)
 
@@ -22,8 +17,6 @@ Unlike typical sandbox runtimes that completely isolate applications, `agy-box` 
 ## 2. Interactive Setup Assistant Sequence Flow
 
 When a user opens an interactive shell session in the `agy-box` container for the first time, a hook in `/etc/profile.d/agy-setup-check.sh` is triggered. The helper handles verifying the environment and setting up credentials.
-
-🚀 **[Explore Interactive Setup Assistant Flow (Live Canvas)](https://wtg-codes.github.io/agy-box/diagrams/interactive/setup-assistant.html)**
 
 ![Interactive Setup Assistant Sequence Flow](../diagrams/rendered/setup-assistant.svg)
 
@@ -43,14 +36,11 @@ Even though the D-Bus socket is forwarded into the sandbox container by Distrobo
 
 The components of the Antigravity developer suite communicate over a series of ports and sockets inside the container loop:
 
-🚀 **[Explore Interactive Product Communication (Live Canvas)](https://wtg-codes.github.io/agy-box/diagrams/interactive/product-communication.html)**
+![Antigravity Product Communication](../diagrams/rendered/product-communication.svg)
 
 | Port | Protocol | Source | Target | Description |
 | :--- | :--- | :--- | :--- | :--- |
 | **8080** | HTTP | Python SDK (`google-antigravity`) | Google Antigravity (Agent UI) | Localhost developer API server mapping workspace canvases. |
-| **8080** | HTTP | Web Browsers | Open WebUI (`just agy-local-ui`) | Local Workspace Web Dashboard. Shares the port number with the Agent UI API, so do not run both at the same time. |
-| **8081** | HTTP | Web Browsers | Open WebUI (`just agy-local-ui-dev`) | Isolated dev/test instance of the Local Workspace Web Dashboard. |
-| **11434** | HTTP | Open WebUI | Ollama (host/container) | Local model backend expected by `just agy-local-ui` (not shipped in the image). |
 | **9222** | WebSocket / CDP | Google Antigravity (Agent UI) | `google-chrome-stable` | Chrome DevTools Protocol port to dynamically execute web commands. |
 | **5900** | RFB | VNC Clients | `x11vnc` | Internal virtual display VNC server stream (bound securely to `127.0.0.1`). |
 | **6080** | HTTP / WS | Web Browsers | `websockify` / noVNC | noVNC HTML5 client portal enabling remote/VDI browser desktop access (listens on `0.0.0.0`, no password). |
@@ -80,7 +70,7 @@ When running on standard Cloud VMs (Compute Engine, EC2):
 When used as a devcontainer:
 1. **Workspace Mounting:** The cloud provider mounts the active repository workspace folder into the container (this repository's [`.devcontainer/devcontainer.json`](../../.devcontainer/devcontainer.json) mounts it at `/workspace`).
 2. **Port Forwarding:** The provider forwards the standard communication ports (e.g., `6080` for noVNC, `8080` for the Antigravity API, and `9222` for the Chrome DevTools Protocol), exposing them securely over HTTPS via OAuth proxy loops.
-3. **Toolchain:** The image provides the system-level toolchain (Chrome, CNCF tools, VDI stack, Open WebUI); the per-user Antigravity toolchain is installed into `~/.local` with `agy-install-toolchain`.
+3. **Toolchain:** The image provides the system-level toolchain (Chrome, CNCF tools, VDI stack) plus the pre-baked Antigravity toolchain; per-user updates go into `~/.local` with `agy-install-toolchain`.
 
 ### C. Jules VM Execution Parity
 When executed by the autonomous agent orchestration runtime (Jules):
@@ -96,26 +86,25 @@ The image is built on a multi-arch Ubuntu base with a batteries-included develop
 
 | Layer | Installed by | Contents |
 | :--- | :--- | :--- |
-| Base | `quay.io/toolbx/ubuntu-toolbox:24.04` | Ubuntu 24.04 LTS toolbox userland (native `linux/amd64` and `linux/arm64`). |
-| System deps | `scripts/install-agent-deps.sh` | git, curl, jq, Python/pipx, Node.js 22 LTS (NodeSource), `libsecret-1-0` + Python keyring, `tini`, `gosu`, Gum, Google Chrome (amd64) / Chromium (arm64 via xtradeb), Xvfb, x11vnc, IceWM, PCManFM, noVNC, websockify, xterm. |
-| Local Web Dashboard | `scripts/install-open-webui.sh` | Python 3.12 + `uv`, Open WebUI in `/opt/open-webui-venv` with CPU-only PyTorch. |
+| Base | `quay.io/toolbx/ubuntu-toolbox:24.04` (pinned by digest) | Ubuntu 24.04 LTS toolbox userland (native `linux/amd64` and `linux/arm64`). |
+| System deps | `scripts/install-agent-deps.sh` | git, curl, jq, Python 3, Node.js 22 LTS (NodeSource), `libsecret-1-0` + Python keyring, `tini`, `gosu`, Gum, Google Chrome (amd64) / Chromium (arm64 via xtradeb), Xvfb, x11vnc, IceWM, PCManFM, noVNC, websockify, xterm. |
 | CNCF tools | `scripts/install-tools.sh` | `kubectl`, `helm`, `k9s` (pinned versions, checksum-verified for both amd64 and arm64). |
-| Pre-baked toolchain (Option A) | `scripts/install-agent-toolchain.sh --system` | Google Antigravity (Agent UI), Antigravity CLI (`agy`), Antigravity SDK, Google ADK, Gemini CLI in `/usr/local/bin` and `/opt`, plus VS Code/Zed Antigravity extensions. |
-| rootfs overlay | `rootfs/` | `agy-setup-helper`, `agy-vdi`, `entrypoint.sh`, profile hook, IceWM config, desktop icons, versioned wallpaper. |
+| Pre-baked toolchain (Option A) | `scripts/install-agent-toolchain.sh --system` | Google Antigravity (Agent UI), Antigravity CLI (`agy`), Gemini CLI in `/usr/local/bin` and `/opt`; Antigravity SDK and Google ADK in `/opt/agy-python` (installed with a pinned `uv` 0.13.7); plus VS Code/Zed Antigravity extensions. |
+| rootfs overlay | `rootfs/` | `agy-setup-helper`, `agy-vdi`, `entrypoint.sh`, profile hook, IceWM config, desktop icons, wallpaper. |
 | Runtime toolchain utility | `scripts/install-agent-toolchain.sh` | Shipped to `/usr/local/bin/agy-install-toolchain` for runtime per-user customizations. |
 
 ---
 
 ## 8. CI/CD Pipeline
 
-The [`CI/CD` workflow](../../.github/workflows/ci.yml) builds and validates native images in parallel across `linux/amd64` (on `ubuntu-24.04`) and `linux/arm64` (on `ubuntu-24.04-arm`). Pull requests run every check but never push; pushes to `main` and `v*` tags additionally publish multi-arch images.
+The [`CI/CD` workflow](../../.github/workflows/ci.yml) builds and validates native images in parallel across `linux/amd64` (on GitHub-hosted `ubuntu-24.04`) and `linux/arm64` (on the self-hosted DGX Spark runners, `[self-hosted, Linux, ARM64, dgx-spark]`, with the persistent `dgx-spark-builder` BuildKit cache). Pull requests run every check but never push; pushes to `main` and `v*` tags additionally publish multi-arch images.
 
 ```mermaid
 flowchart LR
     trigger["PR / push to main / v* tag"] --> lint["Lint Codebase<br/>yamllint, ShellCheck, hadolint"]
     trigger --> bats["Run Script Tests<br/>Bats"]
     trigger --> build_amd64["Build Image (amd64)<br/>ubuntu-24.04"]
-    trigger --> build_arm64["Build Image (arm64)<br/>ubuntu-24.04-arm"]
+    trigger --> build_arm64["Build Image (arm64)<br/>DGX Spark self-hosted"]
     build_amd64 --> itest_amd64["Distrobox tests (amd64)<br/>scripts/test-box.sh"]
     build_arm64 --> itest_arm64["Distrobox tests (arm64)<br/>scripts/test-box.sh"]
     build_amd64 --> sbom_amd64["Syft SBOM (amd64)"]
@@ -138,10 +127,10 @@ flowchart LR
 ```
 
 Notes:
-- Native multi-arch builds (`amd64` and `arm64`) run in parallel on native GitHub Actions runners without QEMU emulation.
+- Native multi-arch builds (`amd64` and `arm64`) run in parallel on native runners (GitHub-hosted amd64, self-hosted DGX Spark arm64) without QEMU emulation.
 - Full hardware support for Intel/AMD x86_64, NVIDIA DGX Spark workstations (Grace Blackwell), Apple Silicon, and ChromeOS Crostini.
 - The SBOMs are published as workflow artifacts and release assets, scanned by Grype in CI.
-- [`pages.yml`](../../.github/workflows/pages.yml) deploys `docs/` to [GitHub Pages](https://wtg-codes.github.io/agy-box/) on every push to `main`; [`compile-diagrams.yml`](../../.github/workflows/compile-diagrams.yml) re-renders `docs/diagrams/*.mmd` to `docs/diagrams/rendered/` when the sources change.
+- [`pages.yml`](../../.github/workflows/pages.yml) deploys `docs/` to [GitHub Pages](https://wtg-codes.github.io/agy-box/) on every push to `main`; [`compile-diagrams.yml`](../../.github/workflows/compile-diagrams.yml) re-renders `docs/diagrams/*.mmd` to `docs/diagrams/rendered/` when the sources change on `main`. [Dependabot](../../.github/dependabot.yml) keeps GitHub Actions and the base image digest current.
 
 ---
 

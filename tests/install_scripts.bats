@@ -75,9 +75,6 @@ EOF2
   # Mock install
   create_mock "install" 'exit 0'
   
-  # Mock pipx
-  create_mock "pipx" 'exit 0'
-  
   # Mock npm
   create_mock "npm" 'exit 0'
 
