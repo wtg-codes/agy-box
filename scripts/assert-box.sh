@@ -23,13 +23,6 @@ assert_cmd() {
     # Verify it runs and outputs successfully
     local ver_out
     if ! ver_out=$(eval "$ver_cmd" 2>&1); then
-        # Go amd64 binaries (kubectl, helm, k9s) under QEMU user-mode emulation on
-        # 48-bit VA ARM64 kernels (e.g. NVIDIA Grace / DGX Spark) can intermittently
-        # receive high mmap addresses and panic in runtime.taggedPointerPack.
-        if [[ "$ver_out" == *"taggedPointerPack"* ]] && test -x "$(command -v "$cmd")"; then
-            echo -e "${GREEN}PASSED (QEMU Go VA tag workaround)${NC}"
-            return 0
-        fi
         echo -e "${RED}FAILED (command failed to execute)${NC}"
         echo -e "${YELLOW}Command: $ver_cmd${NC}"
         echo -e "${YELLOW}Output:${NC} $ver_out"
@@ -69,12 +62,7 @@ assert_cmd "JetBrains IDE Installer" "agy-install-ide" "test -x /usr/local/bin/a
 assert_cmd "IceWM Startup Script" "icewm-session" "test -x /etc/X11/icewm/startup" || errors=$((errors+1))
 assert_cmd "IceWM Preferences" "icewm-session" "test -f /etc/X11/icewm/preferences" || errors=$((errors+1))
 
-# Assert Open WebUI (fast checks only; the server is not started)
-OPEN_WEBUI_PY="/opt/open-webui-venv/bin/python"
-assert_cmd "Open WebUI (on PATH)" "open-webui" "test -x \"\$(command -v open-webui)\"" || errors=$((errors+1))
-assert_cmd "Open WebUI (venv import)" "$OPEN_WEBUI_PY" "\"$OPEN_WEBUI_PY\" -c 'import open_webui'" || errors=$((errors+1))
-assert_cmd "Open WebUI (CPU-only PyTorch)" "$OPEN_WEBUI_PY" "\"$OPEN_WEBUI_PY\" -c 'import sys, torch; sys.exit(1 if torch.version.cuda else 0)'" || errors=$((errors+1))
-assert_cmd "Open WebUI (no stray NVIDIA packages in CPU venv)" "$OPEN_WEBUI_PY" "! \"$OPEN_WEBUI_PY\" -m pip list --format=freeze 2>/dev/null | grep -iE '^nvidia-'" || errors=$((errors+1))
+assert_cmd "No bundled Open WebUI" "sh" "! test -e /opt/open-webui-venv && ! command -v open-webui >/dev/null 2>&1" || errors=$((errors+1))
 
 if [ "$errors" -gt 0 ]; then
     echo -e "${RED}✗ $errors test assertions failed inside the container.${NC}"

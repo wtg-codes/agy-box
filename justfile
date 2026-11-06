@@ -36,9 +36,13 @@ agy-desktop-dev *args="":
 agy-status:
     @{{manager}} status
 
-# Inspect full system, container workspaces, toolchain, IDEs & auth status
-agy-check *args="":
-    @{{manager}} check {{args}}
+# Health checks plus workspace, toolchain, IDE & auth inventory
+agy-doctor:
+    @{{manager}} doctor
+
+# Alias of agy-doctor
+agy-check:
+    @{{manager}} doctor
 
 # Run the first-run configuration setup wizard
 agy-wizard *args="":
@@ -93,8 +97,8 @@ agy-test:
     @./scripts/test-box.sh
 
 # Run full host E2E test against the official published GHCR image
-agy-e2e *tag="0.6.0":
-    @./scripts/test-e2e.sh {{tag}}
+agy-e2e tag="latest":
+    @PULL=true VDI_TEST=true IMAGE_NAME="ghcr.io/wtg-codes/agy-box:{{tag}}" ./scripts/test-box.sh
 
 # Run health checks directly inside the active running container
 agy-assert *args="":
@@ -146,22 +150,3 @@ test-scripts:
         runtime=$(command -v podman &>/dev/null && echo "podman" || echo "docker"); \
         $runtime run --rm -v "$(pwd):/code:z" -w /code docker.io/bats/bats:latest tests/; \
     fi
-
-# Launch Local Workspace Web Dashboard (requires Ollama backend)
-agy-local-ui:
-    @echo "🔍 Auditing local hardware infrastructure..."
-    @if ! curl -s http://localhost:11434/api/tags > /dev/null; then \
-        echo "❌ CONFIG ERROR: Local Ollama backend not accessible on port 11434!"; \
-        echo "💡 Ensure your host accelerator is running via: podman start ollama"; \
-        exit 1; \
-    fi
-    @echo "✅ Ollama hardware acceleration node detected!"
-    @echo "🚀 Launching Local Workspace Web Dashboard..."
-    @mkdir -p ~/.config/agy-local-ui
-    @export DATA_DIR="$HOME/.config/agy-local-ui" && open-webui serve --port 8080
-
-# Launch Local Workspace Web Dashboard in isolated dev/testing mode
-agy-local-ui-dev:
-    @echo "🧪 Initializing isolated local UI testing layer..."
-    @mkdir -p ~/.config/agy-local-ui-dev
-    @export DATA_DIR="$HOME/.config/agy-local-ui-dev" && open-webui serve --port 8081

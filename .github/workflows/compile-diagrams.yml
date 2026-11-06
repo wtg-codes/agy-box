@@ -1,10 +1,13 @@
 name: Compile Diagrams
 
+# Renders only on main so PR heads are never replaced by a [skip ci] bot
+# commit (which would leave the PR without checks).
 on:
   push:
+    branches:
+      - main
     paths:
       - 'docs/diagrams/*.mmd'
-      - 'docs/diagrams/sources/**'
       - 'docs/diagrams/config.json'
       - 'docs/diagrams/style.css'
       - 'docs/diagrams/puppeteer-config.json'
@@ -30,10 +33,10 @@ jobs:
 
       - name: Install Mermaid CLI
         run: |
-          npm install -g @mermaid-js/mermaid-cli
+          npm install -g @mermaid-js/mermaid-cli@11
 
       - name: Create rendered output directory
-        run: mkdir -p docs/diagrams/rendered docs/diagrams/interactive
+        run: mkdir -p docs/diagrams/rendered
 
       - name: Compile Diagrams
         run: |
@@ -46,17 +49,8 @@ jobs:
             fi
           done
 
-      - name: Render Archify Diagrams
-        run: |
-          if [ ! -d /tmp/archify ]; then
-            git clone --depth 1 https://github.com/tt-a1i/archify /tmp/archify
-          fi
-          node /tmp/archify/archify/bin/archify.mjs render architecture docs/diagrams/sources/system-topology.architecture.json docs/diagrams/interactive/system-topology.html
-          node /tmp/archify/archify/bin/archify.mjs render architecture docs/diagrams/sources/product-communication.architecture.json docs/diagrams/interactive/product-communication.html
-          node /tmp/archify/archify/bin/archify.mjs render workflow docs/diagrams/sources/setup-assistant.workflow.json docs/diagrams/interactive/setup-assistant.html
-
       - name: Commit and push changes
         uses: stefanzweifel/git-auto-commit-action@v7
         with:
-          commit_message: "chore: auto-compile diagrams to SVG/PNG/HTML [skip ci]"
-          file_pattern: "docs/diagrams/rendered/* docs/diagrams/interactive/*"
+          commit_message: "chore: auto-compile diagrams to SVG/PNG [skip ci]"
+          file_pattern: "docs/diagrams/rendered/*"

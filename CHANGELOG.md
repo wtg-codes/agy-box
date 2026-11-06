@@ -9,6 +9,13 @@ Container images are published to `ghcr.io/wtg-codes/agy-box` (`:<version>`, `:<
 
 ## [Unreleased]
 
+- **Simplification & cleanup**:
+  - **Removed Open WebUI** (`scripts/install-open-webui.sh`, `just agy-local-ui` / `agy-local-ui-dev`, and the TUI dashboard entry). It is not core to agy-box; run the official `ghcr.io/open-webui/open-webui` container next to the box if you want a local chat UI.
+  - Removed the Archify interactive diagrams (`docs/diagrams/interactive/`, `docs/diagrams/sources/`) and the obsolete one-off `ghcr-retag-amd64-only.yml` workflow. `compile-diagrams.yml` renders Mermaid only, and only on pushes to `main`.
+  - Merged `scripts/test-e2e.sh` into `scripts/test-box.sh` (`PULL=true`, `VDI_TEST=true`, `IMAGE_NAME=…`); `just agy-e2e [tag]` runs it against the published image.
+  - `agy-box-manager`: merged `doctor` and `check` (`check` is an alias), removed the "Check Package Dependencies" menu item and host package-manager auto-installs (gum via Homebrew if present, otherwise install instructions), and removed the `just` shell-function override (`ujust agy-*` integration kept).
+  - Replaced pipx with a pinned `uv` (`0.13.7`) installing the SDK and ADK into `/opt/agy-python`; base image `quay.io/toolbx/ubuntu-toolbox:24.04` pinned by digest; single `wallpaper.png` instead of versioned wallpapers.
+  - CI: `amd64` builds natively on GitHub-hosted `ubuntu-24.04` and `arm64` on the DGX Spark self-hosted runners (no QEMU); added Dependabot for GitHub Actions and the base image digest.
 - **Antigravity Toolchain & IDE Streamlining**:
   - **Removed legacy `antigravity-ide` (`1.23.2`)** from the container image, installer (`scripts/install-agent-toolchain.sh`), VDI desktop, and documentation in favor of the **Google Antigravity App (`antigravity` v2.0.1)**, **Antigravity CLI (`agy` v1.5.0)**, **VS Code (`code`)**, **Zed (`zed`)**, and **JetBrains IDEs (`agy-install-ide`)**.
   - Added automatic cleanup of legacy `antigravity-ide` binaries, share directories, desktop shortcuts, and config directories when running `agy-install-toolchain` / `update-toolchain`.

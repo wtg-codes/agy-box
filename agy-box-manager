@@ -247,55 +247,18 @@ probe_host_capabilities() {
 
 # --- Dependency Management ---
 install_gum() {
-    if [ ! -t 0 ]; then
-        return 0
+    # Gum drives the interactive UI. We never add third-party package repos to
+    # the host; use Homebrew when present (Bluefin/Aurora ship it), otherwise
+    # point at the upstream install docs.
+    [ -t 0 ] || return 0
+    if command -v brew &>/dev/null; then
+        echo -e "${CYAN}Gum is required for the interactive UI. Installing via Homebrew...${NC}"
+        brew install gum && return 0
     fi
-    echo -e "${CYAN}Gum is required for the UI but is not installed.${NC}"
-    # When piped via curl, read needs to be forced to /dev/tty if available
-    if [ -e /dev/tty ]; then
-        exec < /dev/tty 2>/dev/null || true
-    fi
-    read -r -p "Would you like to attempt to install it now? (y/N): " choice
-    if [[ "$choice" =~ ^[Yy]$ ]]; then
-        if command -v brew &> /dev/null; then
-            echo "Installing via Homebrew (Recommended for immutable systems)..."
-            brew install gum
-        elif command -v apt-get &> /dev/null; then
-            echo "Installing via APT (Debian/Ubuntu)..."
-            sudo mkdir -p /etc/apt/keyrings
-            curl -fsSL https://repo.charm.sh/apt/gpg.key | sudo gpg --dearmor -o /etc/apt/keyrings/charm.gpg
-            echo "deb [signed-by=/etc/apt/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *" | sudo tee /etc/apt/sources.list.d/charm.list
-            sudo apt update && sudo apt install -y gum
-        elif command -v dnf &> /dev/null; then
-            echo "Installing via DNF (Fedora/RHEL)..."
-            echo '[charm]
-name=Charm
-baseurl=https://repo.charm.sh/yum/
-enabled=1
-gpgcheck=1
-gpgkey=https://repo.charm.sh/yum/gpg.key' | sudo tee /etc/yum.repos.d/charm.repo
-            sudo dnf install -y gum
-        elif command -v pacman &> /dev/null; then
-            echo "Installing via Pacman (Arch/Manjaro)..."
-            sudo pacman -S --noconfirm gum
-        elif command -v zypper &> /dev/null; then
-            echo "Installing via Zypper (openSUSE)..."
-            echo '[charm]
-name=Charm
-baseurl=https://repo.charm.sh/yum/
-enabled=1
-gpgcheck=1
-gpgkey=https://repo.charm.sh/yum/gpg.key' | sudo tee /etc/zypp/repos.d/charm.repo
-            sudo zypper install -y gum
-        else
-            echo -e "${RED}Could not detect supported package manager (brew, apt, dnf, pacman, zypper).${NC}"
-            echo "Please install manually: https://github.com/charmbracelet/gum#installation"
-            exit 1
-        fi
-    else
-        echo "Gum is required to run this script interactively. Exiting."
-        exit 1
-    fi
+    echo -e "${RED}Gum is required for the interactive UI but is not installed.${NC}"
+    echo "Install it from https://github.com/charmbracelet/gum#installation and re-run."
+    echo "(Non-interactive subcommands such as 'install', 'enter' and 'status' work without it.)"
+    exit 1
 }
 
 check_deps() {
@@ -323,48 +286,10 @@ check_deps() {
         missing=1
     fi
     if [ $missing -eq 1 ]; then
-        if [ "$mode" != "quiet" ] && [ -t 0 ] && [ -e /dev/tty ] && command -v gum &> /dev/null; then
-            echo -e "\n${CYAN}Would you like to try installing the missing container dependencies now?${NC}"
-            exec < /dev/tty 2>/dev/null || true
-            if gum confirm "Install missing dependencies?"; then
-                if command -v apt-get &> /dev/null; then
-                    sudo apt update && sudo apt install -y podman distrobox
-                elif command -v dnf &> /dev/null; then
-                    sudo dnf install -y podman distrobox
-                elif command -v pacman &> /dev/null; then
-                    sudo pacman -S --noconfirm podman distrobox
-                elif command -v zypper &> /dev/null; then
-                    sudo zypper install -y podman distrobox
-                elif command -v brew &> /dev/null; then
-                    brew install podman distrobox
-                else
-                    echo -e "${RED}Could not detect a supported package manager. Please install manually.${NC}"
-                    echo "Tip: You can install Distrobox without root via:"
-                    echo "  curl -s https://raw.githubusercontent.com/89luca89/distrobox/main/install | sh -s -- --prefix ~/.local"
-                    exit 1
-                fi
-
-                # Re-check dependencies
-                if ! command -v distrobox &> /dev/null || (! command -v podman &> /dev/null && ! command -v docker &> /dev/null); then
-                    echo -e "${RED}Dependencies still missing after installation attempt. Please install manually.${NC}"
-                    echo "Tip: You can install Distrobox without root via:"
-                    echo "  curl -s https://raw.githubusercontent.com/89luca89/distrobox/main/install | sh -s -- --prefix ~/.local"
-                    exit 1
-                else
-                    echo -e "${CYAN}Dependencies installed successfully!${NC}"
-                fi
-            else
-                echo -e "\nPlease install the missing container dependencies and try again."
-                echo "Tip: You can install Distrobox without root via:"
-                echo "  curl -s https://raw.githubusercontent.com/89luca89/distrobox/main/install | sh -s -- --prefix ~/.local"
-                exit 1
-            fi
-        else
-            echo -e "${YELLOW}Please install distrobox and podman/docker to proceed.${NC}" >&2
-            echo "Tip: You can install Distrobox without root via:" >&2
-            echo "  curl -s https://raw.githubusercontent.com/89luca89/distrobox/main/install | sh -s -- --prefix ~/.local" >&2
-            exit 1
-        fi
+        echo -e "${YELLOW}Please install distrobox and podman (or docker) with your OS package manager, then retry.${NC}" >&2
+        echo "Tip: Distrobox can be installed without root via:" >&2
+        echo "  curl -s https://raw.githubusercontent.com/89luca89/distrobox/main/install | sh -s -- --prefix ~/.local" >&2
+        exit 1
     fi
 }
 
@@ -804,30 +729,6 @@ ujust() {
     fi
 }
 
-just() {
-    if [[ "$1" == agy-* || "$1" == agy ]]; then
-        local dir="$PWD"
-        local found=false
-        while [[ "$dir" != "/" ]]; do
-            if [[ -f "$dir/justfile" || -f "$dir/Justfile" || -f "$dir/.justfile" || -f "$dir/.Justfile" ]]; then
-                found=true
-                break
-            fi
-            dir="$(dirname "$dir")"
-        done
-        if [[ "$found" == true ]]; then
-            command just "$@"
-        else
-            if [[ -f "$HOME/.config/agy-box/justfile" ]]; then
-                command just --justfile "$HOME/.config/agy-box/justfile" "$@"
-            else
-                command just "$@"
-            fi
-        fi
-    else
-        command just "$@"
-    fi
-}
 # --- End agy-box-manager integration ---
 EOF
 
@@ -883,36 +784,10 @@ function ujust
 end
 EOF
 
-        # just.fish
-        cat << 'EOF' > "$fish_func_dir/just.fish"
-function just
-    if set -q argv[1]
-        set -l cmd $argv[1]
-        if string match -q "agy-*" "$cmd"; or test "$cmd" = "agy"
-            set -l dir "$PWD"
-            set -l found false
-            while test "$dir" != "/"
-                if test -f "$dir/justfile"; or test -f "$dir/Justfile"; or test -f "$dir/.justfile"; or test -f "$dir/.Justfile"
-                    set found true
-                    break
-                end
-                set dir (dirname "$dir")
-            end
-            if test "$found" = "true"
-                command just $argv
-            else
-                if test -f "$HOME/.config/agy-box/justfile"
-                    command just --justfile "$HOME/.config/agy-box/justfile" $argv
-                else
-                    command just $argv
-                end
-            end
-            return
-        end
-    end
-    command just $argv
-end
-EOF
+        # Older versions also overrode `just`; remove that wrapper if it is ours.
+        if [ -f "$fish_func_dir/just.fish" ] && grep -q "agy-box/justfile" "$fish_func_dir/just.fish"; then
+            rm -f "$fish_func_dir/just.fish"
+        fi
     fi
 }
 
@@ -2783,6 +2658,9 @@ cmd_doctor() {
     fi
     echo -e "${CYAN}--------------------------------------------------${NC}\n"
 
+    # Inventory: workspaces, toolchain, IDEs and auth state
+    cmd_check
+
     if [ "$errors" -gt 0 ]; then
         return 1
     fi
@@ -2841,41 +2719,6 @@ cmd_ports() {
     echo ""
 }
 
-cmd_check_dependencies() {
-    local missing=0
-    if ! command -v distrobox &> /dev/null; then
-        echo -e "${RED}✗ Error: distrobox is not installed on the host system.${NC}" >&2
-        missing=1
-    fi
-    if ! command -v podman &> /dev/null && ! command -v docker &> /dev/null; then
-        echo -e "${RED}✗ Error: Neither podman nor docker is installed on the host system.${NC}" >&2
-        missing=1
-    fi
-    if [ "$missing" -eq 0 ]; then
-        gum style --foreground 46 --margin "1 0" "✓ All dependencies (distrobox, podman/docker) are satisfied."
-    else
-        echo -e "\n${CYAN}Would you like to try installing the missing container dependencies now?${NC}"
-        exec < /dev/tty
-        if gum confirm "Install missing dependencies?"; then
-            if command -v apt-get &> /dev/null; then
-                sudo apt update && sudo apt install -y podman distrobox
-            elif command -v dnf &> /dev/null; then
-                sudo dnf install -y podman distrobox
-            elif command -v pacman &> /dev/null; then
-                sudo pacman -S --noconfirm podman distrobox
-            elif command -v zypper &> /dev/null; then
-                sudo zypper install -y podman distrobox
-            elif command -v brew &> /dev/null; then
-                brew install podman distrobox
-            else
-                echo -e "${RED}Could not detect a supported package manager. Please install manually.${NC}"
-            fi
-        else
-            echo -e "\nPlease install the missing container dependencies manually."
-        fi
-    fi
-    read -n 1 -s -r -p "Press any key to continue..."
-}
 
 show_compact_status() {
     local official_status="❌ Not Installed"
@@ -2937,7 +2780,7 @@ cmd_interactive() {
         "🔍 Check System & Component Status")
             clear
             show_compact_banner
-            cmd_check
+            cmd_doctor
             echo ""
             read -n 1 -s -r -p "Press any key to continue to Main Menu..."
             ;;
@@ -3005,7 +2848,6 @@ cmd_interactive() {
                 if check_container_exists "$DEV_CONTAINER_NAME"; then
                     workspace_options+=("💻 Enter Dev Workspace")
                     workspace_options+=("🖥️  Start VDI Web Desktop (Dev)")
-                    workspace_options+=("🌐 Launch Local Web Dashboard (agy-local-ui)")
                 fi
 
                 local all_boxes=()
@@ -3043,12 +2885,6 @@ cmd_interactive() {
                         ;;
                     "🖥️  Start VDI Web Desktop (Dev)")
                         cmd_desktop dev
-                        echo ""
-                        read -n 1 -s -r -p "Press any key to continue..."
-                        ;;
-                    "🌐 Launch Local Web Dashboard (agy-local-ui)")
-                        gum style --foreground 212 "🚀 Launching Local Web Dashboard via agy-box..."
-                        distrobox enter "$CONTAINER_NAME" -- just agy-local-ui &
                         echo ""
                         read -n 1 -s -r -p "Press any key to continue..."
                         ;;
@@ -3261,8 +3097,6 @@ cmd_interactive() {
                 tools_options+=("📥 Restore Settings from Backup")
                 tools_options+=("📊 Show Distrobox List")
                 tools_options+=("🔌 Show Port Mappings")
-                tools_options+=("🩺 Run Doctor Diagnostics")
-                tools_options+=("📦 Check Package Dependencies")
 
                 if [ -f "$HOME/.local/bin/agy-box-manager" ]; then
                     tools_options+=("🔥 Uninstall CLI Globally")
@@ -3282,7 +3116,7 @@ cmd_interactive() {
                         read -n 1 -s -r -p "Press any key to continue..."
                         ;;
                     "🔍 Check System & Component Status")
-                        cmd_check
+                        cmd_doctor
                         echo ""
                         read -n 1 -s -r -p "Press any key to continue..."
                         ;;
@@ -3313,13 +3147,6 @@ cmd_interactive() {
                         cmd_ports
                         read -n 1 -s -r -p "Press any key to continue..."
                         ;;
-                    "🩺 Run Doctor Diagnostics")
-                        cmd_doctor
-                        read -n 1 -s -r -p "Press any key to continue..."
-                        ;;
-                    "📦 Check Package Dependencies")
-                        cmd_check_dependencies
-                        ;;
                     "🌍 Install CLI Globally (~/.local/bin)")
                         cmd_install_global
                         echo ""
@@ -3346,7 +3173,6 @@ show_help() {
     echo "Commands:"
     echo "  (none)                    Launch the interactive UI"
     echo "  wizard [--defaults]       Run the first-run configuration wizard"
-    echo "  check                     Inspect system, container workspaces, toolchain, IDEs & auth"
     echo "  update [name|prod|dev]    Update toolchain, IDE extensions, and container packages"
     echo "                            Options:"
     echo "                              --all             Update all components (default)"
@@ -3377,7 +3203,7 @@ show_help() {
     echo "  restore <file> [-y]       Restore settings and container state from archive"
     echo "  status                    List all AGY Box environments and their storage homes"
     echo "  ports                     Show sandboxed port mappings for all AGY Boxes"
-    echo "  doctor                    Run system diagnostics health check"
+    echo "  doctor (alias: check)     Health checks plus workspace, toolchain, IDE & auth inventory"
     echo "  clean [name|dev|prod]     Remove environment (default: agy-box)"
     echo "                            Options:"
     echo "                              -p, --purge       Also remove isolated home directory"
@@ -3401,7 +3227,7 @@ setup_completions
 
 case "${1:-}" in
     wizard)           check_deps "optional"; cmd_wizard "${@:2}" ;;
-    check)            check_deps "optional"; cmd_check "${@:2}" ;;
+    check|doctor)     check_deps "optional"; cmd_doctor ;;
     update)           check_deps "optional"; cmd_update "${@:2}" ;;
     backup)           check_deps "optional"; cmd_backup "${@:2}" ;;
     restore)          check_deps "optional"; cmd_restore "${@:2}" ;;
@@ -3413,7 +3239,6 @@ case "${1:-}" in
     update-toolchain) check_deps "quiet"; cmd_update_toolchain "${@:2}" ;;
     status)           check_deps "optional"; cmd_status ;;
     ports)            check_deps "quiet"; cmd_ports ;;
-    doctor)           check_deps "optional"; cmd_doctor ;;
     install-global)   check_deps "optional"; cmd_install_global ;;
     uninstall-global) check_deps "optional"; cmd_uninstall_global ;;
     autocomplete)     cmd_autocomplete "${2:-bash}" ;;
