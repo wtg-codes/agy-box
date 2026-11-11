@@ -31,7 +31,8 @@ EOF2
 teardown() {
   export PATH="$ORIGINAL_PATH"
   export HOME="$ORIGINAL_HOME"
-  rm -rf "$TEST_DIR"
+  chmod -R u+w "$TEST_DIR" 2>/dev/null || true
+  rm -rf "$TEST_DIR" 2>/dev/null || true
 }
 
 @test "agy-box-manager: init_defaults creates config.env with valid default states" {
@@ -550,6 +551,144 @@ EOF2
   run grep -F "Unknown option: --unknown-flag" <<< "$output"
   [ "$status" -eq 0 ]
 }
+
+@test "agy-box-manager: VERSION is 0.7.0" {
+  run bash -c 'source ./agy-box-manager && echo "$VERSION"'
+  [ "$status" -eq 0 ]
+  [ "$output" = "0.7.0" ]
+
+  run ./agy-box-manager version
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"agy-box-manager version 0.7.0"* ]]
+}
+
+@test "agy-box-manager: script size is strictly under 125000 bytes and avoids E2BIG" {
+  local size
+  size=$(wc -c < ./agy-box-manager)
+  [ "$size" -lt 125000 ]
+
+  run /usr/bin/bash -c "$(cat ./agy-box-manager)" --version
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"agy-box-manager version 0.7.0"* ]]
+
+  run bash <(cat ./agy-box-manager) --version
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"agy-box-manager version 0.7.0"* ]]
+}
+
+@test "agy-box-manager: run_step surfaces failure logs without swallowing gum spin" {
+  create_mock "gum" '
+if [ "$1" = "spin" ]; then
+  echo "mock-gum-spinner-rendered"
+  while [ "$1" != "--" ]; do shift; done
+  shift
+  "$@"
+else
+  "$@"
+fi
+'
+
+  run bash -c 'source ./agy-box-manager && AGY_NONINTERACTIVE=1 run_step "Failing task" bash -c "echo simulated failure; exit 2"'
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"simulated failure"* ]]
+
+  run bash -c '
+source ./agy-box-manager
+run_step_with_mock_gum() {
+  local title=$1
+  shift
+  local rc=0
+  local log_file
+  log_file=$(mktemp)
+  gum spin --spinner dot --title "$title" -- bash -c '\''log="$1"; shift; "$@" >"$log" 2>&1'\'' _ "$log_file" "$@" || rc=$?
+  if [ "$rc" -ne 0 ]; then cat "$log_file"; fi
+  rm -f "$log_file"
+  return "$rc"
+}
+run_step_with_mock_gum "Failing task with spinner" bash -c "echo surfaced child error; exit 3"
+'
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"mock-gum-spinner-rendered"* ]]
+  [[ "$output" == *"surfaced child error"* ]]
+}
+
+@test "agy-box-manager: cmd_install_official emits visible [1/4] through [4/4] progress steps in sandbox mode" {
+  local mock_log="$TEST_DIR/install_steps_mock.log"
+  cat <<EOF2 > "$MOCK_BIN/podman"
+#!/bin/bash
+echo "podman \$*" >> "$mock_log"
+exit 0
+EOF2
+  chmod +x "$MOCK_BIN/podman"
+  create_mock "distrobox" 'exit 0'
+
+  run ./agy-box-manager install --name agy-box-live --image ghcr.io/wtg-codes/agy-box:latest --mode sandbox -y --no-enter
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"==> [1/4] Pulling container image"* ]]
+  [[ "$output" == *"✓ [1/4] Pulling container image"* ]]
+  [[ "$output" == *"==> [2/4] Creating sandbox environment"* ]]
+  [[ "$output" == *"✓ [2/4] Creating sandbox environment"* ]]
+  [[ "$output" == *"==> [3/4] Verifying sandbox container"* ]]
+  [[ "$output" == *"✓ [3/4] Verifying sandbox container"* ]]
+  [[ "$output" == *"==> [4/4] Configuring host shell integration"* ]]
+  [[ "$output" == *"✓ Host shell integration ready"* ]]
+}
+
+@test "agy-box-manager: cmd_install_official emits visible [1/4] through [4/4] progress steps in workstation mode" {
+  local mock_log="$TEST_DIR/install_ws_steps_mock.log"
+  cat <<EOF2 > "$MOCK_BIN/podman"
+#!/bin/bash
+echo "podman \$*" >> "$mock_log"
+exit 0
+EOF2
+  chmod +x "$MOCK_BIN/podman"
+
+  cat <<EOF2 > "$MOCK_BIN/distrobox"
+#!/bin/bash
+echo "distrobox \$*" >> "$mock_log"
+exit 0
+EOF2
+  chmod +x "$MOCK_BIN/distrobox"
+
+  run ./agy-box-manager install --name agy-box-ws-live --image ghcr.io/wtg-codes/agy-box:latest --mode workstation -y --no-enter
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"==> [1/4] Pulling container image"* ]]
+  [[ "$output" == *"✓ [1/4] Pulling container image"* ]]
+  [[ "$output" == *"==> [2/4] Creating workstation environment"* ]]
+  [[ "$output" == *"✓ [2/4] Creating workstation environment"* ]]
+  [[ "$output" == *"==> [3/4] Initializing 'agy-box-ws-live' container & CLI integration"* ]]
+  [[ "$output" == *"✓ [3/4] Initializing 'agy-box-ws-live' container & CLI integration"* ]]
+  [[ "$output" == *"==> [4/4] Configuring host shell integration"* ]]
+  [[ "$output" == *"✓ Host shell integration ready"* ]]
+  run grep -F "distrobox enter agy-box-ws-live -- true" "$mock_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "agy-box-manager: cmd_desktop supports --stop to terminate VDI session" {
+  local mock_log="$TEST_DIR/desktop_stop_mock.log"
+  create_mock "podman" "echo \"podman \$*\" >> '$mock_log'; if [ \"\$1\" = \"ps\" ]; then echo \"agy-box-test\"; fi; exit 0"
+  create_mock "distrobox" "echo \"distrobox \$*\" >> '$mock_log'; exit 0"
+
+  run ./agy-box-manager desktop agy-box-test --stop
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"VDI session for 'agy-box-test' stopped cleanly"* ]]
+  run grep -F "pkill -TERM -f \"agy-vdi|websockify|x11vnc|icewm-session|Xvfb\"" "$mock_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "agy-box-manager: cmd_desktop supports --detach to launch in background" {
+  local mock_log="$TEST_DIR/desktop_detach_mock.log"
+  create_mock "podman" "echo \"podman \$*\" >> '$mock_log'; if [ \"\$1\" = \"ps\" ]; then echo \"agy-box-test\"; fi; exit 0"
+  create_mock "distrobox" "echo \"distrobox \$*\" >> '$mock_log'; exit 0"
+
+  run ./agy-box-manager desktop agy-box-test --detach
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"VDI Desktop is accessible at"* ]]
+  run grep -F "podman exec -d -u agyuser -w /home/agyuser agy-box-test /usr/local/bin/agy-vdi -p 6080" "$mock_log"
+  [ "$status" -eq 0 ]
+}
+
+
 
 
 

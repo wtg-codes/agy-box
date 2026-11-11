@@ -9,9 +9,24 @@ Container images are published to `ghcr.io/wtg-codes/agy-box` (`:<version>`, `:<
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-11
+
+- **Real-Time Streaming Install Progress & Silent Spinner Hang Fix**:
+  - Upgraded `agy-box-manager install` to stream multi-step progress in real-time (`[1/4]`..`[4/4]`), fixing silent terminal hangs caused by redirecting stdout/stderr of `gum spin` onto itself.
+  - Image layer download bars and transfer speeds are now streamed live during `podman`/`docker pull` instead of hidden behind a spinner.
+  - Workstation first-boot setup (`distrobox enter -- true`) now streams `distrobox-init` output live without `2>/dev/null` swallowing, eliminating 20-60s blank-screen freezes.
+  - Added visible completion confirmation upon exporting the `agy` CLI shim (`✓ Exported 'agy' CLI shim`).
+- **Interactive VDI Session Lifecycle & TUI Control Panel**:
+  - Added clean button-driven VDI session lifecycle management (`vdi_control_panel`) with `⏹️ End VDI Session`, `🌐 Open VDI in Browser`, and `📌 Keep Running in Background`.
+  - Added CLI flags `agy-box-manager desktop --stop`, `--status`, and `--detach`.
+  - Added clean keyboard exit (`[q]` or `[Ctrl+C]`) in `agy-vdi` monitoring loop.
+- **Process Substitution & Compact Script Execution**:
+  - Compacted `agy-box-manager` safely under 120 KB (`< 120000` bytes) to guarantee execution under Linux kernel `MAX_ARG_STRLEN` (`131072` bytes) and avoid `E2BIG: Argument list too long`.
+  - Updated Quick Start one-liner across documentation to use process substitution: `bash <(curl -fsSL https://raw.githubusercontent.com/wtg-codes/agy-box/main/agy-box-manager)`.
 - **Pinned Antigravity Toolchain Updates (`2.31.0` / `1.5.5` / `0.1.23`)**:
   - Updated **Google Antigravity** (Agent UI / Hub) to `2.31.0`, including build-time desktop icon extraction (`app.asar` -> `/usr/share/pixmaps/antigravity.png`) wired into desktop and IceWM launchers.
   - Updated **Antigravity CLI** (`agy`) to `1.5.5` (with refreshed shell completions), **Google Antigravity Python SDK** (`google-antigravity`) to `0.1.23` (with dynamic SDK version lookup in desktop/IceWM launchers), alongside pinned **Google ADK** (`google-adk`) `2.1.0` and **Gemini CLI** (`@google/gemini-cli`) `0.43.0`.
+  - Toolchain is pre-baked into `/usr/local/bin` and `/opt/agy-python` in the container image.
 - **Standalone Sandbox Mode without Distrobox & Local Image Support**:
   - `distrobox` is now optional on the host — required only for Workstation mode (`--mode workstation`), while Sandbox mode (`--mode sandbox` via Podman or Docker) runs standalone and `agy-box-manager install` automatically falls back to `sandbox` mode when `distrobox` is not installed (also reflected in `doctor`, `check`, `enter`, and `scripts/test-box.sh`).
   - `agy-box-manager install --image localhost/...` now supports local Podman/Docker container images directly without attempting a remote registry pull.
@@ -119,7 +134,8 @@ First tagged release.
 - Shell autocompletion, user-mode systemd support, keyring cache fallback, port mapping dashboard ([#6]), SSH-agent forwarding ([#7]), container resource limits ([#8]), devcontainer template ([#9]), workspace state sync ([#10]), and doctor diagnostics ([#11]).
 - Unified CI/CD workflow with lint, build, test, SBOM, and attestation jobs, and automatic GitHub Releases on `v*` tags.
 
-[Unreleased]: https://github.com/wtg-codes/agy-box/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/wtg-codes/agy-box/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/wtg-codes/agy-box/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/wtg-codes/agy-box/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/wtg-codes/agy-box/compare/v0.4.2...v0.5.0
 [0.4.2]: https://github.com/wtg-codes/agy-box/releases/tag/v0.4.2

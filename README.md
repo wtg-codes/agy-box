@@ -30,7 +30,7 @@ The published container image is **`ghcr.io/wtg-codes/agy-box`** (`:latest` trac
 Launch the interactive workspace manager and install the environment directly from your terminal without cloning this repository:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/wtg-codes/agy-box/main/agy-box-manager)"
+bash <(curl -fsSL https://raw.githubusercontent.com/wtg-codes/agy-box/main/agy-box-manager)
 ```
 
 *(From the interactive menu, simply select **"Install CLI Globally"** to save the tool to your system permanently!)*

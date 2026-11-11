@@ -135,6 +135,7 @@ else
     HEIGHT=1080
 fi
 
+# shellcheck disable=SC2329
 cleanup() {
     echo -e "\n${YELLOW}[INFO] Cleaning up VDI session services...${NC}"
     
@@ -157,7 +158,7 @@ cleanup() {
     echo -e "${GREEN}[SUCCESS] VDI cleanup complete. Bye!${NC}"
 }
 
-trap cleanup EXIT
+trap cleanup EXIT INT TERM HUP
 
 echo -e "${BLUE}==================================================${NC}"
 echo -e "${BLUE}        agy-box VDI Virtual Desktop Session       ${NC}"
@@ -266,7 +267,7 @@ echo ""
 echo -e "${YELLOW}[WARNING] Security Notice: VDI is listening on all interfaces (0.0.0.0) without a password.${NC}"
 echo -e "${YELLOW}Ensure you are on a trusted local network.${NC}"
 echo ""
-echo -e "${YELLOW}Press [Ctrl+C] to stop the virtual desktop session.${NC}"
+echo -e "${YELLOW}Press [q] or [Ctrl+C] to stop the virtual desktop session.${NC}"
 
 # 5. Set up the desktop environment
 # Launch a terminal on the desktop (users launch Antigravity App, VS Code, or Zed via desktop/toolbar icons)
@@ -277,6 +278,16 @@ fi
 
 # Block and keep shell open while monitoring all critical services
 while true; do
+    if [ -t 0 ]; then
+        if read -r -s -n 1 -t 2 key; then
+            if [[ "$key" == "q" || "$key" == "Q" ]]; then
+                echo -e "\n${BLUE}[INFO] Ending VDI session...${NC}"
+                exit 0
+            fi
+        fi
+    else
+        sleep 2
+    fi
     if ! kill -0 %1 2>/dev/null; then
         echo -e "${RED}[ERROR] Xvfb crashed unexpectedly.${NC}"
         exit 1
@@ -293,5 +304,4 @@ while true; do
         echo -e "${RED}[ERROR] websockify crashed unexpectedly.${NC}"
         exit 1
     fi
-    sleep 2
 done

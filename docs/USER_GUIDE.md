@@ -49,7 +49,7 @@ You do **not** need to clone any Git repositories to install and launch `agy-box
 Run this single command in your host terminal:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/wtg-codes/agy-box/main/agy-box-manager)"
+bash <(curl -fsSL https://raw.githubusercontent.com/wtg-codes/agy-box/main/agy-box-manager)
 ```
 
 The manager script will automatically:
