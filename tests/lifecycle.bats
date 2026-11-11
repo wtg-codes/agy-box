@@ -666,13 +666,13 @@ EOF2
 
 @test "agy-box-manager: cmd_desktop supports --stop to terminate VDI session" {
   local mock_log="$TEST_DIR/desktop_stop_mock.log"
-  create_mock "podman" "echo \"podman \$*\" >> '$mock_log'; if [ \"\$1\" = \"ps\" ]; then echo \"agy-box-test\"; fi; exit 0"
+  create_mock "podman" "echo \"podman \$*\" >> '$mock_log'; if [ \"\$1\" = \"ps\" ]; then echo \"agy-box-test\"; elif [ \"\$1\" = \"exec\" ] && [[ \"\$*\" == *\"pgrep\"* ]]; then exit 1; fi; exit 0"
   create_mock "distrobox" "echo \"distrobox \$*\" >> '$mock_log'; exit 0"
 
   run ./agy-box-manager desktop agy-box-test --stop
   [ "$status" -eq 0 ]
   [[ "$output" == *"VDI session for 'agy-box-test' stopped cleanly"* ]]
-  run grep -F "pkill -TERM -f \"agy-vdi|websockify|x11vnc|icewm-session|Xvfb\"" "$mock_log"
+  run grep -F 'pkill -TERM -f "[a]gy-vdi|[w]ebsockify|[x]11vnc|[i]cewm-session|[X]vfb"' "$mock_log"
   [ "$status" -eq 0 ]
 }
 

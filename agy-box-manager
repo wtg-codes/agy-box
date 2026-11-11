@@ -1483,15 +1483,19 @@ is_vdi_running() {
   local runtime
   runtime=$(get_runtime)
   "$runtime" ps --format '{{.Names}}' 2>/dev/null | grep -qxF "$name" || return 1
-  "$runtime" exec "$name" pgrep -f 'websockify.*novnc' >/dev/null 2>&1
+  "$runtime" exec "$name" pgrep -f '[w]ebsockify.*novnc' >/dev/null 2>&1
 }
 
 stop_vdi_session() {
   local name=$1
   local runtime
   runtime=$(get_runtime)
-  "$runtime" exec "$name" sh -c 'pkill -TERM -f "agy-vdi|websockify|x11vnc|icewm-session|Xvfb" 2>/dev/null || true; sleep 0.5; pkill -KILL -f "websockify|x11vnc|Xvfb" 2>/dev/null || true; rm -f /tmp/.X*-lock /tmp/.X11-unix/X*' 2>/dev/null || true
-  ui_ok "✓ VDI session for '$name' stopped cleanly."
+  "$runtime" exec "$name" sh -c 'pkill -TERM -f "[a]gy-vdi|[w]ebsockify|[x]11vnc|[i]cewm-session|[X]vfb" 2>/dev/null || true; sleep 0.5; pkill -KILL -f "[w]ebsockify|[x]11vnc|[X]vfb" 2>/dev/null || true; rm -f /tmp/.X*-lock /tmp/.X11-unix/X*' 2>/dev/null || true
+  if ! is_vdi_running "$name"; then
+    ui_ok "✓ VDI session for '$name' stopped cleanly."
+  else
+    ui_warn "⚠️  Some VDI processes for '$name' may still be running."
+  fi
 }
 
 vdi_control_panel() {
