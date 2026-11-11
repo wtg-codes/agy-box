@@ -71,7 +71,7 @@ cleanup() {
     fi
     if "$rt" ps -a --format '{{.Names}}' 2>/dev/null | grep -qw "$CONTAINER_NAME"; then
         log_info "Removing container '$CONTAINER_NAME'..."
-        if distrobox list --no-color 2>/dev/null | grep -qw "$CONTAINER_NAME"; then
+        if command -v distrobox &>/dev/null && distrobox list --no-color 2>/dev/null | grep -qw "$CONTAINER_NAME"; then
             distrobox rm --yes "$CONTAINER_NAME" >/dev/null || true
         fi
         if "$rt" ps -a --format '{{.Names}}' 2>/dev/null | grep -qw "$CONTAINER_NAME"; then
@@ -79,6 +79,9 @@ cleanup() {
         fi
     else
         log_info "No test container '$CONTAINER_NAME' to clean up."
+    fi
+    if [[ "$rt" = "podman" ]] && [[ "$(id -u)" -ne 0 ]]; then
+        podman unshare rm -rf "$TEST_ROOT" 2>/dev/null || true
     fi
     rm -rf "$TEST_ROOT" 2>/dev/null || true
 }
@@ -88,11 +91,6 @@ trap cleanup EXIT INT TERM
 
 # --- Host Pre-checks ---
 log_info "Performing host system checks..."
-if ! command -v distrobox &>/dev/null; then
-    log_error "distrobox is not installed on host"
-    exit 1
-fi
-
 if [[ -z "${RUNTIME:-}" ]]; then
     if command -v podman &>/dev/null; then
         RUNTIME="podman"
@@ -104,7 +102,12 @@ if [[ -z "${RUNTIME:-}" ]]; then
     fi
 fi
 export DBX_CONTAINER_MANAGER="${RUNTIME}"
-log_success "Host checks passed. Runtime: $RUNTIME, Distrobox: $(distrobox --version | head -n 1)"
+if command -v distrobox &>/dev/null; then
+    log_success "Host checks passed. Runtime: $RUNTIME, Distrobox: $(distrobox --version | head -n 1)"
+else
+    log_warn "distrobox is not installed on host; falling back to Isolated Sandbox mode (${RUNTIME})."
+    log_success "Host checks passed. Runtime: $RUNTIME (Distrobox: not installed)"
+fi
 
 # --- Change Detection Hashing ---
 calculate_build_hash() {
@@ -153,12 +156,11 @@ else
     echo "$CURRENT_HASH" > "$STATE_FILE"
 fi
 
-# --- Create Distrobox ---
-log_info "Creating distrobox container '$CONTAINER_NAME'..."
+# --- Create Distrobox (or Isolated Sandbox fallback) ---
 # If it already exists for some reason, remove it
 if "${RUNTIME}" ps -a --format '{{.Names}}' 2>/dev/null | grep -qw "$CONTAINER_NAME"; then
     log_warn "Container '$CONTAINER_NAME' already exists in ${RUNTIME}. Removing first..."
-    if distrobox list --no-color 2>/dev/null | grep -qw "$CONTAINER_NAME"; then
+    if command -v distrobox &>/dev/null && distrobox list --no-color 2>/dev/null | grep -qw "$CONTAINER_NAME"; then
         distrobox rm --yes "$CONTAINER_NAME" >/dev/null || true
     fi
     if "${RUNTIME}" ps -a --format '{{.Names}}' 2>/dev/null | grep -qw "$CONTAINER_NAME"; then
@@ -166,10 +168,13 @@ if "${RUNTIME}" ps -a --format '{{.Names}}' 2>/dev/null | grep -qw "$CONTAINER_N
     fi
 fi
 
-# Probe whether distrobox create + enter works on this host/runtime (e.g. Docker on
-# Ubuntu 24.04 can fail with 'openat dev/ptmx: no such device' when distrobox bind-mounts
-# /dev). If so, fall back to Isolated Sandbox mode.
-if distrobox create -i "$IMAGE_NAME" -n "$CONTAINER_NAME" --hostname "$CONTAINER_NAME" --home "$TEST_HOME" --yes && \
+# Probe whether distrobox is installed and create + enter works on this host/runtime
+# (e.g. pure Podman/Docker hosts without distrobox, or Docker on Ubuntu 24.04 failing
+# with 'openat dev/ptmx: no such device' when distrobox bind-mounts /dev).
+# If so, fall back to Isolated Sandbox mode.
+if command -v distrobox &>/dev/null && \
+   log_info "Creating distrobox container '$CONTAINER_NAME'..." && \
+   distrobox create -i "$IMAGE_NAME" -n "$CONTAINER_NAME" --hostname "$CONTAINER_NAME" --home "$TEST_HOME" --yes && \
    sleep 2 && \
    distrobox enter "$CONTAINER_NAME" -- true 2>/dev/null; then
     log_success "Created distrobox container '$CONTAINER_NAME'."
@@ -244,23 +249,57 @@ if distrobox create -i "$IMAGE_NAME" -n "$CONTAINER_NAME" --hostname "$CONTAINER
     fi
 else
     log_warn "distrobox enter unavailable on this host/arch (${RUNTIME}); validating via Isolated Sandbox mode (agyuser)..."
-    distrobox rm --yes "$CONTAINER_NAME" >/dev/null 2>&1 || true
+    if command -v distrobox &>/dev/null; then
+        distrobox rm --yes "$CONTAINER_NAME" >/dev/null 2>&1 || true
+    fi
     "${RUNTIME}" rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
 
-    "${RUNTIME}" run -d \
-        --name "$CONTAINER_NAME" \
-        --hostname "$CONTAINER_NAME" \
-        -e "PUID=$(id -u)" \
-        -e "PGID=$(id -g)" \
-        -v "$TEST_HOME:/home/agyuser" \
-        -v "$REPO_DIR:/mnt/repo:ro" \
-        "$IMAGE_NAME" sleep infinity
+    sandbox_flags=(
+        -d
+        --name "$CONTAINER_NAME"
+        --hostname "$CONTAINER_NAME"
+        -v "$TEST_HOME:/home/agyuser"
+        -v "$REPO_DIR:/mnt/repo:ro"
+    )
+    if [[ "$RUNTIME" = "podman" ]]; then
+        if [[ "$(id -u)" -ne 0 ]]; then
+            podman unshare chown -R 9000:9000 "$TEST_HOME" 2>/dev/null || true
+        fi
+        sandbox_flags+=(--security-opt label=disable)
+    else
+        sandbox_flags+=(-e "PUID=$(id -u)" -e "PGID=$(id -g)")
+    fi
+
+    "${RUNTIME}" run "${sandbox_flags[@]}" "$IMAGE_NAME" sleep infinity
 
     # Wait briefly for entrypoint.sh to finish configuring agyuser and sudoers
     sleep 3
 
     log_info "Running test assertions inside sandbox container as agyuser..."
     "${RUNTIME}" exec -u agyuser -w /home/agyuser "$CONTAINER_NAME" /mnt/repo/scripts/assert-box.sh
+
+    # --- Optional: headless VDI desktop (noVNC on :6080) ---
+    if [[ "${VDI_TEST:-false}" = "true" ]]; then
+        log_info "Starting agy-vdi inside sandbox container and waiting for noVNC on http://127.0.0.1:6080 ..."
+        "${RUNTIME}" exec -e HOME=/home/agyuser -u agyuser -w /home/agyuser "$CONTAINER_NAME" /usr/local/bin/agy-vdi > "$TEST_ROOT/vdi.log" 2>&1 &
+        vdi_pid=$!
+        vdi_ready=false
+        for _ in {1..30}; do
+            if "$RUNTIME" exec -u agyuser "$CONTAINER_NAME" curl -fsS http://127.0.0.1:6080/vnc.html >/dev/null 2>&1; then
+                vdi_ready=true
+                break
+            fi
+            sleep 1
+        done
+        kill "$vdi_pid" 2>/dev/null || true
+        "$RUNTIME" exec -u agyuser "$CONTAINER_NAME" pkill -f "websockify|x11vnc|Xvfb" 2>/dev/null || true
+        if [[ "$vdi_ready" != "true" ]]; then
+            log_error "noVNC did not respond within 30 seconds:"
+            cat "$TEST_ROOT/vdi.log" >&2 || true
+            exit 1
+        fi
+        log_success "VDI web desktop responded on port 6080."
+    fi
 fi
 
 log_success "Integration tests finished successfully!"

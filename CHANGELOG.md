@@ -9,6 +9,15 @@ Container images are published to `ghcr.io/wtg-codes/agy-box` (`:<version>`, `:<
 
 ## [Unreleased]
 
+- **Pinned Antigravity Toolchain Updates (`2.31.0` / `1.5.5` / `0.1.23`)**:
+  - Updated **Google Antigravity** (Agent UI / Hub) to `2.31.0`, including build-time desktop icon extraction (`app.asar` -> `/usr/share/pixmaps/antigravity.png`) wired into desktop and IceWM launchers.
+  - Updated **Antigravity CLI** (`agy`) to `1.5.5` (with refreshed shell completions), **Google Antigravity Python SDK** (`google-antigravity`) to `0.1.23` (with dynamic SDK version lookup in desktop/IceWM launchers), alongside pinned **Google ADK** (`google-adk`) `2.1.0` and **Gemini CLI** (`@google/gemini-cli`) `0.43.0`.
+- **Standalone Sandbox Mode without Distrobox & Local Image Support**:
+  - `distrobox` is now optional on the host — required only for Workstation mode (`--mode workstation`), while Sandbox mode (`--mode sandbox` via Podman or Docker) runs standalone and `agy-box-manager install` automatically falls back to `sandbox` mode when `distrobox` is not installed (also reflected in `doctor`, `check`, `enter`, and `scripts/test-box.sh`).
+  - `agy-box-manager install --image localhost/...` now supports local Podman/Docker container images directly without attempting a remote registry pull.
+- **IDE Extensions Policy (Sunsetted Build-Time Extension Execution)**:
+  - Sunsetted build-time root Electron `code --install-extension` execution during `--system` container image builds to keep builds deterministic and resilient against VS Code Marketplace timeouts.
+  - Containers now ship `/etc/skel/.vscode/extensions.json` recommending `Google.google-antigravity` (plus Zed `auto_install_extensions`), with on-demand user-space installation available via `agy-install-toolchain` or `agy-box-manager update --ides`.
 - **CI/CD audit fixes**:
   - Fixed CI/CD not running on merges to `main`: a skip directive quoted in PR commit messages was copied into the squash-merge commit. The lint job now rejects PRs containing skip directives, and the diagram bot no longer uses one.
   - Fork PRs never run on the self-hosted DGX Spark runners; they fall back to GitHub-hosted `ubuntu-24.04` / `ubuntu-24.04-arm`.
@@ -26,7 +35,7 @@ Container images are published to `ghcr.io/wtg-codes/agy-box` (`:<version>`, `:<
   - Replaced pipx with a pinned `uv` (`0.13.7`) installing the SDK and ADK into `/opt/agy-python`; base image `quay.io/toolbx/ubuntu-toolbox:24.04` pinned by digest; single `wallpaper.png` instead of versioned wallpapers.
   - CI: `amd64` builds natively on GitHub-hosted `ubuntu-24.04` and `arm64` on the DGX Spark self-hosted runners (no QEMU); added Dependabot for GitHub Actions and the base image digest.
 - **Antigravity Toolchain & IDE Streamlining**:
-  - **Removed legacy `antigravity-ide` (`1.23.2`)** from the container image, installer (`scripts/install-agent-toolchain.sh`), VDI desktop, and documentation in favor of the **Google Antigravity App (`antigravity` v2.0.1)**, **Antigravity CLI (`agy` v1.5.0)**, **VS Code (`code`)**, **Zed (`zed`)**, and **JetBrains IDEs (`agy-install-ide`)**.
+  - **Removed legacy `antigravity-ide` (`1.23.2`)** from the container image, installer (`scripts/install-agent-toolchain.sh`), VDI desktop, and documentation in favor of the **Google Antigravity App (`antigravity` v2.31.0)**, **Antigravity CLI (`agy` v1.5.5)**, **VS Code (`code`)**, **Zed (`zed`)**, and **JetBrains IDEs (`agy-install-ide`)**.
   - Added automatic cleanup of legacy `antigravity-ide` binaries, share directories, desktop shortcuts, and config directories when running `agy-install-toolchain` / `update-toolchain`.
   - Updated `agy-vdi` browser VDI desktop startup to launch only the **Terminal (`xterm`)** automatically so users can launch Google Antigravity, VS Code, or Zed on demand from the desktop/toolbar icons.
 - **Sandbox Sudo, UID/GID Alignment & Self-Hosted DGX Spark CI**:
@@ -41,7 +50,7 @@ Container images are published to `ghcr.io/wtg-codes/agy-box` (`:<version>`, `:<
   - Added preserved storage management in `agy-box-manager status` and an interactive TUI menu item ("📁 Manage Preserved Box Data...") to inspect and reclaim orphaned storage.
 - **Container IDE Support**:
   - Pre-installed **Visual Studio Code** (`code`) and **Zed Editor** (`zed`) in the container image with multi-arch support (`amd64` and `arm64`).
-  - Pre-installed/pre-configured **Antigravity extensions**: `Google.antigravity` extension pre-installed in VS Code and auto-installation configured for Zed (`~/.config/zed/settings.json`).
+  - Pre-configured **Antigravity extensions**: `/etc/skel/.vscode/extensions.json` workspace recommendation for `Google.google-antigravity` (with on-demand user-space install via `agy-install-toolchain` / `agy-box-manager update --ides`) and auto-installation configured for Zed (`~/.config/zed/settings.json`).
   - IceWM desktop launchers and application menu/toolbar entries for VS Code and Zed.
   - On-demand **JetBrains IDE installer** (`agy-install-ide`) supporting IntelliJ IDEA Community and PyCharm Community with Antigravity plugin installation, desktop shortcuts, and an interactive integration menu in `agy-setup-helper`.
   - Comprehensive health checks in `scripts/assert-box.sh` and Bats unit tests for IDE installation and toolchain extensions.

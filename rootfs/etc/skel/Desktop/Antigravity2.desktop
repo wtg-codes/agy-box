@@ -2,6 +2,6 @@
 Type=Application
 Name=Antigravity 2.0 (Agent First Experience)
 Exec=antigravity
-Icon=system-run
+Icon=antigravity
 Terminal=false
 Categories=Development;

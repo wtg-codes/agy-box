@@ -23,6 +23,8 @@ EOF2
 
   export ORIGINAL_PATH="$PATH"
   export ORIGINAL_HOME="$HOME"
+  export HOME="$TEST_DIR/home"
+  mkdir -p "$HOME"
   export PATH="$MOCK_BIN:$PATH"
 }
 
@@ -47,8 +49,8 @@ mock_installer_env() {
   create_mock "id" 'echo 1000'
   create_mock "uname" 'echo x86_64'
   create_mock "python3" 'exit 0'
-  create_mock "sha256sum" 'exit 0'
-  create_mock "sha512sum" 'exit 0'
+  create_mock "sha256sum" '[ ! -t 0 ] && cat >/dev/null || true; exit 0'
+  create_mock "sha512sum" '[ ! -t 0 ] && cat >/dev/null || true; exit 0'
   # curl: honour -o by creating the output file
   create_mock "curl" '
     out=""
@@ -58,8 +60,9 @@ mock_installer_env() {
     done
     if [ -n "$out" ]; then : > "$out"; fi
     exit 0'
-  # tar: populate the -C target with an "antigravity" executable
+  # tar: populate the -C target with an "antigravity" executable (and mock uv when extracting uv)
   create_mock "tar" '
+    [ ! -t 0 ] && cat >/dev/null || true
     dir=""; prev=""
     for a in "$@"; do
       if [ "$prev" = "-C" ]; then dir="$a"; fi
@@ -67,15 +70,41 @@ mock_installer_env() {
     done
     mkdir -p "$dir"
     : > "$dir/antigravity"
+    case "$*" in
+      *uv-*)
+        cat <<UVEOF > "$dir/uv"
+#!/bin/bash
+echo "uv \$*" >> "$TEST_LOG"
+py=""; p=""
+for arg in "\$@"; do
+  if [ "\$p" = "--python" ]; then py="\$arg"; fi
+  p="\$arg"
+done
+if [ -n "\$py" ]; then
+  vbin="\$(dirname "\$py")"
+  mkdir -p "\$vbin"
+  printf "#!/bin/sh\n" > "\$vbin/adk"
+  chmod +x "\$vbin/adk"
+fi
+exit 0
+UVEOF
+        chmod +x "$dir/uv"
+        ;;
+    esac
     exit 0'
-  # pip3/npm: create the console scripts they would install into ~/.local/bin
+  # pip3/npm: create the console scripts they would install into ~/.local/bin (or --prefix/bin)
   create_mock "pip3" '
     case "$*" in
       *google-adk*) mkdir -p "$HOME/.local/bin"; printf "#!/bin/sh\n" > "$HOME/.local/bin/adk"; chmod +x "$HOME/.local/bin/adk" ;;
     esac
     exit 0'
   create_mock "npm" '
-    mkdir -p "$HOME/.local/bin"; printf "#!/bin/sh\n" > "$HOME/.local/bin/gemini"; chmod +x "$HOME/.local/bin/gemini"
+    prefix="$HOME/.local"; prev=""
+    for a in "$@"; do
+      if [ "$prev" = "--prefix" ]; then prefix="$a"; fi
+      prev="$a"
+    done
+    mkdir -p "$prefix/bin"; printf "#!/bin/sh\n" > "$prefix/bin/gemini"; chmod +x "$prefix/bin/gemini"
     exit 0'
 }
 
@@ -97,7 +126,8 @@ mock_installer_env() {
   [ ! -e "$HOME/.local/bin/agy.new" ]
   [ ! -e "$HOME/.local/share/antigravity.new" ]
 
-  grep -F 'https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.0-5269980577660928/linux-x64/cli_linux_x64.tar.gz' "$TEST_LOG"
+  grep -F 'https://storage.googleapis.com/antigravity-public/antigravity-hub/2.31.0-6379060755038208/linux-x64/Antigravity.tar.gz' "$TEST_LOG"
+  grep -F 'https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.5-6740358537805824/linux-x64/cli_linux_x64.tar.gz' "$TEST_LOG"
   grep -F 'pip3 install --user --break-system-packages --no-cache-dir --retries 10 google-antigravity==0.1.23' "$TEST_LOG"
   grep -F 'pip3 install --user --break-system-packages --no-cache-dir --retries 10 google-adk==2.1.0' "$TEST_LOG"
   grep -F "npm install -g --prefix $HOME/.local --omit=dev --no-audit --no-fund @google/gemini-cli@0.43.0" "$TEST_LOG"
@@ -112,7 +142,37 @@ mock_installer_env() {
   TMPDIR="$TEST_DIR" run ./scripts/install-agent-toolchain.sh
   [ "$status" -eq 0 ]
 
-  grep -F 'code --install-extension Google.antigravity --force' "$TEST_LOG"
+  grep -F 'code --install-extension Google.google-antigravity --force' "$TEST_LOG"
+}
+
+@test "install-agent-toolchain.sh --system writes /etc/skel/.vscode/extensions.json without invoking code --install-extension" {
+  mock_installer_env
+  create_mock "id" 'echo 0'
+  create_mock "code" 'exit 0'
+
+  sed -e "s|/etc/skel|$TEST_DIR/etc/skel|g" \
+      -e "s|/usr/local|$TEST_DIR/usr/local|g" \
+      -e "s|/usr/share|$TEST_DIR/usr/share|g" \
+      -e "s|/opt|$TEST_DIR/opt|g" \
+      ./scripts/install-agent-toolchain.sh > "$TEST_DIR/install-agent-toolchain.sh"
+  chmod +x "$TEST_DIR/install-agent-toolchain.sh"
+
+  TMPDIR="$TEST_DIR" run "$TEST_DIR/install-agent-toolchain.sh" --system
+  echo "$output"
+  [ "$status" -eq 0 ]
+
+  [ -f "$TEST_DIR/etc/skel/.vscode/extensions.json" ]
+  grep -F '{"recommendations": ["Google.google-antigravity"]}' "$TEST_DIR/etc/skel/.vscode/extensions.json"
+  refute_grep -F 'code --install-extension' "$TEST_LOG"
+  for bin in agy antigravity adk gemini; do
+    [ -x "$TEST_DIR/usr/local/bin/$bin" ]
+  done
+
+  # Preserves existing extensions.json if already present
+  echo '{"recommendations": ["custom.ext"]}' > "$TEST_DIR/etc/skel/.vscode/extensions.json"
+  TMPDIR="$TEST_DIR" run "$TEST_DIR/install-agent-toolchain.sh" --system
+  [ "$status" -eq 0 ]
+  grep -F '"custom.ext"' "$TEST_DIR/etc/skel/.vscode/extensions.json"
 }
 
 @test "install-agent-toolchain.sh supports aarch64 and downloads arm64 binaries" {
@@ -122,8 +182,8 @@ mock_installer_env() {
   echo "$output"
   [ "$status" -eq 0 ]
 
-  grep -F 'https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.0-5269980577660928/linux-arm/cli_linux_arm64.tar.gz' "$TEST_LOG"
-  grep -F 'https://storage.googleapis.com/antigravity-public/antigravity-hub/2.0.1-6566078776737792/linux-arm/Antigravity.tar.gz' "$TEST_LOG"
+  grep -F 'https://storage.googleapis.com/antigravity-public/antigravity-cli/1.5.5-6740358537805824/linux-arm/cli_linux_arm64.tar.gz' "$TEST_LOG"
+  grep -F 'https://storage.googleapis.com/antigravity-public/antigravity-hub/2.31.0-6379060755038208/linux-arm/Antigravity.tar.gz' "$TEST_LOG"
   [ -x "$HOME/.local/bin/agy" ]
 }
 
@@ -288,6 +348,20 @@ EOF
   run env -i PATH="$TEST_DIR/mock-docker" "$bash_bin" -c 'source ./agy-box-manager && detect_runtime'
   [ "$status" -eq 0 ]
   [ "$output" = "docker" ]
+}
+
+@test "Desktop and IceWM launchers use antigravity icon and dynamic SDK version lookup" {
+  grep -F 'Icon=antigravity' rootfs/etc/skel/Desktop/Antigravity2.desktop
+  refute_grep -F 'system-run' rootfs/etc/skel/Desktop/Antigravity2.desktop
+  grep -F '"antigravity" antigravity' rootfs/etc/X11/icewm/menu
+  grep -F '"antigravity" antigravity' rootfs/etc/X11/icewm/toolbar
+  refute_grep -F '"system-run" antigravity' rootfs/etc/X11/icewm/menu
+  refute_grep -F '"system-run" antigravity' rootfs/etc/X11/icewm/toolbar
+
+  for f in rootfs/etc/skel/Desktop/AntigravitySDK.desktop rootfs/etc/X11/icewm/menu rootfs/etc/X11/icewm/toolbar; do
+    grep -F "importlib.metadata.version('google-antigravity')" "$f"
+    refute_grep -F 'v0.1.0' "$f"
+  done
 }
 
 

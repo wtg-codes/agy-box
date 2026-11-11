@@ -91,16 +91,16 @@ case "$arch" in
     x86_64)
         CLI_ARCH="linux-x64"
         CLI_TARBALL="cli_linux_x64.tar.gz"
-        CLI_SHA512="e6031f850929210705d8c2393a5665b82b8c3b19684a6d3c556cafa31f26f77acbf164dfee96ca84a5ae7670ac0cc238a974c981c517b269194bdccff271cbd5"
+        CLI_SHA512="746a2bd73f83b65d9b44f2fc55d0f0f511ff7f89702846213eeabd76d06bc9c98576b424c2babc7b947f15e518447b946ba02dca260b778363c55c07a7f7a277"
         HUB_ARCH="linux-x64"
-        HUB_SHA256="0727e1f56961b6d2347941f278da69cc6c17de3befe988524848cd167380e9ab"
+        HUB_SHA256="30ccdea1fff0bf643b7f6e7aa493240d13ec1d866acf4f89c2a6cc3a2c33369c"
         ;;
     aarch64|arm64)
         CLI_ARCH="linux-arm"
         CLI_TARBALL="cli_linux_arm64.tar.gz"
-        CLI_SHA512="509518b2820945db2bea5e013ca43a49df5c78927c3ac341a1115287d52627356e1e9506ac0d2040fb467915fba4dde90061d091fddbddf8ddc212637ae40150"
+        CLI_SHA512="eb3e025c125c1c60a1493a0c1d9cdf15e8372277d6d3b015e8d29e1bd095344eece5cbc2447f238148bd259d5f2daa0f75641adc0ac02b5fad57edc4ed842d59"
         HUB_ARCH="linux-arm"
-        HUB_SHA256="5af56cc9dda954f369a61045b7da2f348bcb0b3507d272b4c0e9aa7cd6175d9b"
+        HUB_SHA256="0b3cdd17faac0e8ee1f80494787ac1ef78f5404bc216ccecf0e3fe95918b2dac"
         ;;
     *)
         die "unsupported architecture '${arch}': must be x86_64 or aarch64."
@@ -118,7 +118,7 @@ else
     # Ensure user directories in HOME are writable. When distrobox initializes,
     # files from /etc/skel may be copied with root ownership if the container was
     # started by root/distrobox-init. Fix ownership using passwordless sudo.
-    for d in "$HOME/.config" "$HOME/.gemini" "$HOME/.local" "$HOME/Desktop"; do
+    for d in "$HOME/.config" "$HOME/.gemini" "$HOME/.local" "$HOME/.vscode" "$HOME/Desktop"; do
         if [ -e "$d" ] && [ ! -w "$d" ]; then
             if command -v sudo &>/dev/null && sudo -n true 2>/dev/null; then
                 sudo chown -R "$(id -u):$(id -g)" "$d" 2>/dev/null || true
@@ -188,12 +188,43 @@ ensure_default_settings() {
     fi
 }
 
-# --- 1. Google Antigravity (Agent UI) (2.0.1 Tarball) -------------------------
+# --- 1. Google Antigravity (Agent UI) (2.31.0 Tarball) ------------------------
 step "Installing Google Antigravity (Agent UI)"
-IDE_VERSION="2.0.1"
-IDE_EXEC_ID="6566078776737792"
+IDE_VERSION="2.31.0"
+IDE_EXEC_ID="6379060755038208"
 IDE_URL="https://storage.googleapis.com/antigravity-public/antigravity-hub/${IDE_VERSION}-${IDE_EXEC_ID}/${HUB_ARCH}/Antigravity.tar.gz"
 install_app_tarball "$IDE_URL" "$HUB_SHA256" "$SHARE_DIR/antigravity"
+
+# Extract application icon from Electron app.asar when bundled inside resources/
+if [ -f "$SHARE_DIR/antigravity/resources/app.asar" ]; then
+    python3 - "$SHARE_DIR/antigravity/resources/app.asar" "$SHARE_DIR/antigravity/resources/icon.png" <<'PYEOF' || true
+import json, struct, sys
+
+asar_path, out_path = sys.argv[1], sys.argv[2]
+with open(asar_path, "rb") as fh:
+    _, hdr_size, _, str_len = struct.unpack("<IIII", fh.read(16))
+    tree = json.loads(fh.read(str_len).decode("utf-8"))
+    base_offset = 8 + hdr_size
+    entry = tree.get("files", {}).get("icon.png")
+    if entry and "offset" in entry and "size" in entry:
+        fh.seek(base_offset + int(entry["offset"]))
+        data = fh.read(int(entry["size"]))
+        if data.startswith(b"\x89PNG\r\n\x1a\n"):
+            with open(out_path, "wb") as out:
+                out.write(data)
+PYEOF
+    if [ -f "$SHARE_DIR/antigravity/resources/icon.png" ]; then
+        if [ "$MODE" = "system" ]; then
+            mkdir -p /usr/share/pixmaps /usr/share/icons/hicolor/512x512/apps
+            cp -f "$SHARE_DIR/antigravity/resources/icon.png" /usr/share/pixmaps/antigravity.png
+            cp -f "$SHARE_DIR/antigravity/resources/icon.png" /usr/share/icons/hicolor/512x512/apps/antigravity.png
+            chmod 0644 /usr/share/pixmaps/antigravity.png /usr/share/icons/hicolor/512x512/apps/antigravity.png
+        else
+            mkdir -p "$HOME/.local/share/icons/hicolor/512x512/apps"
+            cp -f "$SHARE_DIR/antigravity/resources/icon.png" "$HOME/.local/share/icons/hicolor/512x512/apps/antigravity.png"
+        fi
+    fi
+fi
 
 app_exec="$SHARE_DIR/antigravity/antigravity"
 write_file_atomic "$BIN_DIR/antigravity" 0755 << EOF
@@ -234,10 +265,10 @@ elif [ -n "${HOME:-}" ]; then
 fi
 
 
-# --- 3. Antigravity CLI (1.5.0 Tarball) ---------------------------------------
+# --- 3. Antigravity CLI (1.5.5 Tarball) ---------------------------------------
 step "Installing Antigravity CLI (agy)"
-CLI_VERSION="1.5.0"
-CLI_EXEC_ID="5269980577660928"
+CLI_VERSION="1.5.5"
+CLI_EXEC_ID="6740358537805824"
 CLI_URL="https://storage.googleapis.com/antigravity-public/antigravity-cli/${CLI_VERSION}-${CLI_EXEC_ID}/${CLI_ARCH}/${CLI_TARBALL}"
 
 download_verify "$CLI_URL" sha512 "$CLI_SHA512" "$WORK_DIR/$CLI_TARBALL"
@@ -300,16 +331,14 @@ fi
 
 
 # --- 7. Visual Studio Code Antigravity Extension -----------------------------
-if command -v code >/dev/null 2>&1; then
-    step "Installing Antigravity extension for Visual Studio Code"
-    if [ "$MODE" = "system" ]; then
-        timeout 30s code --user-data-dir /tmp/vscode-root --extensions-dir /etc/skel/.vscode/extensions --install-extension Google.antigravity --force || true
-        rm -rf /tmp/vscode-root
-        mkdir -p /root/.vscode
-        cp -r /etc/skel/.vscode/extensions /root/.vscode/ 2>/dev/null || true
-    else
-        code --install-extension Google.antigravity --force || true
+if [ "$MODE" = "system" ]; then
+    mkdir -p /etc/skel/.vscode
+    if [ ! -f /etc/skel/.vscode/extensions.json ]; then
+        echo '{"recommendations": ["Google.google-antigravity"]}' > /etc/skel/.vscode/extensions.json
     fi
+elif command -v code >/dev/null 2>&1; then
+    step "Installing Antigravity extension for Visual Studio Code"
+    code --install-extension Google.google-antigravity --force || true
 fi
 
 
