@@ -443,4 +443,114 @@ EOF2
   [ "$status" -eq 0 ]
 }
 
+@test "agy-box-manager: autocomplete bash generates valid bash syntax and sources cleanly" {
+  local comp_file="$TEST_DIR/agy-completion.bash"
+  run ./agy-box-manager autocomplete bash
+  [ "$status" -eq 0 ]
+  printf '%s\n' "$output" > "$comp_file"
+
+  run bash -n "$comp_file"
+  [ "$status" -eq 0 ]
+
+  run bash -c "source '$comp_file' && declare -F _agy_box_manager >/dev/null && declare -F _agy >/dev/null"
+  [ "$status" -eq 0 ]
+
+  run grep -F "mic-serve" "$comp_file"
+  [ "$status" -eq 0 ]
+  run grep -F "remote-control" "$comp_file"
+  [ "$status" -eq 0 ]
+  run grep -F -- "--effort" "$comp_file"
+  [ "$status" -eq 0 ]
+}
+
+@test "agy-box-manager: install automatically falls back to sandbox mode when distrobox is absent on host" {
+  local no_dbx_bin="$TEST_DIR/no_dbx_bin"
+  mkdir -p "$no_dbx_bin"
+  local util
+  for util in bash sh mkdir rm ls cat grep awk sed sort head cut du id chmod cp mktemp uname tr printf dirname basename sleep clear; do
+    if command -v "$util" >/dev/null 2>&1; then
+      ln -sf "$(command -v "$util")" "$no_dbx_bin/$util"
+    fi
+  done
+
+  local mock_log="$TEST_DIR/fallback_mock.log"
+  cat <<EOF2 > "$no_dbx_bin/podman"
+#!/bin/bash
+echo "podman \$*" >> "$mock_log"
+exit 0
+EOF2
+  chmod +x "$no_dbx_bin/podman"
+
+  PATH="$no_dbx_bin" run ./agy-box-manager install -y --no-enter
+  [ "$status" -eq 0 ]
+  run grep -i "falling back to sandbox mode" <<< "$output"
+  [ "$status" -eq 0 ]
+  run grep -F "podman run -d --name agy-box --hostname agy-box --label manager=agy-box-podman --label agy-box.mode=sandbox" "$mock_log"
+  [ "$status" -eq 0 ]
+
+  # Explicit --mode workstation still fails when distrobox is absent
+  PATH="$no_dbx_bin" run ./agy-box-manager install --name agy-box-explicit-ws --mode workstation -y --no-enter
+  [ "$status" -ne 0 ]
+}
+
+@test "agy-box-manager: install --image localhost/... skips pull when local image exists" {
+  local mock_log="$TEST_DIR/local_image_mock.log"
+  cat <<EOF2 > "$MOCK_BIN/podman"
+#!/bin/bash
+echo "podman \$*" >> "$mock_log"
+if [ "\$1" = "image" ] && [ "\$2" = "inspect" ]; then
+  exit 0
+fi
+exit 0
+EOF2
+  chmod +x "$MOCK_BIN/podman"
+
+  run ./agy-box-manager install --name agy-box-local --image localhost/agy-box:local-test --mode sandbox -y --no-enter
+  [ "$status" -eq 0 ]
+  run grep -F "Using local container image 'localhost/agy-box:local-test'..." <<< "$output"
+  [ "$status" -eq 0 ]
+  run grep -F "podman image inspect localhost/agy-box:local-test" "$mock_log"
+  [ "$status" -eq 0 ]
+  if grep -F "podman pull" "$mock_log"; then
+    echo "unexpected podman pull for local image"
+    return 1
+  fi
+  run grep -F "podman run -d --name agy-box-local" "$mock_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "agy-box-manager: cmd_enter strips -- and omits -it for non-TTY sandbox commands" {
+  local mock_log="$TEST_DIR/enter_nontty_mock.log"
+  create_mock "podman" "echo \"podman \$*\" >> '$mock_log'; if [ \"\$1\" = \"ps\" ]; then echo \"agy-box-cmdtest\"; fi; exit 0"
+
+  run bash -c "./agy-box-manager enter agy-box-cmdtest -- agy --version < /dev/null"
+  [ "$status" -eq 0 ]
+  run grep -F "podman exec -u agyuser -w /home/agyuser agy-box-cmdtest agy --version" "$mock_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "agy-box-manager: cmd_clean accepts -y/--yes and rejects unknown flags" {
+  local mock_log="$TEST_DIR/clean_y_mock.log"
+  create_mock "podman" "echo \"podman \$*\" >> '$mock_log'; if [ \"\$1\" = \"ps\" ]; then echo \"agy-box-demo\"; fi; exit 0"
+  create_mock "distrobox" "echo \"distrobox \$*\" >> '$mock_log'; exit 0"
+
+  mkdir -p "$HOME/.config/agy-box/homes/agy-box-demo"
+  echo "demo-data" > "$HOME/.config/agy-box/homes/agy-box-demo/data.txt"
+
+  # Accepts -y alongside --purge without treating -y as container name
+  run ./agy-box-manager clean agy-box-demo --purge -y
+  [ "$status" -eq 0 ]
+  run grep -F "podman rm -f agy-box-demo" "$mock_log"
+  [ "$status" -eq 0 ]
+  [ ! -d "$HOME/.config/agy-box/homes/agy-box-demo" ]
+
+  # Rejects unknown flags
+  run ./agy-box-manager clean agy-box-demo --unknown-flag
+  [ "$status" -ne 0 ]
+  run grep -F "Unknown option: --unknown-flag" <<< "$output"
+  [ "$status" -eq 0 ]
+}
+
+
+
 

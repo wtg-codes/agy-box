@@ -276,17 +276,17 @@ check_deps() {
         return 0
     fi
 
-    local missing=0
-    if ! command -v distrobox &> /dev/null; then
-        echo -e "${RED}✗ Error: distrobox is not installed on the host system.${NC}" >&2
-        missing=1
-    fi
     if ! command -v podman &> /dev/null && ! command -v docker &> /dev/null; then
         echo -e "${RED}✗ Error: Neither podman nor docker is installed on the host system.${NC}" >&2
-        missing=1
+        echo -e "${YELLOW}Please install podman (or docker) with your OS package manager, then retry.${NC}" >&2
+        exit 1
     fi
-    if [ $missing -eq 1 ]; then
-        echo -e "${YELLOW}Please install distrobox and podman (or docker) with your OS package manager, then retry.${NC}" >&2
+}
+
+require_distrobox() {
+    if ! command -v distrobox &> /dev/null; then
+        ui_error "✗ Error: distrobox is not installed on the host system (required for Workstation mode)."
+        echo -e "${YELLOW}Please install distrobox with your OS package manager, or pass '--mode sandbox'.${NC}" >&2
         echo "Tip: Distrobox can be installed without root via:" >&2
         echo "  curl -s https://raw.githubusercontent.com/89luca89/distrobox/main/install | sh -s -- --prefix ~/.local" >&2
         exit 1
@@ -314,7 +314,7 @@ check_container_exists() {
     local name=$1
     local runtime
     runtime=$(get_runtime)
-    if "$runtime" ps -a --format '{{.Names}}' 2>/dev/null | grep -qxF "$name"; then return 0; else return 1; fi
+    if "$runtime" ps -a --format '{{.Names}}' 2>/dev/null | grep -qxF -- "$name"; then return 0; else return 1; fi
 }
 
 get_box_manager() {
@@ -552,14 +552,17 @@ _agy_box_manager() {
     prev="${COMP_WORDS[COMP_CWORD-1]}"
     opts="install dev enter desktop clean update-toolchain status install-global uninstall-global test autocomplete ports doctor wizard check update backup restore"
     
+    case "$prev" in
         enter|desktop|clean|update-toolchain)
-            local boxes
-            boxes=$(distrobox list --no-color 2>/dev/null | awk -F'|' 'NR>1 {gsub(/^[ \t]+|[ \t]+$/, "", $2); if ($2 ~ /^agy-box/) print $2}')
+            local boxes=""
+            if command -v distrobox >/dev/null 2>&1; then
+                boxes=$(distrobox list --no-color 2>/dev/null | awk -F'|' 'NR>1 {gsub(/^[ \t]+|[ \t]+$/, "", $2); if ($2 ~ /^agy-box/) print $2}')
+            fi
             COMPREPLY=( $(compgen -W "dev prod ${boxes}" -- "$cur") )
             return 0
             ;;
         install)
-            COMPREPLY=( $(compgen -W "-n --name -i --image --home -s --systemd -y --yes --enter --no-enter" -- "$cur") )
+            COMPREPLY=( $(compgen -W "-n --name -i --image --home -m --mode --engine -s --systemd -y --yes --enter --no-enter" -- "$cur") )
             return 0
             ;;
         dev)
@@ -594,7 +597,7 @@ _agy() {
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    opts="changelog help install plugin plugins update --add-dir -c --continue --conversation --dangerously-skip-permissions -i --log-file -p --print --print-timeout --prompt --prompt-interactive --sandbox"
+    opts="acp agent agents changelog help install mcp mic-serve models plugin plugins remote-control update --add-dir -c --continue --conversation --dangerously-skip-permissions --effort -i --log-file --mode --model -p --print --print-timeout --prompt --prompt-interactive --remote-agent --remote-control --sandbox"
     
     case "$prev" in
         plugin|plugins)
@@ -641,11 +644,18 @@ _agy_box_manager() {
 _agy() {
     local -a commands
     commands=(
+        'acp:Start ACP server'
+        'agent:Manage agents'
+        'agents:Alias for agent'
         'changelog:Show changelog and release notes'
         'help:Show help for subcommands'
         'install:Configure environment paths'
+        'mcp:Manage MCP servers'
+        'mic-serve:Start microphone server'
+        'models:List available models'
         'plugin:Manage plugins'
         'plugins:Alias for plugin'
+        'remote-control:Manage remote control'
         'update:Update CLI'
     )
     _describe 'command' commands
@@ -663,7 +673,7 @@ EOF
 complete -c agy-box-manager -f
 complete -c agy-box-manager -a "install dev enter desktop clean update-toolchain status install-global uninstall-global test autocomplete ports doctor wizard check update backup restore"
 complete -c agy -f
-complete -c agy -a "changelog help install plugin plugins update"
+complete -c agy -a "acp agent agents changelog help install mcp mic-serve models plugin plugins remote-control update"
 EOF
             ;;
         *)
@@ -1008,11 +1018,17 @@ cmd_install_official() {
 
     # Determine execution mode: workstation (Distrobox) vs sandbox (Podman/Docker)
     local mode=""
+    local explicit_workstation=false
     if [ -n "$custom_mode" ]; then
         mode="$custom_mode"
+        if [ "$custom_mode" = "workstation" ] || [ "$custom_mode" = "distrobox" ]; then
+            mode="workstation"
+            explicit_workstation=true
+        fi
     elif [ -n "$custom_engine" ]; then
         if [ "$custom_engine" = "distrobox" ]; then
             mode="workstation"
+            explicit_workstation=true
         else
             mode="sandbox"
         fi
@@ -1027,6 +1043,15 @@ cmd_install_official() {
             if [ "$mode" != "sandbox" ] && [ "$mode" != "workstation" ]; then
                 if [ "$mode" = "distrobox" ]; then mode="workstation"; else mode="sandbox"; fi
             fi
+        fi
+    fi
+
+    if [ "$mode" = "workstation" ]; then
+        if [ "$explicit_workstation" = "true" ]; then
+            require_distrobox
+        elif ! command -v distrobox >/dev/null 2>&1; then
+            ui_warn "⚠️  distrobox is not installed on the host; falling back to sandbox mode."
+            mode="sandbox"
         fi
     fi
 
@@ -1063,7 +1088,9 @@ cmd_install_official() {
 
     if [ "$mode" = "sandbox" ]; then
         # --- Mode B: Isolated Sandbox (Pure Podman / Docker Runner) ---
-        if ! run_step "Pulling container image '$target_image' from GHCR..." "$runtime" pull "$target_image"; then
+        if [[ "$target_image" == localhost/* ]] && "$runtime" image inspect "$target_image" >/dev/null 2>&1; then
+            ui_ok "Using local container image '$target_image'..."
+        elif ! run_step "Pulling container image '$target_image' from GHCR..." "$runtime" pull "$target_image"; then
             ui_error "❌ Error: Failed to pull container image."
             exit 1
         fi
@@ -1161,7 +1188,9 @@ cmd_install_official() {
             dbx_flags+=("--nvidia")
         fi
 
-        if ! run_step "Pulling container image '$target_image' from GHCR..." "$runtime" pull "$target_image"; then
+        if [[ "$target_image" == localhost/* ]] && "$runtime" image inspect "$target_image" >/dev/null 2>&1; then
+            ui_ok "Using local container image '$target_image'..."
+        elif ! run_step "Pulling container image '$target_image' from GHCR..." "$runtime" pull "$target_image"; then
             ui_error "❌ Error: Failed to pull container image."
             exit 1
         fi
@@ -1266,16 +1295,32 @@ cmd_build_dev() {
         esac
     done
 
+    require_distrobox
+
     if [ ! -f "Containerfile" ]; then
-        gum style --foreground 196 "✗ Error: Containerfile not found in current directory. Please clone the repository first to build from source."
+        ui_error "✗ Error: Containerfile not found in current directory. Please clone the repository first to build from source."
         exit 1
     fi
 
     if check_container_exists "$DEV_CONTAINER_NAME"; then
-        if [ -t 0 ] && command -v gum >/dev/null 2>&1 && gum confirm "Container '$DEV_CONTAINER_NAME' already exists. Recreate it?"; then
+        local recreate_dev=false
+        if [ -t 0 ]; then
+            if command -v gum >/dev/null 2>&1; then
+                if gum confirm "Container '$DEV_CONTAINER_NAME' already exists. Recreate it?"; then
+                    recreate_dev=true
+                fi
+            else
+                local recreate_choice=""
+                read -r -p "Container '$DEV_CONTAINER_NAME' already exists. Recreate it? [y/N] " recreate_choice
+                if [[ "$recreate_choice" =~ ^[Yy]$ ]]; then
+                    recreate_dev=true
+                fi
+            fi
+        fi
+        if [ "$recreate_dev" = "true" ]; then
             cmd_clean "$DEV_CONTAINER_NAME"
         else
-            gum style --foreground 212 "Skipping build."
+            ui_warn "Skipping build."
             return
         fi
     fi
@@ -1283,16 +1328,11 @@ cmd_build_dev() {
     local runtime
     runtime=$(get_runtime)
 
-    local log_file
-    log_file=$(mktemp)
-
-    if ! gum spin --spinner dot --title "Building development image with $runtime (this may take a while)..." -- "$runtime" build -t "$DEV_IMAGE_NAME" -f Containerfile . >"$log_file" 2>&1; then
-        cat "$log_file"
-        rm -f "$log_file"
-        gum style --foreground 196 "❌ Error: Failed to build development image."
+    if ! run_step "Building development image with $runtime (this may take a while)..." \
+        "$runtime" build -t "$DEV_IMAGE_NAME" -f Containerfile .; then
+        ui_error "❌ Error: Failed to build development image."
         exit 1
     fi
-    rm -f "$log_file"
 
     local dbx_flags=()
     local isolated_home
@@ -1359,21 +1399,12 @@ cmd_build_dev() {
         dbx_flags+=("--nvidia")
     fi
 
-    local log_file
-    log_file=$(mktemp)
-
-    if ! gum spin --spinner dot --title "Creating development Distrobox environment '$DEV_CONTAINER_NAME'..." -- distrobox create -i "$DEV_IMAGE_NAME" -n "$DEV_CONTAINER_NAME" --hostname "$DEV_CONTAINER_NAME" "${dbx_flags[@]}" --yes >"$log_file" 2>&1; then
-        cat "$log_file"
-        rm -f "$log_file"
-        gum style --foreground 196 "❌ Error: Failed to create development Distrobox environment."
+    if ! run_step "Creating development Distrobox environment '$DEV_CONTAINER_NAME'..." \
+        distrobox create -i "$DEV_IMAGE_NAME" -n "$DEV_CONTAINER_NAME" --hostname "$DEV_CONTAINER_NAME" "${dbx_flags[@]}" --yes; then
+        ui_error "❌ Error: Failed to create development Distrobox environment."
         exit 1
     fi
-    rm -f "$log_file"
 
-    local isolated_home
-    isolated_home=$(get_box_home "$DEV_CONTAINER_NAME")
-    local runtime
-    runtime=$(get_runtime)
     if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
         podman unshare chown -R 0:0 "$isolated_home" 2>/dev/null || true
     fi
@@ -1527,6 +1558,10 @@ cmd_enter() {
 
     if [[ $# -gt 0 ]]; then
         case "$1" in
+            --)
+                target_name="$CONTAINER_NAME"
+                enter_args=("${@:2}")
+                ;;
             dev)
                 target_name="$DEV_CONTAINER_NAME"
                 enter_args=("${@:2}")
@@ -1569,8 +1604,17 @@ cmd_enter() {
         if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
             podman unshare chown -R 0:0 "$isolated_home" 2>/dev/null || true
         fi
-        echo -e "Entering ${CYAN}$target_name${NC} (Workstation)..."
-        distrobox enter "$target_name" "${enter_args[@]}"
+        if [ ${#enter_args[@]} -gt 0 ] && [ "${enter_args[0]}" != "--" ] && [[ "${enter_args[0]}" != -* ]]; then
+            enter_args=("--" "${enter_args[@]}")
+        fi
+        if [ ${#enter_args[@]} -eq 0 ] || [ -t 1 ]; then
+            echo -e "Entering ${CYAN}$target_name${NC} (Workstation)..."
+        fi
+        if [ ${#enter_args[@]} -gt 0 ]; then
+            distrobox enter "$target_name" "${enter_args[@]}"
+        else
+            distrobox enter "$target_name"
+        fi
     else
         if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
             podman unshare chown -R 9000:9000 "$isolated_home" 2>/dev/null || true
@@ -1578,9 +1622,18 @@ cmd_enter() {
         if ! "$runtime" ps --format '{{.Names}}' 2>/dev/null | grep -qxF "$target_name"; then
             run_step "Starting container '$target_name'..." "$runtime" start "$target_name"
         fi
-        echo -e "Entering ${CYAN}$target_name${NC} (Sandbox)..."
+        if [ ${#enter_args[@]} -gt 0 ] && [ "${enter_args[0]}" = "--" ]; then
+            enter_args=("${enter_args[@]:1}")
+        fi
+        if [ ${#enter_args[@]} -eq 0 ] || [ -t 1 ]; then
+            echo -e "Entering ${CYAN}$target_name${NC} (Sandbox)..."
+        fi
         if [ ${#enter_args[@]} -gt 0 ]; then
-            "$runtime" exec -it -u agyuser -w /home/agyuser "$target_name" "${enter_args[@]}"
+            if [ -t 0 ]; then
+                "$runtime" exec -it -u agyuser -w /home/agyuser "$target_name" "${enter_args[@]}"
+            else
+                "$runtime" exec -u agyuser -w /home/agyuser "$target_name" "${enter_args[@]}"
+            fi
         else
             "$runtime" exec -it -u agyuser -w /home/agyuser "$target_name" /bin/bash
         fi
@@ -1748,11 +1801,11 @@ cmd_update() {
         echo -e "\n${CYAN}==> Updating IDE Extensions...${NC}"
         if [ "$mgr" = "distrobox" ]; then
             if distrobox enter "$target_container" -- command -v code &>/dev/null; then
-                run_step "Updating VS Code Antigravity extension..." distrobox enter "$target_container" -- code --install-extension Google.antigravity --force || ui_warn "! Could not update VS Code extension"
+                run_step "Updating VS Code Antigravity extension..." distrobox enter "$target_container" -- code --install-extension Google.google-antigravity --force || ui_warn "! Could not update VS Code extension"
             fi
         else
             if "$runtime" exec -u agyuser -w /home/agyuser "$target_container" sh -c "command -v code" &>/dev/null; then
-                run_step "Updating VS Code Antigravity extension..." "$runtime" exec -u agyuser -w /home/agyuser "$target_container" code --install-extension Google.antigravity --force || ui_warn "! Could not update VS Code extension"
+                run_step "Updating VS Code Antigravity extension..." "$runtime" exec -u agyuser -w /home/agyuser "$target_container" code --install-extension Google.google-antigravity --force || ui_warn "! Could not update VS Code extension"
             fi
         fi
         local zed_settings="$isolated_home/.config/zed/settings.json"
@@ -1979,7 +2032,7 @@ cmd_check() {
     if check_container_exists "$CONTAINER_NAME"; then
         if "$runtime" ps --format '{{.Names}}' 2>/dev/null | grep -qxF "$CONTAINER_NAME"; then
             official_status="Running"
-        elif distrobox list --no-color 2>/dev/null | awk -F'|' -v name="$CONTAINER_NAME" 'NR>1 {gsub(/^[ \t]+|[ \t]+$/, "", $2); if ($2 == name) {print $3}}' | grep -qi "running"; then
+        elif command -v distrobox >/dev/null 2>&1 && distrobox list --no-color 2>/dev/null | awk -F'|' -v name="$CONTAINER_NAME" 'NR>1 {gsub(/^[ \t]+|[ \t]+$/, "", $2); if ($2 == name) {print $3}}' | grep -qi "running"; then
             official_status="Running"
         else
             official_status="Stopped"
@@ -1988,7 +2041,7 @@ cmd_check() {
     if check_container_exists "$DEV_CONTAINER_NAME"; then
         if "$runtime" ps --format '{{.Names}}' 2>/dev/null | grep -qxF "$DEV_CONTAINER_NAME"; then
             dev_status="Running"
-        elif distrobox list --no-color 2>/dev/null | awk -F'|' -v name="$DEV_CONTAINER_NAME" 'NR>1 {gsub(/^[ \t]+|[ \t]+$/, "", $2); if ($2 == name) {print $3}}' | grep -qi "running"; then
+        elif command -v distrobox >/dev/null 2>&1 && distrobox list --no-color 2>/dev/null | awk -F'|' -v name="$DEV_CONTAINER_NAME" 'NR>1 {gsub(/^[ \t]+|[ \t]+$/, "", $2); if ($2 == name) {print $3}}' | grep -qi "running"; then
             dev_status="Running"
         else
             dev_status="Stopped"
@@ -2008,10 +2061,20 @@ cmd_check() {
         active_box="$CONTAINER_NAME"
     elif [ "$dev_status" = "Stopped" ]; then
         active_box="$DEV_CONTAINER_NAME"
+    else
+        local b
+        while IFS= read -r b; do
+            if [ -n "$b" ] && "$runtime" ps --format '{{.Names}}' 2>/dev/null | grep -qxF "$b"; then
+                active_box="$b"
+                box_running=true
+                break
+            fi
+        done < <(get_all_agy_boxes)
     fi
 
     # Toolchain inspection
-    local isolated_home="$HOME/.config/agy-box/home"
+    local isolated_home
+    isolated_home=$(get_box_home "${active_box:-$CONTAINER_NAME}")
     local agy_ver="Not Installed"
     local agy_bin="$isolated_home/.local/bin/agy"
     if [ -x "$HOME/.local/bin/agy" ]; then
@@ -2030,18 +2093,33 @@ cmd_check() {
     local zed_ext="N/A"
     local jetbrains_status="Installer Available (agy-install-ide)"
 
+    local active_mgr=""
     if [ -n "$active_box" ] && [ "$box_running" = "true" ]; then
-        python_ver=$(distrobox enter "$active_box" -- python3 --version 2>/dev/null | awk '{print $2}' || echo "N/A")
-        node_ver=$(distrobox enter "$active_box" -- node --version 2>/dev/null || echo "N/A")
-        gcloud_ver=$(distrobox enter "$active_box" -- gcloud --version 2>/dev/null | head -n 1 | awk '{print $4}' || echo "N/A")
-        gh_ver=$(distrobox enter "$active_box" -- gh --version 2>/dev/null | head -n 1 | awk '{print $3}' || echo "N/A")
-        code_ver=$(distrobox enter "$active_box" -- code --version 2>/dev/null | head -n 1 || echo "N/A")
-        if distrobox enter "$active_box" -- code --list-extensions 2>/dev/null | grep -qi "antigravity"; then
-            code_ext="Installed (Google.antigravity)"
+        active_mgr=$(get_box_manager "$active_box")
+        local exec_cmd=()
+        if [ "$active_mgr" = "distrobox" ]; then
+            exec_cmd=(distrobox enter "$active_box" --)
+        else
+            exec_cmd=("$runtime" exec -u agyuser -w /home/agyuser "$active_box")
+        fi
+        if [ "$agy_ver" = "Not Installed" ]; then
+            local box_agy_ver
+            box_agy_ver=$("${exec_cmd[@]}" agy --version 2>/dev/null | head -n 1 || true)
+            if [ -n "$box_agy_ver" ]; then
+                agy_ver="$box_agy_ver"
+            fi
+        fi
+        python_ver=$("${exec_cmd[@]}" python3 --version 2>/dev/null | awk '{print $2}' || echo "N/A")
+        node_ver=$("${exec_cmd[@]}" node --version 2>/dev/null || echo "N/A")
+        gcloud_ver=$("${exec_cmd[@]}" gcloud --version 2>/dev/null | head -n 1 | awk '{print $4}' || echo "N/A")
+        gh_ver=$("${exec_cmd[@]}" gh --version 2>/dev/null | head -n 1 | awk '{print $3}' || echo "N/A")
+        code_ver=$("${exec_cmd[@]}" code --version 2>/dev/null | head -n 1 || echo "N/A")
+        if "${exec_cmd[@]}" code --list-extensions 2>/dev/null | grep -qi "antigravity"; then
+            code_ext="Installed (Google.google-antigravity)"
         else
             code_ext="Not Installed"
         fi
-        zed_ver=$(distrobox enter "$active_box" -- zed --version 2>/dev/null | awk '{print $2}' || echo "N/A")
+        zed_ver=$("${exec_cmd[@]}" zed --version 2>/dev/null | awk '{print $2}' || echo "N/A")
     elif [ -n "$active_box" ]; then
         # Container stopped, check filesystem indicators
         if [ -x "$isolated_home/.local/bin/agy" ]; then
@@ -2074,8 +2152,14 @@ cmd_check() {
 
     local gh_auth="Not Logged In"
     if [ -n "$active_box" ] && [ "$box_running" = "true" ]; then
-        if distrobox enter "$active_box" -- gh auth status &>/dev/null; then
-            gh_auth="Logged In"
+        if [ "$active_mgr" = "distrobox" ]; then
+            if distrobox enter "$active_box" -- gh auth status &>/dev/null; then
+                gh_auth="Logged In"
+            fi
+        else
+            if "$runtime" exec -u agyuser -w /home/agyuser "$active_box" gh auth status &>/dev/null; then
+                gh_auth="Logged In"
+            fi
         fi
     elif [ -f "$isolated_home/.config/gh/hosts.yml" ] || [ -f "$HOME/.config/gh/hosts.yml" ]; then
         gh_auth="Configured"
@@ -2261,6 +2345,9 @@ cmd_clean() {
                 keep_home=true
                 shift
                 ;;
+            -y|--yes)
+                shift
+                ;;
             dev)
                 target_name="$DEV_CONTAINER_NAME"
                 shift
@@ -2268,6 +2355,11 @@ cmd_clean() {
             prod)
                 target_name="$CONTAINER_NAME"
                 shift
+                ;;
+            -*)
+                ui_error "Unknown option: $1"
+                echo "Usage: agy-box-manager clean [name|dev|prod] [--purge|-p] [--keep|-k] [-y|--yes]" >&2
+                return 1
                 ;;
             *)
                 target_name="$1"
@@ -2430,25 +2522,47 @@ cmd_install_global() {
     local target_dir="$HOME/.local/bin"
     local target_file="$target_dir/agy-box-manager"
 
-    gum spin --spinner dot --title "Installing globally to $target_dir..." -- sleep 1
+    if command -v gum >/dev/null 2>&1 && [ -t 1 ]; then
+        gum spin --spinner dot --title "Installing globally to $target_dir..." -- sleep 1
+    else
+        echo "==> Installing globally to $target_dir..."
+    fi
     mkdir -p "$target_dir"
 
     # Check if executed locally or via curl pipe
-    if [ -f "$0" ] && [[ "$0" != *"bash"* ]] && [[ "$0" != *"sh"* ]]; then
-        cp "$0" "$target_file"
-    else
-        # If curled directly to bash, download from remote URL
-        curl -fsSL "$REMOTE_SCRIPT_URL" -o "$target_file"
-    fi
+    local self_name="${0##*/}"
+    case "$self_name" in
+        bash|-bash|sh|-sh)
+            # If curled directly to bash/sh, download from remote URL
+            curl -fsSL "$REMOTE_SCRIPT_URL" -o "$target_file"
+            ;;
+        *)
+            if [ -f "$0" ]; then
+                if [ ! "$0" -ef "$target_file" ]; then
+                    cp "$0" "$target_file"
+                fi
+            else
+                curl -fsSL "$REMOTE_SCRIPT_URL" -o "$target_file"
+            fi
+            ;;
+    esac
 
     chmod +x "$target_file"
 
-    gum style --foreground 46 --margin "1 0" "✓ Installed globally! You can now run 'agy-box-manager' from anywhere."
+    if command -v gum >/dev/null 2>&1; then
+        gum style --foreground 46 --margin "1 0" "✓ Installed globally! You can now run 'agy-box-manager' from anywhere."
+    else
+        ui_ok "✓ Installed globally! You can now run 'agy-box-manager' from anywhere."
+    fi
 
     if command -v ujust &> /dev/null; then
-        gum style --foreground 39 "🟦 Universal Blue detected: $target_dir is in your PATH by default."
+        if command -v gum >/dev/null 2>&1; then
+            gum style --foreground 39 "🟦 Universal Blue detected: $target_dir is in your PATH by default."
+        else
+            echo -e "${CYAN}🟦 Universal Blue detected: $target_dir is in your PATH by default.${NC}"
+        fi
     else
-        gum style --foreground 214 "Make sure $target_dir is added to your \$PATH variable."
+        ui_warn "Make sure $target_dir is added to your \$PATH variable."
     fi
 
     # Set up ujust/just integration by default
@@ -2457,13 +2571,38 @@ cmd_install_global() {
 
 cmd_uninstall_global() {
     local target_file="$HOME/.local/bin/agy-box-manager"
+    local auto_yes=false
+    if [ "${1:-}" = "-y" ] || [ "${1:-}" = "--yes" ]; then
+        auto_yes=true
+    fi
 
-    if gum confirm "Are you sure you want to remove the global CLI installation?"; then
-        gum spin --spinner dot --title "Removing globally installed CLI..." -- rm -f "$target_file"
+    local confirmed=false
+    if [ "$auto_yes" = "true" ]; then
+        confirmed=true
+    elif command -v gum >/dev/null 2>&1 && [ -t 0 ]; then
+        if gum confirm "Are you sure you want to remove the global CLI installation?"; then
+            confirmed=true
+        fi
+    elif [ -t 0 ]; then
+        local uninstall_choice=""
+        read -r -p "Are you sure you want to remove the global CLI installation? [y/N] " uninstall_choice
+        if [[ "$uninstall_choice" =~ ^[Yy]$ ]]; then
+            confirmed=true
+        fi
+    else
+        confirmed=true
+    fi
+
+    if [ "$confirmed" = "true" ]; then
+        run_step "Removing globally installed CLI..." rm -f "$target_file"
 
         # Clean up auto-completions
         rm -f "$HOME/.local/share/bash-completion/completions/agy-box-manager"
+        rm -f "$HOME/.local/share/bash-completion/completions/agy"
         rm -f "$HOME/.zfunc/_agy-box-manager"
+        rm -f "$HOME/.zfunc/_agy"
+        rm -f "$HOME/.config/fish/completions/agy-box-manager.fish"
+        rm -f "$HOME/.config/fish/completions/agy.fish"
         rm -f "$HOME/.config/agy-box-manager/.completions_installed"
 
         # Clean up ujust/just shell integration
@@ -2473,7 +2612,7 @@ cmd_uninstall_global() {
         rm -f "$HOME/.config/fish/functions/ujust.fish"
 
         # Clean up sourcing in ~/.bashrc and ~/.zshrc using python
-        if [ -f "$HOME/.bashrc" ] || [ -f "$HOME/.zshrc" ]; then
+        if command -v python3 >/dev/null 2>&1 && { [ -f "$HOME/.bashrc" ] || [ -f "$HOME/.zshrc" ]; }; then
             # shellcheck disable=SC2016
             python3 -c '
 import os
@@ -2499,9 +2638,13 @@ clean_file(os.path.expanduser("~/.zshrc"))
 '
         fi
 
-        gum style --foreground 46 --margin "1 0" "✓ Removed globally installed CLI, auto-completions, and shell integrations."
+        if command -v gum >/dev/null 2>&1; then
+            gum style --foreground 46 --margin "1 0" "✓ Removed globally installed CLI, auto-completions, and shell integrations."
+        else
+            ui_ok "✓ Removed globally installed CLI, auto-completions, and shell integrations."
+        fi
     else
-        gum style --foreground 212 "Skipping uninstall."
+        ui_warn "Skipping uninstall."
     fi
 }
 
@@ -2579,7 +2722,7 @@ show_system_status() {
 
 cmd_doctor() {
     # Ensure dependencies and host capabilities are probed
-    check_deps "quiet"
+    check_deps "optional"
 
     echo -e "${CYAN}==================================================${NC}"
     echo -e "${CYAN}             AGY Box Doctor Diagnostics           ${NC}"
@@ -2600,16 +2743,17 @@ cmd_doctor() {
 
     # 2. DNS / Internet Check
     echo -n "Checking DNS resolution and internet connectivity... "
-    if curl -s --connect-timeout 3 https://www.google.com &>/dev/null; then
+    if command -v curl >/dev/null 2>&1 && curl -s --connect-timeout 3 https://www.google.com &>/dev/null; then
         echo -e "${GREEN}[OK]${NC}"
     else
-        echo -e "${RED}[ERROR]${NC}"
-        echo -e "  -> Failed to connect to Google. Check your internet connection and DNS settings."
-        errors=$((errors + 1))
+        echo -e "${YELLOW}[WARN]${NC}"
+        echo -e "  -> Offline or curl unavailable (unable to reach https://www.google.com). Local containers still work."
+        warnings=$((warnings + 1))
     fi
 
     # 3. Mount and Directory Permissions
     echo -n "Checking ~/.config write permissions... "
+    mkdir -p "$HOME/.config" 2>/dev/null || true
     if [ -w "$HOME/.config" ]; then
         echo -e "${GREEN}[OK]${NC}"
     else
@@ -2629,8 +2773,18 @@ cmd_doctor() {
 
     # 4. Container engine check
     echo -n "Checking container manager runtime... "
-    if [ -n "${DBX_CONTAINER_MANAGER:-}" ]; then
-        echo -e "${GREEN}[OK] ($DBX_CONTAINER_MANAGER)${NC}"
+    local detected_mgr=""
+    if [ -n "${DBX_CONTAINER_MANAGER:-}" ] && command -v "$DBX_CONTAINER_MANAGER" >/dev/null 2>&1; then
+        detected_mgr="$DBX_CONTAINER_MANAGER"
+    elif command -v podman >/dev/null 2>&1; then
+        detected_mgr="podman"
+    elif command -v docker >/dev/null 2>&1; then
+        detected_mgr="docker"
+    elif [ -n "${DBX_CONTAINER_MANAGER:-}" ]; then
+        detected_mgr="$DBX_CONTAINER_MANAGER"
+    fi
+    if [ -n "$detected_mgr" ]; then
+        echo -e "${GREEN}[OK] ($detected_mgr)${NC}"
     else
         echo -e "${RED}[ERROR]${NC}"
         echo -e "  -> No container manager detected."
@@ -2641,6 +2795,10 @@ cmd_doctor() {
     echo -n "Checking distrobox installation... "
     if command -v distrobox &>/dev/null; then
         echo -e "${GREEN}[OK]${NC}"
+    elif command -v podman &>/dev/null || command -v docker &>/dev/null || [ -n "${DBX_CONTAINER_MANAGER:-}" ]; then
+        echo -e "${YELLOW}[WARN]${NC}"
+        echo -e "  -> distrobox command not found on host (Workstation mode unavailable; Sandbox mode ready)."
+        warnings=$((warnings + 1))
     else
         echo -e "${RED}[ERROR]${NC}"
         echo -e "  -> distrobox command not found on host."
@@ -2672,7 +2830,7 @@ cmd_ports() {
     check_deps "quiet"
     
     if [ -z "${DBX_CONTAINER_MANAGER:-}" ]; then
-        gum style --foreground 196 "❌ Error: Container manager not detected."
+        ui_error "❌ Error: Container manager not detected."
         return 1
     fi
     
@@ -2731,7 +2889,7 @@ show_compact_status() {
     if check_container_exists "$CONTAINER_NAME"; then
         if "$runtime" ps --format '{{.Names}}' 2>/dev/null | grep -qxF "$CONTAINER_NAME"; then
             official_status="🟢 Running"
-        elif distrobox list --no-color 2>/dev/null | awk -F'|' -v name="$CONTAINER_NAME" 'NR>1 {gsub(/^[ \t]+|[ \t]+$/, "", $2); if ($2 == name) {print $3}}' | grep -qi "running"; then
+        elif command -v distrobox >/dev/null 2>&1 && distrobox list --no-color 2>/dev/null | awk -F'|' -v name="$CONTAINER_NAME" 'NR>1 {gsub(/^[ \t]+|[ \t]+$/, "", $2); if ($2 == name) {print $3}}' | grep -qi "running"; then
             official_status="🟢 Running"
         else
             official_status="💤 Installed"
@@ -2741,7 +2899,7 @@ show_compact_status() {
     if check_container_exists "$DEV_CONTAINER_NAME"; then
         if "$runtime" ps --format '{{.Names}}' 2>/dev/null | grep -qxF "$DEV_CONTAINER_NAME"; then
             dev_status="🟢 Running"
-        elif distrobox list --no-color 2>/dev/null | awk -F'|' -v name="$DEV_CONTAINER_NAME" 'NR>1 {gsub(/^[ \t]+|[ \t]+$/, "", $2); if ($2 == name) {print $3}}' | grep -qi "running"; then
+        elif command -v distrobox >/dev/null 2>&1 && distrobox list --no-color 2>/dev/null | awk -F'|' -v name="$DEV_CONTAINER_NAME" 'NR>1 {gsub(/^[ \t]+|[ \t]+$/, "", $2); if ($2 == name) {print $3}}' | grep -qi "running"; then
             dev_status="🟢 Running"
         else
             dev_status="💤 Installed"
@@ -3240,7 +3398,7 @@ case "${1:-}" in
     status)           check_deps "optional"; cmd_status ;;
     ports)            check_deps "quiet"; cmd_ports ;;
     install-global)   check_deps "optional"; cmd_install_global ;;
-    uninstall-global) check_deps "optional"; cmd_uninstall_global ;;
+    uninstall-global) check_deps "optional"; cmd_uninstall_global "${@:2}" ;;
     autocomplete)     cmd_autocomplete "${2:-bash}" ;;
     test)             check_deps "quiet"; if [ -f "scripts/test-box.sh" ]; then ./scripts/test-box.sh; else echo -e "${RED}Test script not found. Please run this command inside the repository.${NC}"; exit 1; fi ;;
     version|--version|-v) echo "agy-box-manager version $VERSION"; exit 0 ;;
