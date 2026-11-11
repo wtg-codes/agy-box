@@ -37,7 +37,7 @@ clear() {
 
 pause_key() {
   echo ""
-  read -n 1 -s -r -p "${1:-Press any key to continue...}"
+  read -n 1 -s -r -p "Press any key to continue..."
 }
 
 # --- Configuration & Paths ---
