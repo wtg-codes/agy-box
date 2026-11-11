@@ -232,7 +232,21 @@ if command -v distrobox &>/dev/null && \
         vdi_pid=$!
         vdi_ready=false
         for _ in {1..30}; do
-            if curl -s -f http://127.0.0.1:6080/vnc.html >/dev/null 2>&1; then
+            if curl -s -f http://127.0.0.1:6080/vnc.html >/dev/null 2>&1 && python3 -c '
+import socket, sys
+try:
+    s = socket.create_connection(("127.0.0.1", 6080), timeout=2)
+    s.sendall(b"GET /websockify HTTP/1.1\r\nHost: 127.0.0.1:6080\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Protocol: binary\r\n\r\n")
+    res = s.recv(4096)
+    if b"101 Switching Protocols" not in res:
+        sys.exit(1)
+    frame = s.recv(4096)
+    if b"RFB 003." not in frame:
+        sys.exit(1)
+    sys.exit(0)
+except Exception:
+    sys.exit(1)
+' 2>/dev/null; then
                 vdi_ready=true
                 break
             fi
@@ -241,11 +255,11 @@ if command -v distrobox &>/dev/null && \
         kill "$vdi_pid" 2>/dev/null || true
         distrobox enter "$CONTAINER_NAME" -- pkill -f "websockify|x11vnc|Xvfb" 2>/dev/null || true
         if [[ "$vdi_ready" != "true" ]]; then
-            log_error "noVNC did not respond within 30 seconds:"
+            log_error "noVNC/RFB WebSocket did not respond within 30 seconds:"
             cat "$TEST_ROOT/vdi.log" >&2 || true
             exit 1
         fi
-        log_success "VDI web desktop responded on port 6080."
+        log_success "VDI web desktop & RFB WebSocket responded on port 6080."
     fi
 else
     log_warn "distrobox enter unavailable on this host/arch (${RUNTIME}); validating via Isolated Sandbox mode (agyuser)..."
@@ -285,7 +299,22 @@ else
         vdi_pid=$!
         vdi_ready=false
         for _ in {1..30}; do
-            if "$RUNTIME" exec -u agyuser "$CONTAINER_NAME" curl -fsS http://127.0.0.1:6080/vnc.html >/dev/null 2>&1; then
+            if "$RUNTIME" exec -u agyuser "$CONTAINER_NAME" curl -fsS http://127.0.0.1:6080/vnc.html >/dev/null 2>&1 && \
+               "$RUNTIME" exec -u agyuser "$CONTAINER_NAME" python3 -c '
+import socket, sys
+try:
+    s = socket.create_connection(("127.0.0.1", 6080), timeout=2)
+    s.sendall(b"GET /websockify HTTP/1.1\r\nHost: 127.0.0.1:6080\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Protocol: binary\r\n\r\n")
+    res = s.recv(4096)
+    if b"101 Switching Protocols" not in res:
+        sys.exit(1)
+    frame = s.recv(4096)
+    if b"RFB 003." not in frame:
+        sys.exit(1)
+    sys.exit(0)
+except Exception:
+    sys.exit(1)
+' 2>/dev/null; then
                 vdi_ready=true
                 break
             fi
@@ -294,11 +323,11 @@ else
         kill "$vdi_pid" 2>/dev/null || true
         "$RUNTIME" exec -u agyuser "$CONTAINER_NAME" pkill -f "websockify|x11vnc|Xvfb" 2>/dev/null || true
         if [[ "$vdi_ready" != "true" ]]; then
-            log_error "noVNC did not respond within 30 seconds:"
+            log_error "noVNC/RFB WebSocket did not respond within 30 seconds:"
             cat "$TEST_ROOT/vdi.log" >&2 || true
             exit 1
         fi
-        log_success "VDI web desktop responded on port 6080."
+        log_success "VDI web desktop & RFB WebSocket responded on port 6080."
     fi
 fi
 

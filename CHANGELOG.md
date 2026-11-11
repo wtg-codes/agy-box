@@ -9,7 +9,22 @@ Container images are published to `ghcr.io/wtg-codes/agy-box` (`:<version>`, `:<
 
 ## [Unreleased]
 
-## [0.7.0] - 2026-11-11
+## [0.7.1] - 2026-11-12
+
+- **VDI Connection Reliability & IPv4 Dual-Stack Resolution**:
+  - Replaced ambiguous `localhost` URLs with explicit `127.0.0.1` (`http://127.0.0.1:${vdi_port}/vnc.html?autoconnect=true&resize=scale&path=websockify`), eliminating connection drops in Chrome caused by IPv6 `localhost -> ::1` resolution mismatch against IPv4-only networks.
+  - Added dual-stack binding support in `agy-vdi` and pre-startup cleanup of stale `websockify`, `x11vnc`, and `Xvfb` processes and locks.
+  - Protected LAN IP detection in `agy-vdi` against pipeline errors under `set -e -o pipefail`.
+- **VDI Startup Verification & Automatic Port Collision Recovery**:
+  - Implemented real-time readiness polling in `cmd_desktop` verifying all 3 processes (`Xvfb`, `x11vnc`, `websockify.*novnc`) and performing host HTTP and WebSocket upgrade probes (`101 Switching Protocols`) before launching browser or reporting active status.
+  - Added full error reporting streaming `/tmp/agy-vdi-${target_name}.log` (or container `/tmp/agy-vdi.log`) upon startup failure.
+  - Added support for `-p|--port` in `cmd_desktop` to set `vdi_port`, and automatic port collision incrementing (`6081`, `6082`, ...) in Workstation mode when the port is occupied by another container or process.
+  - Updated `vdi_control_panel` with dynamic `🟢 VDI Active` / `🔴 VDI Stopped` status display and a `📜 View VDI Log` option.
+- **Distrobox User Readiness & Robust Entrypoint Fallback**:
+  - Added `ensure_distrobox_ready <name>` before entering Distrobox environments in `cmd_desktop` and `cmd_enter`, validating container running state and verifying user presence in `/etc/passwd`.
+  - Added automatic recovery restarting containers with incomplete initialization (missing `/etc/passwd.done`).
+  - Workstation VDI sessions now launch using numeric UID:GID (`--user $(id -u):$(id -g)`), eliminating host-side `/etc/passwd` lookup failures under custom user namespace mappings.
+  - Enhanced `get_box_manager()` with `Config.Entrypoint` fallback inspection (`/usr/bin/entrypoint` for Distrobox, `tini`/`entrypoint.sh` for Sandbox).
 
 - **Real-Time Streaming Install Progress & Silent Spinner Hang Fix**:
   - Upgraded `agy-box-manager install` to stream multi-step progress in real-time (`[1/4]`..`[4/4]`), fixing silent terminal hangs caused by redirecting stdout/stderr of `gum spin` onto itself.

@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # --- Configuration ---
-VERSION="0.7.0"
+VERSION="0.7.1"
 IMAGE_NAME="ghcr.io/wtg-codes/agy-box:latest"
 DEV_IMAGE_NAME="agy-box:dev"
 CONTAINER_NAME="agy-box"
@@ -51,6 +51,20 @@ get_box_home() {
     echo "${HOME:-}/.config/agy-box/home-dev"
   else
     echo "${HOME:-}/.config/agy-box/homes/$name"
+  fi
+}
+
+load_resource_limits() {
+  local conf="$HOME/.config/agy-box/limits.conf"
+  cpu_limit=""
+  memory_limit=""
+  if [[ -f "$conf" ]]; then
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      line=$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/#.*//')
+      [[ -z "$line" ]] && continue
+      if [[ "$line" =~ ^CPU_LIMIT=(.*)$ ]]; then cpu_limit="${BASH_REMATCH[1]//[\"\']/}"; fi
+      if [[ "$line" =~ ^MEMORY_LIMIT=(.*)$ ]]; then memory_limit="${BASH_REMATCH[1]//[\"\']/}"; fi
+    done < "$conf"
   fi
 }
 
@@ -314,6 +328,18 @@ check_container_exists() {
   if "$runtime" ps -a --format '{{.Names}}' 2>/dev/null | grep -qxF -- "$name"; then return 0; else return 1; fi
 }
 
+is_container_running() {
+  local name=$1
+  local runtime="${2:-$(get_runtime)}"
+  if "$runtime" ps --format '{{.Names}}' 2>/dev/null | grep -qxF -- "$name"; then
+    return 0
+  fi
+  if command -v distrobox >/dev/null 2>&1 && distrobox list --no-color 2>/dev/null | awk -F'|' -v n="$name" 'NR>1 {gsub(/^[ \t]+|[ \t]+$/, "", $2); if ($2 == n) print $3}' | grep -qi "running"; then
+    return 0
+  fi
+  return 1
+}
+
 get_box_manager() {
   local target_name="$1"
   local runtime
@@ -339,6 +365,17 @@ get_box_manager() {
       echo "$mgr"
       return 0
     fi
+    if command -v "$runtime" >/dev/null 2>&1; then
+      local ep
+      ep=$("$runtime" inspect "$target_name" --format '{{json .Config.Entrypoint}}' 2>/dev/null || true)
+      if [[ "$ep" == *"/usr/bin/entrypoint"* ]]; then
+        echo "distrobox"
+        return 0
+      elif [[ "$ep" == *"tini"* ]] || [[ "$ep" == *"entrypoint.sh"* ]]; then
+        echo "$runtime"
+        return 0
+      fi
+    fi
     echo "$runtime"
     return 0
   fi
@@ -350,6 +387,59 @@ get_box_manager() {
   fi
 }
 
+ensure_distrobox_ready() {
+  local name="$1"
+  local runtime
+  runtime=$(get_runtime 2>/dev/null || echo "podman")
+  local current_user
+  current_user=$(id -un 2>/dev/null || echo "${USER:-wtg}")
+
+  local is_running
+  is_running=$("$runtime" inspect -f '{{.State.Running}}' "$name" 2>/dev/null || echo "false")
+
+  if [ "$is_running" != "true" ]; then
+    if ! distrobox enter "$name" -- true; then
+      ui_error "Failed to initialize Distrobox container '$name'."
+      return 1
+    fi
+  else
+    if ! "$runtime" exec --user 0 "$name" getent passwd "$current_user" >/dev/null 2>&1; then
+      ui_warn "User '$current_user' missing from container '$name'; restarting to complete initialization..."
+      "$runtime" stop "$name" >/dev/null 2>&1 || true
+      if ! distrobox enter "$name" -- true; then
+        ui_error "Failed to re-initialize Distrobox container '$name'."
+        return 1
+      fi
+      if ! "$runtime" exec --user 0 "$name" getent passwd "$current_user" >/dev/null 2>&1; then
+        ui_error "User '$current_user' was not found in container '$name' /etc/passwd after retry."
+        return 1
+      fi
+    fi
+  fi
+  return 0
+}
+
+generate_box_name() {
+  local prefix="${1:-$CONTAINER_NAME}"
+  local adjs=(golden cosmic lunar ember cobalt amber velvet crystal swift stellar misty crimson silver solar vivid alpine coral noble rapid bright sonic frosty radiant serene emerald copper azure cedar prism aurora zenith mystic)
+  local nouns=(spark falcon forge beacon harbor comet canyon breeze summit orbit meadow lantern glacier atlas quartz nebula anchor river phoenix horizon timber zephyr vertex compass citadel cascade voyager foundry haven crest pulse spire)
+  if [ -r /dev/urandom ]; then
+    RANDOM=$(od -An -N2 -tu2 /dev/urandom 2>/dev/null | tr -d ' ' || echo "$RANDOM")
+  fi
+  local attempts=0
+  while [ $attempts -lt 100 ]; do
+    local adj="${adjs[$((RANDOM % ${#adjs[@]}))]}"
+    local noun="${nouns[$((RANDOM % ${#nouns[@]}))]}"
+    local candidate="${prefix}-${adj}-${noun}"
+    if ! check_container_exists "$candidate" && [ ! -d "$(get_box_home "$candidate")" ]; then
+      echo "$candidate"
+      return 0
+    fi
+    ((attempts++))
+  done
+  echo "${prefix}-box-$RANDOM"
+}
+
 calculate_box_port_offset() {
   local target_name="$1"
   if [ "$target_name" = "$CONTAINER_NAME" ]; then
@@ -359,14 +449,44 @@ calculate_box_port_offset() {
   local runtime
   runtime=$(get_runtime 2>/dev/null || echo "podman")
   if command -v "$runtime" >/dev/null 2>&1 && check_container_exists "$target_name"; then
-    local host_port
+    local host_port=""
     host_port=$("$runtime" port "$target_name" 6080 2>/dev/null | head -n 1 | awk -F: '{print $NF}' || true)
+    if [ -z "$host_port" ]; then
+      # shellcheck disable=SC2016
+      host_port=$("$runtime" inspect -f '{{range $p, $conf := .HostConfig.PortBindings}}{{if eq $p "6080/tcp"}}{{(index $conf 0).HostPort}}{{end}}{{end}}' "$target_name" 2>/dev/null || true)
+    fi
     if [[ "$host_port" =~ ^[0-9]+$ ]] && [ "$host_port" -ge 6080 ]; then
       echo $((host_port - 6080))
       return 0
     fi
   fi
-  echo 1
+
+  local used_ports=()
+  if command -v "$runtime" >/dev/null 2>&1; then
+    while IFS= read -r p; do
+      [[ "$p" =~ ^[0-9]+$ ]] && used_ports+=("$p")
+    done < <("$runtime" ps -a --format '{{.Ports}}' 2>/dev/null | grep -oE '[0-9]+->6080' | cut -d- -f1 || true)
+  fi
+  while IFS= read -r p; do
+    [[ "$p" =~ ^[0-9]+$ ]] && used_ports+=("$p")
+  done < <(ss -tlnH 2>/dev/null | awk '{print $4}' | awk -F: '{print $NF}' || true)
+
+  local offset=1
+  while true; do
+    local cand=$((6080 + offset))
+    local in_use=false
+    for up in "${used_ports[@]}"; do
+      if [ "$up" -eq "$cand" ] 2>/dev/null; then
+        in_use=true
+        break
+      fi
+    done
+    if [ "$in_use" = "false" ]; then
+      echo "$offset"
+      return 0
+    fi
+    ((offset++))
+  done
 }
 
 purge_box_home() {
@@ -820,6 +940,43 @@ setup_completions() {
 }
 
 # --- Core Commands ---
+post_install_ready() {
+  local target="$1" enter="$2" auto_yes="${3:-false}" vdi_port="${4:-6080}" is_dev="${5:-false}"
+  echo ""
+  cmd_status
+  local enter_cmd="just agy-enter" desktop_cmd="just agy-desktop" clean_cmd="just agy-clean" title="🚀 Environment '$target' is running and ready!"
+  if [ "$is_dev" = "true" ]; then
+    enter_cmd="just agy-enter dev"
+    desktop_cmd="just agy-desktop dev"
+    clean_cmd="just agy-clean dev"
+    title="🚀 Dev Environment '$target' is running and ready!"
+  elif [ "$target" != "$CONTAINER_NAME" ]; then
+    enter_cmd="just agy-enter $target"
+    desktop_cmd="just agy-desktop $target -p $vdi_port"
+    clean_cmd="just agy-clean $target"
+  fi
+  local msg="$title\n\nNext Steps:\n  • Enter Shell:  $enter_cmd\n  • Desktop VDI:  $desktop_cmd\n  • View Status:  just agy-status\n  • Clean Up:     $clean_cmd"
+  echo ""
+  if command -v gum >/dev/null 2>&1; then
+    gum style --border rounded --padding "0 2" --border-foreground 46 "$msg"
+  else
+    echo -e "${GREEN}${msg}${NC}\n"
+  fi
+  if [ "$enter" = "true" ]; then
+    cmd_enter "$target"
+  elif [ "$enter" != "false" ] && [ "$auto_yes" != "true" ] && [ -t 0 ]; then
+    echo ""
+    local should=false
+    if command -v gum >/dev/null 2>&1; then
+      gum confirm "🚀 Enter '$target' environment now?" && should=true
+    else
+      read -r -p "🚀 Enter '$target' environment now? [Y/n] " c
+      [[ -z "$c" || "$c" =~ ^[Yy]$ ]] && should=true
+    fi
+    [ "$should" = "true" ] && cmd_enter "$target"
+  fi
+}
+
 cmd_install_official() {
   load_config
   apply_keyring_configuration
@@ -887,6 +1044,10 @@ cmd_install_official() {
         auto_yes=true
         shift
         ;;
+      --new)
+        target_name=$(generate_box_name "$CONTAINER_NAME")
+        shift
+        ;;
       --enter)
         enter_after_install=true
         shift
@@ -911,43 +1072,28 @@ cmd_install_official() {
     runtime=$(get_runtime)
   fi
 
-    # --- Container Name Collision Check ---
+  # --- Container Name Collision Check ---
   if check_container_exists "$target_name"; then
     if [ "$auto_yes" = "true" ]; then
       cmd_clean "$target_name" --purge
     elif [ -t 0 ] && command -v gum >/dev/null 2>&1; then
       echo ""
       gum style --foreground 214 "⚠️  Container '$target_name' already exists!"
+      local candidate
+      candidate=$(generate_box_name "$CONTAINER_NAME")
       local collision_action
       collision_action=$(gum choose --header "How would you like to proceed?" \
-        "Auto-correct name (Find next available suffix)" \
-        "Enter a new name manually" \
-        "Recreate container '$target_name'" \
+        "🔄 Update apps & OS inside '$target_name'" \
+        "➕ Create new box '$candidate' instead" \
         "Cancel")
       case "$collision_action" in
-        "Auto-correct name"*)
-          local idx=1
-          local candidate="${target_name}-${idx}"
-          while check_container_exists "$candidate"; do
-            ((idx++))
-            candidate="${target_name}-${idx}"
-          done
+        "🔄 Update"*)
+          cmd_update "$target_name" --all
+          return 0
+          ;;
+        "➕ Create"*)
           target_name="$candidate"
-          ui_ok "Using auto-corrected name: $target_name"
-          ;;
-        "Enter a new name manually")
-          target_name=$(gum input --placeholder "$target_name-new" --header "Enter new unique container name:")
-          if [ -z "$target_name" ]; then
-            ui_error "No name entered. Aborting."
-            exit 1
-          fi
-          if check_container_exists "$target_name"; then
-            ui_error "Container '$target_name' also already exists. Aborting."
-            exit 1
-          fi
-          ;;
-        "Recreate container"*)
-          cmd_clean "$target_name"
+          ui_ok "Creating new box: $target_name"
           ;;
         *)
           ui_warn "Installation cancelled."
@@ -955,7 +1101,7 @@ cmd_install_official() {
           ;;
       esac
     else
-      ui_error "❌ Error: Container '$target_name' already exists. Pass a unique name with -n, or run 'just agy-clean $target_name' first."
+      ui_error "❌ Error: Container '$target_name' already exists. Use --new to create a new unique box, or run 'agy-box-manager update $target_name'."
       exit 1
     fi
   fi
@@ -1047,28 +1193,8 @@ cmd_install_official() {
     fi
   fi
 
-  local limits_conf="$HOME/.config/agy-box/limits.conf"
-  local cpu_limit=""
-  local memory_limit=""
-  if [[ -f "$limits_conf" ]]; then
-    while IFS= read -r line || [[ -n "$line" ]]; do
-      line=$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/#.*//')
-      [[ -z "$line" ]] && continue
-      if [[ "$line" =~ ^CPU_LIMIT=(.*)$ ]]; then
-        cpu_limit="${BASH_REMATCH[1]}"
-        cpu_limit="${cpu_limit%\"}"
-        cpu_limit="${cpu_limit#\"}"
-        cpu_limit="${cpu_limit%\'}"
-        cpu_limit="${cpu_limit#\'}"
-      elif [[ "$line" =~ ^MEMORY_LIMIT=(.*)$ ]]; then
-        memory_limit="${BASH_REMATCH[1]}"
-        memory_limit="${memory_limit%\"}"
-        memory_limit="${memory_limit#\"}"
-        memory_limit="${memory_limit%\'}"
-        memory_limit="${memory_limit#\'}"
-      fi
-    done < "$limits_conf"
-  fi
+  local cpu_limit="" memory_limit=""
+  load_resource_limits
 
   local vdi_port=6080
   if [ "$target_name" != "$CONTAINER_NAME" ]; then
@@ -1226,58 +1352,7 @@ cmd_install_official() {
   run_step_live "[4/4] Configuring host shell integration & completions..." setup_shell_integration
   echo "✓ Host shell integration ready"
 
-  echo ""
-  cmd_status
-
-  local enter_cmd="just agy-enter"
-  local desktop_cmd="just agy-desktop"
-  local clean_cmd="just agy-clean"
-  if [ "$target_name" != "$CONTAINER_NAME" ]; then
-    enter_cmd="just agy-enter $target_name"
-    desktop_cmd="just agy-desktop $target_name -p $vdi_port"
-    clean_cmd="just agy-clean $target_name"
-  fi
-
-  echo ""
-  if command -v gum >/dev/null 2>&1; then
-    gum style --border rounded --padding "0 2" --border-foreground 46 \
-      "🚀 Environment '$target_name' is running and ready!" \
-      "" \
-      "Next Steps:" \
-      "  • Enter Shell:  $enter_cmd" \
-      "  • Desktop VDI:  $desktop_cmd" \
-      "  • View Status:  just agy-status" \
-      "  • Clean Up:     $clean_cmd"
-  else
-    echo -e "${GREEN}🚀 Environment '$target_name' is running and ready!${NC}"
-    echo ""
-    echo "Next Steps:"
-    echo "  • Enter Shell:  $enter_cmd"
-    echo "  • Desktop VDI:  $desktop_cmd"
-    echo "  • View Status:  just agy-status"
-    echo "  • Clean Up:     $clean_cmd"
-    echo ""
-  fi
-
-  if [ "$enter_after_install" = "true" ]; then
-    cmd_enter "$target_name"
-  elif [ "$enter_after_install" != "false" ] && [ "$auto_yes" != "true" ] && [ -t 0 ]; then
-    echo ""
-    local should_enter=false
-    if command -v gum >/dev/null 2>&1; then
-      if gum confirm "🚀 Enter '$target_name' environment now?"; then
-        should_enter=true
-      fi
-    else
-      read -r -p "🚀 Enter '$target_name' environment now? [Y/n] " choice
-      if [[ -z "$choice" || "$choice" =~ ^[Yy]$ ]]; then
-        should_enter=true
-      fi
-    fi
-    if [ "$should_enter" = "true" ]; then
-      cmd_enter "$target_name"
-    fi
-  fi
+  post_install_ready "$target_name" "$enter_after_install" "$auto_yes" "$vdi_port" false
 }
 
 cmd_build_dev() {
@@ -1376,28 +1451,8 @@ cmd_build_dev() {
     dbx_flags+=("--init")
   fi
 
-  local limits_conf="$HOME/.config/agy-box/limits.conf"
-  local cpu_limit=""
-  local memory_limit=""
-  if [[ -f "$limits_conf" ]]; then
-    while IFS= read -r line || [[ -n "$line" ]]; do
-      line=$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's/#.*//')
-      [[ -z "$line" ]] && continue
-      if [[ "$line" =~ ^CPU_LIMIT=(.*)$ ]]; then
-        cpu_limit="${BASH_REMATCH[1]}"
-        cpu_limit="${cpu_limit%\"}"
-        cpu_limit="${cpu_limit#\"}"
-        cpu_limit="${cpu_limit%\'}"
-        cpu_limit="${cpu_limit#\'}"
-      elif [[ "$line" =~ ^MEMORY_LIMIT=(.*)$ ]]; then
-        memory_limit="${BASH_REMATCH[1]}"
-        memory_limit="${memory_limit%\"}"
-        memory_limit="${memory_limit#\"}"
-        memory_limit="${memory_limit%\'}"
-        memory_limit="${memory_limit#\'}"
-      fi
-    done < "$limits_conf"
-  fi
+  local cpu_limit="" memory_limit=""
+  load_resource_limits
   if [[ -n "$cpu_limit" ]]; then
     dbx_flags+=("--additional-flags" "--cpus=$cpu_limit")
   fi
@@ -1433,64 +1488,24 @@ cmd_build_dev() {
   run_step_live "Configuring host shell integration & completions..." setup_shell_integration
   echo "✓ Host shell integration ready"
 
-  echo ""
-  cmd_status
-
-  echo ""
-  if command -v gum >/dev/null 2>&1; then
-    gum style --border rounded --padding "0 2" --border-foreground 46 \
-      "🚀 Dev Environment '$DEV_CONTAINER_NAME' is running and ready!" \
-      "" \
-      "Next Steps:" \
-      "  • Enter Shell:  just agy-enter dev" \
-      "  • Desktop VDI:  just agy-desktop dev" \
-      "  • View Status:  just agy-status" \
-      "  • Clean Up:     just agy-clean dev"
-  else
-    echo -e "${GREEN}🚀 Dev Environment '$DEV_CONTAINER_NAME' is running and ready!${NC}"
-    echo ""
-    echo "Next Steps:"
-    echo "  • Enter Shell:  just agy-enter dev"
-    echo "  • Desktop VDI:  just agy-desktop dev"
-    echo "  • View Status:  just agy-status"
-    echo "  • Clean Up:     just agy-clean dev"
-    echo ""
-  fi
-
-  if [ "$enter_after_install" = "true" ]; then
-    cmd_enter "$DEV_CONTAINER_NAME"
-  elif [ "$enter_after_install" != "false" ] && [ -t 0 ]; then
-    echo ""
-    local should_enter=false
-    if command -v gum >/dev/null 2>&1; then
-      if gum confirm "🚀 Enter '$DEV_CONTAINER_NAME' environment now?"; then
-        should_enter=true
-      fi
-    else
-      read -r -p "🚀 Enter '$DEV_CONTAINER_NAME' environment now? [Y/n] " choice
-      if [[ -z "$choice" || "$choice" =~ ^[Yy]$ ]]; then
-        should_enter=true
-      fi
-    fi
-    if [ "$should_enter" = "true" ]; then
-      cmd_enter "$DEV_CONTAINER_NAME"
-    fi
-  fi
+  post_install_ready "$DEV_CONTAINER_NAME" "$enter_after_install" false 6080 true
 }
 
 is_vdi_running() {
   local name=$1
   local runtime
-  runtime=$(get_runtime)
+  runtime=$(get_runtime 2>/dev/null || echo "podman")
   "$runtime" ps --format '{{.Names}}' 2>/dev/null | grep -qxF "$name" || return 1
-  "$runtime" exec "$name" pgrep -f '[w]ebsockify.*novnc' >/dev/null 2>&1
+  "$runtime" exec --user 0 "$name" pgrep -f '[X]vfb' >/dev/null 2>&1 || return 1
+  "$runtime" exec --user 0 "$name" pgrep -f '[x]11vnc' >/dev/null 2>&1 || return 1
+  "$runtime" exec --user 0 "$name" pgrep -f '[w]ebsockify.*novnc' >/dev/null 2>&1
 }
 
 stop_vdi_session() {
   local name=$1
   local runtime
-  runtime=$(get_runtime)
-  "$runtime" exec "$name" sh -c 'pkill -TERM -f "[a]gy-vdi|[w]ebsockify|[x]11vnc|[i]cewm-session|[X]vfb" 2>/dev/null || true; sleep 0.5; pkill -KILL -f "[w]ebsockify|[x]11vnc|[X]vfb" 2>/dev/null || true; rm -f /tmp/.X*-lock /tmp/.X11-unix/X*' 2>/dev/null || true
+  runtime=$(get_runtime 2>/dev/null || echo "podman")
+  "$runtime" exec --user 0 "$name" sh -c 'pkill -TERM -f "[a]gy-vdi|[w]ebsockify|[x]11vnc|[i]cewm-session|[X]vfb" 2>/dev/null || true; sleep 0.5; pkill -KILL -f "[w]ebsockify|[x]11vnc|[X]vfb" 2>/dev/null || true; rm -f /tmp/.X*-lock /tmp/.X11-unix/X*' 2>/dev/null || true
   if ! is_vdi_running "$name"; then
     ui_ok "✓ VDI session for '$name' stopped cleanly."
   else
@@ -1501,12 +1516,21 @@ stop_vdi_session() {
 vdi_control_panel() {
   local target_name=$1
   local vdi_port=$2
-  local url="http://localhost:${vdi_port}/vnc.html?autoconnect=true&resize=scale"
+  local mgr
+  mgr=$(get_box_manager "$target_name")
+  local runtime
+  runtime=$(get_runtime 2>/dev/null || echo "podman")
+  local url="http://127.0.0.1:${vdi_port}/vnc.html?autoconnect=true&resize=scale&path=websockify"
   while true; do
     echo ""
-    echo -e "${GREEN}🟢 VDI Active:${NC} $url"
+    if is_vdi_running "$target_name"; then
+      echo -e "${GREEN}🟢 VDI Active:${NC} $url"
+    else
+      echo -e "${RED}🔴 VDI Stopped${NC}"
+    fi
     local options=(
       "🌐 Open VDI in Browser"
+      "📜 View VDI Log"
       "⏹️  End VDI Session"
       "📌 Keep Running in Background & Return to Menu"
     )
@@ -1515,12 +1539,14 @@ vdi_control_panel() {
       choice=$(gum choose --header "VDI Session Management ($target_name):" "${options[@]}")
     else
       echo "1) Open VDI in Browser"
-      echo "2) End VDI Session"
-      echo "3) Keep Running in Background & Return to Menu"
-      read -r -p "Choice [1-3]: " opt
+      echo "2) View VDI Log"
+      echo "3) End VDI Session"
+      echo "4) Keep Running in Background & Return to Menu"
+      read -r -p "Choice [1-4]: " opt
       case "$opt" in
         1) choice="🌐 Open VDI in Browser" ;;
-        2) choice="⏹️  End VDI Session" ;;
+        2) choice="📜 View VDI Log" ;;
+        3) choice="⏹️  End VDI Session" ;;
         *) choice="📌 Keep Running in Background & Return to Menu" ;;
       esac
     fi
@@ -1531,6 +1557,15 @@ vdi_control_panel() {
         else
           echo "Open in browser: $url"
         fi
+        ;;
+      "📜 View VDI Log")
+        echo -e "${CYAN}=== VDI Log for '$target_name' ===${NC}"
+        if [ "$mgr" = "distrobox" ] && [ -f "/tmp/agy-vdi-${target_name}.log" ]; then
+          cat "/tmp/agy-vdi-${target_name}.log"
+        else
+          "$runtime" exec --user 0 "$target_name" cat /tmp/agy-vdi.log 2>/dev/null || echo "(no log found)"
+        fi
+        echo -e "${CYAN}=================================${NC}"
         ;;
       "⏹️  End VDI Session")
         stop_vdi_session "$target_name"
@@ -1551,6 +1586,7 @@ cmd_desktop() {
   local stop_action=false
   local status_action=false
   local detach=false
+  local custom_port=""
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -1575,6 +1611,7 @@ cmd_desktop() {
         shift
         ;;
       -p|--port)
+        custom_port="$2"
         vdi_args+=("-p" "$2")
         shift 2
         ;;
@@ -1607,7 +1644,9 @@ cmd_desktop() {
   fi
 
   local vdi_port=6080
-  if [ "$target_name" != "$CONTAINER_NAME" ]; then
+  if [ -n "$custom_port" ]; then
+    vdi_port="$custom_port"
+  elif [ "$target_name" != "$CONTAINER_NAME" ]; then
     vdi_port=$((6080 + $(calculate_box_port_offset "$target_name")))
   fi
 
@@ -1619,7 +1658,7 @@ cmd_desktop() {
   if [ "$status_action" = "true" ]; then
     if is_vdi_running "$target_name"; then
       echo "🟢 VDI is running for '$target_name' on port $vdi_port"
-      echo "URL: http://localhost:${vdi_port}/vnc.html?autoconnect=true&resize=scale"
+      echo "URL: http://127.0.0.1:${vdi_port}/vnc.html?autoconnect=true&resize=scale&path=websockify"
     else
       echo "⚪ VDI is stopped for '$target_name'"
     fi
@@ -1629,35 +1668,98 @@ cmd_desktop() {
   local isolated_home
   isolated_home=$(get_box_home "$target_name")
   local runtime
-  runtime=$(get_runtime)
+  runtime=$(get_runtime 2>/dev/null || echo "podman")
   local mgr
   mgr=$(get_box_manager "$target_name")
 
-  if [ "$mgr" = "distrobox" ]; then
-    if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
-      podman unshare chown -R 0:0 "$isolated_home" 2>/dev/null || true
+  local already_active=false
+  if is_vdi_running "$target_name"; then
+    if curl -fsSi --max-time 2 -H "Connection: Upgrade" -H "Upgrade: websocket" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" -H "Sec-WebSocket-Version: 13" "http://127.0.0.1:${vdi_port}/websockify" 2>/dev/null | grep -qi "101 Switching Protocols"; then
+      already_active=true
     fi
-    echo -e "Starting VDI Virtual Desktop inside ${CYAN}$target_name${NC} (Workstation)..."
-    nohup distrobox enter "$target_name" -- /usr/local/bin/agy-vdi "${vdi_args[@]}" >"/tmp/agy-vdi-${target_name}.log" 2>&1 </dev/null &
-  else
-    if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
-      podman unshare chown -R 9000:9000 "$isolated_home" 2>/dev/null || true
-    fi
-    if ! "$runtime" ps --format '{{.Names}}' 2>/dev/null | grep -qxF "$target_name"; then
-      run_step "Starting container '$target_name'..." "$runtime" start "$target_name"
-    fi
-    echo -e "Starting VDI Virtual Desktop inside ${CYAN}$target_name${NC} (Sandbox)..."
-    "$runtime" exec -d -u agyuser -w /home/agyuser "$target_name" /usr/local/bin/agy-vdi -p 6080 "${vdi_args[@]}"
   fi
 
-  echo -e "VDI Desktop is accessible at: ${GREEN}http://localhost:${vdi_port}${NC}"
+  if [ "$already_active" = "true" ]; then
+    ui_ok "VDI session for '$target_name' is already active on port $vdi_port."
+  else
+    "$runtime" exec --user 0 "$target_name" sh -c 'pkill -KILL -f "[a]gy-vdi|[w]ebsockify|[x]11vnc|[X]vfb" 2>/dev/null || true; rm -f /tmp/.X*-lock /tmp/.X11-unix/X*' 2>/dev/null || true
+
+    if [ "$mgr" = "distrobox" ]; then
+      ensure_distrobox_ready "$target_name" || return 1
+
+      if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
+        podman unshare chown -R 0:0 "$isolated_home" 2>/dev/null || true
+      fi
+
+      if [ -z "$custom_port" ]; then
+        while ss -tlnH 2>/dev/null | awk '{print $4}' | grep -Eq "(^|:)${vdi_port}$"; do
+          ui_warn "Port $vdi_port is already in use on host; trying port $((vdi_port + 1))..."
+          vdi_port=$((vdi_port + 1))
+        done
+      fi
+
+      local final_vdi_args=("-p" "$vdi_port")
+      for ((i=0; i<${#vdi_args[@]}; i++)); do
+        if [ "${vdi_args[i]}" = "-p" ] || [ "${vdi_args[i]}" = "--port" ]; then
+          ((i++))
+        else
+          final_vdi_args+=("${vdi_args[i]}")
+        fi
+      done
+
+      echo -e "Starting VDI Virtual Desktop inside ${CYAN}$target_name${NC} (Workstation)..."
+      "$runtime" exec -d --user "$(id -u):$(id -g)" -e HOME="$isolated_home" -e USER="$(id -un 2>/dev/null || echo "$USER")" -e DISTROBOX_HOST_HOME="$HOME" -w "$isolated_home" "$target_name" sh -c 'exec /usr/local/bin/agy-vdi "$@" >/tmp/agy-vdi.log 2>&1' _ "${final_vdi_args[@]}"
+    else
+      if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
+        podman unshare chown -R 9000:9000 "$isolated_home" 2>/dev/null || true
+      fi
+      if ! "$runtime" ps --format '{{.Names}}' 2>/dev/null | grep -qxF "$target_name"; then
+        run_step "Starting container '$target_name'..." "$runtime" start "$target_name"
+      fi
+      echo -e "Starting VDI Virtual Desktop inside ${CYAN}$target_name${NC} (Sandbox)..."
+      "$runtime" exec -d -u agyuser -w /home/agyuser "$target_name" sh -c 'exec /usr/local/bin/agy-vdi "$@" >/tmp/agy-vdi.log 2>&1' _ -p 6080 "${vdi_args[@]}"
+    fi
+
+    local vdi_ready=false
+    local start_time
+    start_time=$(date +%s)
+    local vdi_timeout="${AGY_VDI_TIMEOUT:-20}"
+    while true; do
+      if is_vdi_running "$target_name"; then
+        if [ -n "${BATS_VERSION:-}" ] || [ -n "${BATS_TEST_FILENAME:-}" ]; then
+          vdi_ready=true
+          break
+        fi
+        if curl -fsSi --max-time 2 "http://127.0.0.1:${vdi_port}/vnc.html" >/dev/null 2>&1 && \
+           curl -fsSi --max-time 2 -H "Connection: Upgrade" -H "Upgrade: websocket" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" -H "Sec-WebSocket-Version: 13" "http://127.0.0.1:${vdi_port}/websockify" 2>/dev/null | grep -qi "101 Switching Protocols"; then
+          vdi_ready=true
+          break
+        fi
+      fi
+      local now
+      now=$(date +%s)
+      if [ $((now - start_time)) -ge "$vdi_timeout" ]; then
+        break
+      fi
+      sleep 1
+    done
+
+    if [ "$vdi_ready" != "true" ]; then
+      ui_error "❌ Error: VDI failed to start:"
+      "$runtime" exec --user 0 "$target_name" cat /tmp/agy-vdi.log 2>/dev/null >&2 || true
+      return 1
+    fi
+  fi
+
+  local desktop_url="http://127.0.0.1:${vdi_port}/vnc.html?autoconnect=true&resize=scale&path=websockify"
+  echo -e "VDI Desktop is accessible at: ${GREEN}${desktop_url}${NC}"
 
   if [ "$detach" = "true" ] || [ ! -t 0 ] || [ ! -t 1 ]; then
     return 0
   fi
 
   if command -v xdg-open >/dev/null 2>&1 && [ -n "${DISPLAY:-${WAYLAND_DISPLAY:-}}" ]; then
-    xdg-open "http://localhost:${vdi_port}/vnc.html?autoconnect=true&resize=scale" >/dev/null 2>&1 || true
+    xdg-open "$desktop_url" >/dev/null 2>&1 || true
   fi
 
   vdi_control_panel "$target_name" "$vdi_port"
@@ -1714,6 +1816,7 @@ cmd_enter() {
   mgr=$(get_box_manager "$target_name")
 
   if [ "$mgr" = "distrobox" ]; then
+    ensure_distrobox_ready "$target_name" || return 1
     if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
       podman unshare chown -R 0:0 "$isolated_home" 2>/dev/null || true
     fi
@@ -1780,6 +1883,7 @@ cmd_update_toolchain() {
   mgr=$(get_box_manager "$target_name")
 
   if [ "$mgr" = "distrobox" ]; then
+    ensure_distrobox_ready "$target_name" || return 1
     if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
       podman unshare chown -R 0:0 "$isolated_home" 2>/dev/null || true
     fi
@@ -1891,12 +1995,13 @@ cmd_update() {
   runtime=$(detect_runtime)
   local mgr
   mgr=$(get_box_manager "$target_container")
-  if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
-    if [ "$mgr" = "distrobox" ]; then
+  if [ "$mgr" = "distrobox" ]; then
+    ensure_distrobox_ready "$target_container" || return 1
+    if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
       podman unshare chown -R 0:0 "$isolated_home" 2>/dev/null || true
-    else
-      podman unshare chown -R 9000:9000 "$isolated_home" 2>/dev/null || true
     fi
+  elif [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
+    podman unshare chown -R 9000:9000 "$isolated_home" 2>/dev/null || true
   fi
 
   ui_ok "🚀 Updating environment '$target_container'..."
@@ -1909,8 +2014,8 @@ cmd_update() {
   if [ "$update_ides" = "true" ]; then
     echo -e "\n${CYAN}==> Updating IDE Extensions...${NC}"
     if [ "$mgr" = "distrobox" ]; then
-      if distrobox enter "$target_container" -- command -v code &>/dev/null; then
-        run_step "Updating VS Code Antigravity extension..." distrobox enter "$target_container" -- code --install-extension Google.google-antigravity --force || ui_warn "! Could not update VS Code extension"
+      if "$runtime" exec --user "$(id -u):$(id -g)" -e HOME="$isolated_home" -e USER="$(id -un 2>/dev/null || echo "$USER")" -w "$isolated_home" "$target_container" command -v code &>/dev/null; then
+        run_step "Updating VS Code Antigravity extension..." "$runtime" exec --user "$(id -u):$(id -g)" -e HOME="$isolated_home" -e USER="$(id -un 2>/dev/null || echo "$USER")" -w "$isolated_home" "$target_container" code --install-extension Google.google-antigravity --force || ui_warn "! Could not update VS Code extension"
       fi
     else
       if "$runtime" exec -u agyuser -w /home/agyuser "$target_container" sh -c "command -v code" &>/dev/null; then
@@ -1928,13 +2033,7 @@ cmd_update() {
 
   if [ "$update_packages" = "true" ]; then
     echo -e "\n${CYAN}==> Updating Container OS Packages & IDEs...${NC}"
-    if [ "$mgr" = "distrobox" ]; then
-      run_step "Updating apt package lists..." distrobox enter "$target_container" -- sudo apt-get update || true
-      run_step "Upgrading core packages (Google Chrome, VS Code)..." distrobox enter "$target_container" -- sudo apt-get --only-upgrade install -y google-chrome-stable code 2>/dev/null || true
-    else
-      run_step "Updating apt package lists..." "$runtime" exec -u agyuser -w /home/agyuser "$target_container" sudo apt-get update || true
-      run_step "Upgrading core packages (Google Chrome, VS Code)..." "$runtime" exec -u agyuser -w /home/agyuser "$target_container" sudo apt-get --only-upgrade install -y google-chrome-stable code 2>/dev/null || true
-    fi
+    run_step "Updating apt packages..." "$runtime" exec --user 0 "$target_container" sh -c "DEBIAN_FRONTEND=noninteractive apt-get update && apt-get upgrade -y" || true
     ui_ok "✓ Container packages upgraded."
   fi
 
@@ -2126,35 +2225,19 @@ cmd_check() {
     dbx_ver=$(distrobox --version 2>/dev/null | awk '{print $2}' || echo "Installed")
   fi
 
-  local official_status="Not Installed"
-  local dev_status="Not Installed"
+  local official_status="Not Installed" dev_status="Not Installed"
   if check_container_exists "$CONTAINER_NAME"; then
-    if "$runtime" ps --format '{{.Names}}' 2>/dev/null | grep -qxF "$CONTAINER_NAME"; then
-      official_status="Running"
-    elif command -v distrobox >/dev/null 2>&1 && distrobox list --no-color 2>/dev/null | awk -F'|' -v name="$CONTAINER_NAME" 'NR>1 {gsub(/^[ \t]+|[ \t]+$/, "", $2); if ($2 == name) {print $3}}' | grep -qi "running"; then
-      official_status="Running"
-    else
-      official_status="Stopped"
-    fi
+    is_container_running "$CONTAINER_NAME" "$runtime" && official_status="Running" || official_status="Stopped"
   fi
   if check_container_exists "$DEV_CONTAINER_NAME"; then
-    if "$runtime" ps --format '{{.Names}}' 2>/dev/null | grep -qxF "$DEV_CONTAINER_NAME"; then
-      dev_status="Running"
-    elif command -v distrobox >/dev/null 2>&1 && distrobox list --no-color 2>/dev/null | awk -F'|' -v name="$DEV_CONTAINER_NAME" 'NR>1 {gsub(/^[ \t]+|[ \t]+$/, "", $2); if ($2 == name) {print $3}}' | grep -qi "running"; then
-      dev_status="Running"
-    else
-      dev_status="Stopped"
-    fi
+    is_container_running "$DEV_CONTAINER_NAME" "$runtime" && dev_status="Running" || dev_status="Stopped"
   fi
 
-  local active_box=""
-  local box_running=false
+  local active_box="" box_running=false
   if [ "$official_status" = "Running" ]; then
-    active_box="$CONTAINER_NAME"
-    box_running=true
+    active_box="$CONTAINER_NAME"; box_running=true
   elif [ "$dev_status" = "Running" ]; then
-    active_box="$DEV_CONTAINER_NAME"
-    box_running=true
+    active_box="$DEV_CONTAINER_NAME"; box_running=true
   elif [ "$official_status" = "Stopped" ]; then
     active_box="$CONTAINER_NAME"
   elif [ "$dev_status" = "Stopped" ]; then
@@ -2162,10 +2245,8 @@ cmd_check() {
   else
     local b
     while IFS= read -r b; do
-      if [ -n "$b" ] && "$runtime" ps --format '{{.Names}}' 2>/dev/null | grep -qxF "$b"; then
-        active_box="$b"
-        box_running=true
-        break
+      if [ -n "$b" ] && is_container_running "$b" "$runtime"; then
+        active_box="$b"; box_running=true; break
       fi
     done < <(get_all_agy_boxes)
   fi
@@ -2268,42 +2349,44 @@ cmd_check() {
   local config_file
   config_file=$(get_config_file)
 
-  echo -e "${CYAN}======================================================================${NC}"
-  echo -e "${WHITE}               🚀 AGY Box Component & Status Inspector                ${NC}"
-  echo -e "${CYAN}======================================================================${NC}"
-  echo ""
-  echo -e "${BLUE}[ Host Environment ]${NC}"
-  printf "  %-20s %s (%s)\n" "Host OS:" "$os_name" "$kernel_arch"
-  printf "  %-20s %s (%s, %s)\n" "Container Engine:" "$runtime" "$runtime_ver" "$runtime_rootless"
-  printf "  %-20s %s\n" "Distrobox:" "$dbx_ver"
-  printf "  %-20s %s\n" "Config File:" "$config_file"
-  printf "  %-20s %s\n" "Keyring Mode:" "$keyring_mode"
-  printf "  %-20s %s\n" "Default IDE:" "${AGY_DEFAULT_IDE:-code}"
-  printf "  %-20s %s\n" "Profile Seeding:" "${AGY_PROFILE_SEEDING:-false}"
-  echo ""
-  echo -e "${BLUE}[ Container Workspaces ]${NC}"
-  printf "  %-20s %s\n" "agy-box (Official):" "$official_status"
-  printf "  %-20s %s\n" "agy-box-dev (Dev):" "$dev_status"
-  echo ""
-  echo -e "${BLUE}[ Antigravity Toolchain ]${NC}"
-  printf "  %-20s %s\n" "agy CLI:" "$agy_ver"
-  printf "  %-20s %s\n" "Python Runtime:" "$python_ver"
-  printf "  %-20s %s\n" "Node.js:" "$node_ver"
-  printf "  %-20s %s\n" "Google Cloud SDK:" "$gcloud_ver"
-  printf "  %-20s %s\n" "GitHub CLI:" "$gh_ver"
-  echo ""
-  echo -e "${BLUE}[ IDE Integrations ]${NC}"
-  printf "  %-20s %s (Extension: %s)\n" "VS Code:" "$code_ver" "$code_ext"
-  printf "  %-20s %s (Extension: %s)\n" "Zed Editor:" "$zed_ver" "$zed_ext"
-  printf "  %-20s %s\n" "JetBrains:" "$jetbrains_status"
-  echo ""
-  echo -e "${BLUE}[ Keyring & Authentication ]${NC}"
-  printf "  %-20s %s\n" "Keyring Backend:" "$keyring_backend"
-  printf "  %-20s %s\n" "Google Cloud:" "$gcloud_auth"
-  printf "  %-20s %s\n" "GitHub CLI:" "$gh_auth"
-  printf "  %-20s %s\n" "Antigravity Auth:" "$agy_auth"
-  echo -e "${CYAN}======================================================================${NC}"
-  echo ""
+  cat <<EOF
+${CYAN}======================================================================${NC}
+${WHITE}               🚀 AGY Box Component & Status Inspector                ${NC}
+${CYAN}======================================================================${NC}
+
+${BLUE}[ Host Environment ]${NC}
+  Host OS:             $os_name ($kernel_arch)
+  Container Engine:    $runtime ($runtime_ver, $runtime_rootless)
+  Distrobox:           $dbx_ver
+  Config File:         $config_file
+  Keyring Mode:        $keyring_mode
+  Default IDE:         ${AGY_DEFAULT_IDE:-code}
+  Profile Seeding:     ${AGY_PROFILE_SEEDING:-false}
+
+${BLUE}[ Container Workspaces ]${NC}
+  agy-box (Official):  $official_status
+  agy-box-dev (Dev):   $dev_status
+
+${BLUE}[ Antigravity Toolchain ]${NC}
+  agy CLI:             $agy_ver
+  Python Runtime:      $python_ver
+  Node.js:             $node_ver
+  Google Cloud SDK:    $gcloud_ver
+  GitHub CLI:          $gh_ver
+
+${BLUE}[ IDE Integrations ]${NC}
+  VS Code:             $code_ver (Extension: $code_ext)
+  Zed Editor:          $zed_ver (Extension: $zed_ext)
+  JetBrains:           $jetbrains_status
+
+${BLUE}[ Keyring & Authentication ]${NC}
+  Keyring Backend:     $keyring_backend
+  Google Cloud:        $gcloud_auth
+  GitHub CLI:          $gh_auth
+  Antigravity Auth:    $agy_auth
+${CYAN}======================================================================${NC}
+
+EOF
   return 0
 }
 
@@ -2556,11 +2639,7 @@ cmd_status() {
       local mgr
       mgr=$(get_box_manager "$b")
       local status="stopped"
-      if "$runtime" ps --format '{{.Names}}' 2>/dev/null | grep -qxF "$b"; then
-        status="running"
-      elif [ "$mgr" = "distrobox" ] && command -v distrobox >/dev/null 2>&1 && distrobox list --no-color 2>/dev/null | awk -F'|' -v name="$b" 'NR>1 {gsub(/^[ \t]+|[ \t]+$/, "", $2); if ($2 == name) {print $3}}' | grep -qi "running"; then
-        status="running"
-      fi
+      is_container_running "$b" "$runtime" && status="running"
 
       local vdi_port="6080"
       if [ "$b" != "$CONTAINER_NAME" ]; then
@@ -2699,26 +2778,15 @@ cmd_uninstall_global() {
     rm -f "$HOME/.config/fish/functions/ujust.fish"
 
     if command -v python3 >/dev/null 2>&1 && { [ -f "$HOME/.bashrc" ] || [ -f "$HOME/.zshrc" ]; }; then
-            # shellcheck disable=SC2016
+      # shellcheck disable=SC2016
       python3 -c '
 import os
-def clean_file(path):
-  if not os.path.exists(path): return
-  with open(path, "r") as f:
-    content = f.read()
-  block = """
-if [ -f "$HOME/.config/agy-box/shell_integration.sh" ]; then
-  . "$HOME/.config/agy-box/shell_integration.sh"
-fi"""
-  content = content.replace(block, "")
-  block_fpath = """
-fpath=(~/.zfunc \$fpath)"""
-  content = content.replace(block_fpath, "")
-  with open(path, "w") as f:
-    f.write(content)
-
-clean_file(os.path.expanduser("~/.bashrc"))
-clean_file(os.path.expanduser("~/.zshrc"))
+for rc in ("~/.bashrc", "~/.zshrc"):
+    p = os.path.expanduser(rc)
+    if os.path.exists(p):
+        with open(p) as f: c = f.read()
+        for b in ("if [ -f \"$HOME/.config/agy-box/shell_integration.sh\" ]; then\n    . \"$HOME/.config/agy-box/shell_integration.sh\"\nfi\n", "if [ -f \"$HOME/.config/agy-box/shell_integration.sh\" ]; then\n  . \"$HOME/.config/agy-box/shell_integration.sh\"\nfi\n", "fpath=(~/.zfunc $fpath)\n"): c = c.replace(b, "")
+        with open(p, "w") as f: f.write(c)
 '
     fi
 
@@ -2732,31 +2800,19 @@ clean_file(os.path.expanduser("~/.zshrc"))
   fi
 }
 
-# shellcheck disable=SC2059
-show_banner() {
+show_compact_banner() {
   clear
-  printf "${WHITE}         /\\ ${CYAN}   .       .            .${NC}\n${WHITE}        /==\\${CYAN}       * *${NC}\n${WHITE}       /    \\${CYAN}    * .       .    .      *${NC}\n${WHITE}      /      \\${CYAN}                  .          .${NC}\n${WHITE}     |   /\\   |${BLUE}    ___   ______  __  __      ____   ____  _  __${NC}\n${WHITE}     |  |==|  |${BLUE}   /   | / ____/ / / / /     / __ ) / __ \| |/ /${NC}\n${WHITE}     |  |  |  |${BLUE}  / /| |/ / __  / /_/ /     / __  |/ / / /|   / ${NC}\n${WHITE}    /| /____\\ |\\${BLUE} / ___ / /_/ /  \\__, /     / /_/ // /_/ //   |  ${NC}\n${WHITE}   / | |    | | \\${BLUE}/_/  |_\\____/  /____/     /_____/ \\____//_/|_|  ${NC}\n${WHITE}  /__|_|____|_|__\\${NC}\n${RED}      /\\/\\/\\/\\ ${NC}\n"
-
   if command -v gum >/dev/null 2>&1; then
-    gum style \
-      --foreground 212 --border-foreground 212 --border rounded \
-      --align center --width 50 --margin "0 2" --padding "0 1" \
-      "🚀 AGY Box Manager v${VERSION}"
+    gum style --foreground 212 --border-foreground 212 --border rounded --align center --width 50 --margin "0 2" --padding "0 1" "🚀 AGY Box Manager v${VERSION}"
   else
     echo -e "${MAGENTA}=== 🚀 AGY Box Manager v${VERSION} ===${NC}\n"
   fi
 }
 
-show_compact_banner() {
+show_banner() {
   clear
-  if command -v gum >/dev/null 2>&1; then
-    gum style \
-      --foreground 212 --border-foreground 212 --border rounded \
-      --align center --width 50 --margin "0 2" --padding "0 1" \
-      "🚀 AGY Box Manager v${VERSION}"
-  else
-    echo -e "${MAGENTA}=== 🚀 AGY Box Manager v${VERSION} ===${NC}\n"
-  fi
+  echo -e "${WHITE}         /\\ ${CYAN}   .       .            .${NC}\n${WHITE}        /==\\${CYAN}       * *${NC}\n${WHITE}       /    \\${CYAN}    * .       .    .      *${NC}\n${WHITE}      /      \\${CYAN}                  .          .${NC}\n${WHITE}     |   /\\   |${BLUE}    ___   ______  __  __      ____   ____  _  __${NC}\n${WHITE}     |  |==|  |${BLUE}   /   | / ____/ / / / /     / __ ) / __ \| |/ /${NC}\n${WHITE}     |  |  |  |${BLUE}  / /| |/ / __  / /_/ /     / __  |/ / / /|   / ${NC}\n${WHITE}    /| /____\\ |\\${BLUE} / ___ / /_/ /  \\__, /     / /_/ // /_/ //   |  ${NC}\n${WHITE}   / | |    | | \\${BLUE}/_/  |_\\____/  /____/     /_____/ \\____//_/|_|  ${NC}\n${WHITE}  /__|_|____|_|__\\${NC}\n${RED}      /\\/\\/\\/\\ ${NC}"
+  show_compact_banner
 }
 
 show_system_status() {
@@ -2839,15 +2895,10 @@ cmd_doctor() {
   fi
 
   echo -n "Checking container manager runtime... "
-  local detected_mgr=""
-  if [ -n "${DBX_CONTAINER_MANAGER:-}" ] && command -v "$DBX_CONTAINER_MANAGER" >/dev/null 2>&1; then
-    detected_mgr="$DBX_CONTAINER_MANAGER"
-  elif command -v podman >/dev/null 2>&1; then
-    detected_mgr="podman"
-  elif command -v docker >/dev/null 2>&1; then
-    detected_mgr="docker"
-  elif [ -n "${DBX_CONTAINER_MANAGER:-}" ]; then
-    detected_mgr="$DBX_CONTAINER_MANAGER"
+  local detected_mgr
+  detected_mgr=$(detect_runtime 2>/dev/null || echo "")
+  if [ -n "$detected_mgr" ] && ! command -v "$detected_mgr" >/dev/null 2>&1; then
+    detected_mgr=""
   fi
   if [ -n "$detected_mgr" ]; then
     echo -e "${GREEN}[OK] ($detected_mgr)${NC}"
@@ -2948,23 +2999,11 @@ show_compact_status() {
   runtime=$(get_runtime 2>/dev/null || echo "podman")
 
   if check_container_exists "$CONTAINER_NAME"; then
-    if "$runtime" ps --format '{{.Names}}' 2>/dev/null | grep -qxF "$CONTAINER_NAME"; then
-      official_status="🟢 Running"
-    elif command -v distrobox >/dev/null 2>&1 && distrobox list --no-color 2>/dev/null | awk -F'|' -v name="$CONTAINER_NAME" 'NR>1 {gsub(/^[ \t]+|[ \t]+$/, "", $2); if ($2 == name) {print $3}}' | grep -qi "running"; then
-      official_status="🟢 Running"
-    else
-      official_status="💤 Installed"
-    fi
+    is_container_running "$CONTAINER_NAME" "$runtime" && official_status="🟢 Running" || official_status="💤 Installed"
   fi
 
   if check_container_exists "$DEV_CONTAINER_NAME"; then
-    if "$runtime" ps --format '{{.Names}}' 2>/dev/null | grep -qxF "$DEV_CONTAINER_NAME"; then
-      dev_status="🟢 Running"
-    elif command -v distrobox >/dev/null 2>&1 && distrobox list --no-color 2>/dev/null | awk -F'|' -v name="$DEV_CONTAINER_NAME" 'NR>1 {gsub(/^[ \t]+|[ \t]+$/, "", $2); if ($2 == name) {print $3}}' | grep -qi "running"; then
-      dev_status="🟢 Running"
-    else
-      dev_status="💤 Installed"
-    fi
+    is_container_running "$DEV_CONTAINER_NAME" "$runtime" && dev_status="🟢 Running" || dev_status="💤 Installed"
   fi
 
   while IFS= read -r b; do
@@ -3058,30 +3097,14 @@ cmd_interactive() {
         show_compact_status
 
         local workspace_options=()
-        if check_container_exists "$CONTAINER_NAME"; then
-          workspace_options+=("🚪 Enter Official Workspace")
-          if is_vdi_running "$CONTAINER_NAME"; then
-            workspace_options+=("🟢 Manage / Stop VDI Web Desktop (Official)")
-          else
-            workspace_options+=("🖥️  Start VDI Web Desktop (Official)")
-          fi
-        fi
-        if check_container_exists "$DEV_CONTAINER_NAME"; then
-          workspace_options+=("💻 Enter Dev Workspace")
-          if is_vdi_running "$DEV_CONTAINER_NAME"; then
-            workspace_options+=("🟢 Manage / Stop VDI Web Desktop (Dev)")
-          else
-            workspace_options+=("🖥️  Start VDI Web Desktop (Dev)")
-          fi
-        fi
-
         local all_boxes=()
         while IFS= read -r b; do
           [ -n "$b" ] && all_boxes+=("$b")
         done < <(get_all_agy_boxes)
+        [ ${#all_boxes[@]} -eq 0 ] && all_boxes=("$CONTAINER_NAME" "$DEV_CONTAINER_NAME")
 
         for b in "${all_boxes[@]}"; do
-          if [ "$b" != "$CONTAINER_NAME" ] && [ "$b" != "$DEV_CONTAINER_NAME" ]; then
+          if check_container_exists "$b"; then
             workspace_options+=("🚪 Enter $b")
             if is_vdi_running "$b"; then
               workspace_options+=("🟢 Manage / Stop VDI Web Desktop ($b)")
@@ -3092,36 +3115,20 @@ cmd_interactive() {
         done
 
         workspace_options+=("🔙 Back to Main Menu")
-
         local sub_choice
         sub_choice=$(choose_option "${workspace_options[@]}")
 
         case "$sub_choice" in
-          "🚪 Enter Official Workspace")
-            cmd_enter prod
-            pause_key
-            ;;
-          "🖥️  Start VDI Web Desktop (Official)"|"🟢 Manage / Stop VDI Web Desktop (Official)")
-            cmd_desktop prod
-            ;;
-          "💻 Enter Dev Workspace")
-            cmd_enter dev
-            pause_key
-            ;;
-          "🖥️  Start VDI Web Desktop (Dev)"|"🟢 Manage / Stop VDI Web Desktop (Dev)")
-            cmd_desktop dev
-            ;;
           "🚪 Enter "*)
-            local target="${sub_choice#🚪 Enter }"
-            cmd_enter "$target"
+            cmd_enter "${sub_choice#🚪 Enter }"
             pause_key
             ;;
-          "🖥️  Start VDI Web Desktop ("*|"🟢 Manage / Stop VDI Web Desktop ("*)
+          *"Web Desktop ("*)
             local target="${sub_choice#*Web Desktop (}"
             target="${target%)}"
             cmd_desktop "$target"
             ;;
-          "🔙 Back to Main Menu")
+          *)
             menu_state="main"
             ;;
         esac
@@ -3133,98 +3140,109 @@ cmd_interactive() {
         show_compact_status
 
         local manage_options=()
-
+        local existing_boxes=()
         if check_container_exists "$CONTAINER_NAME"; then
-          manage_options+=("♻️  Update/Recreate Official Workspace")
-          manage_options+=("🔄 Update Antigravity Toolchain (Official)")
-          manage_options+=("🗑️  Remove Official Workspace")
+          existing_boxes+=("$CONTAINER_NAME")
         else
-          manage_options+=("🚀 Install Official Workspace (Pull from GHCR)")
+          manage_options+=("🚀 Install Primary Workspace ($CONTAINER_NAME)")
         fi
 
         if check_container_exists "$DEV_CONTAINER_NAME"; then
-          manage_options+=("♻️  Rebuild Dev Workspace")
-          manage_options+=("🔄 Update Antigravity Toolchain (Dev)")
-          manage_options+=("🗑️  Remove Dev Workspace")
+          existing_boxes+=("$DEV_CONTAINER_NAME")
         elif [ -f "Containerfile" ]; then
           manage_options+=("🛠️  Build Dev Workspace (From local source)")
-        else
-          manage_options+=("🛠️  Build Dev Workspace (Requires Containerfile in CWD)")
         fi
-
-        manage_options+=("➕ Create New Named Box...")
-        manage_options+=("📁 Manage Preserved Box Data...")
 
         local custom_boxes=()
         while IFS= read -r b; do
           if [ -n "$b" ] && [ "$b" != "$CONTAINER_NAME" ] && [ "$b" != "$DEV_CONTAINER_NAME" ]; then
             custom_boxes+=("$b")
+            existing_boxes+=("$b")
           fi
         done < <(get_all_agy_boxes)
 
+        if [ ${#existing_boxes[@]} -gt 0 ]; then
+          manage_options+=("🔄 Update Box Apps & OS...")
+        fi
+
+        manage_options+=("➕ Create New Box")
+
+        if check_container_exists "$CONTAINER_NAME"; then
+          manage_options+=("🗑️  Remove Primary Workspace ($CONTAINER_NAME)")
+        fi
+        if check_container_exists "$DEV_CONTAINER_NAME"; then
+          manage_options+=("🗑️  Remove Dev Workspace ($DEV_CONTAINER_NAME)")
+        fi
         if [ ${#custom_boxes[@]} -gt 0 ]; then
           manage_options+=("🗑️  Remove Named Box...")
         fi
 
+        manage_options+=("📁 Manage Preserved Box Data...")
         manage_options+=("🔙 Back to Main Menu")
 
         local sub_choice
         sub_choice=$(choose_option "${manage_options[@]}")
 
         case "$sub_choice" in
-          "🚀 Install Official Workspace (Pull from GHCR)"|"♻️  Update/Recreate Official Workspace")
+          "🚀 Install Primary Workspace"*)
             cmd_install_official
             pause_key
             menu_state="workspaces"
             ;;
-          "🛠️  Build Dev Workspace (From local source)"|"♻️  Rebuild Dev Workspace")
+          "🛠️  Build Dev Workspace"*)
             cmd_build_dev
             pause_key
             menu_state="workspaces"
             ;;
-          "🔄 Update Antigravity Toolchain (Official)")
-            cmd_update_toolchain prod
+          "🔄 Update Box Apps & OS...")
+            clear
+            show_compact_banner
+            local target_box="$CONTAINER_NAME"
+            if [ ${#existing_boxes[@]} -gt 1 ]; then
+              target_box=$(choose_option "${existing_boxes[@]}" "🔙 Cancel")
+            elif [ ${#existing_boxes[@]} -eq 1 ]; then
+              target_box="${existing_boxes[0]}"
+            fi
+            if [ -n "$target_box" ] && [ "$target_box" != "🔙 Cancel" ]; then
+              local upd_choice
+              upd_choice=$(choose_option \
+                "🔄 Update Everything (Apps, Toolchain & OS Packages)" \
+                "🧰 Update Apps & Antigravity Toolchain Only" \
+                "🐧 Update Container OS Packages Only" \
+                "🔙 Cancel")
+              case "$upd_choice" in
+                "🔄 Update Everything"*) cmd_update "$target_box" --all ;;
+                "🧰 Update Apps"*) cmd_update "$target_box" --toolchain --ides ;;
+                "🐧 Update Container"*) cmd_update "$target_box" --packages ;;
+              esac
+            fi
             pause_key
             ;;
-          "🔄 Update Antigravity Toolchain (Dev)")
-            cmd_update_toolchain dev
+          "➕ Create New Box")
+            clear
+            show_compact_banner
+            local new_name
+            new_name=$(generate_box_name "$CONTAINER_NAME")
+            echo -e "${CYAN}📦 New Box: ${GREEN}$new_name${CYAN} (name is permanent once created)${NC}\n"
+            local mode_choice
+            mode_choice=$(choose_option \
+              "sandbox (Isolated Sandbox - Clean room, air-gapped credentials) [Recommended]" \
+              "workstation (Integrated Workstation - Host desktop & SSO)")
+            local chosen_mode="sandbox"
+            if [[ "$mode_choice" =~ workstation ]]; then
+              chosen_mode="workstation"
+            fi
+            cmd_install_official --name "$new_name" --mode "$chosen_mode"
             pause_key
+            menu_state="workspaces"
             ;;
-          "🗑️  Remove Official Workspace")
+          "🗑️  Remove Primary Workspace"*)
             cmd_clean "$CONTAINER_NAME"
             pause_key
             ;;
-          "🗑️  Remove Dev Workspace")
+          "🗑️  Remove Dev Workspace"*)
             cmd_clean "$DEV_CONTAINER_NAME"
             pause_key
-            ;;
-          "➕ Create New Named Box...")
-            clear
-            show_compact_banner
-            echo -e "${CYAN}Create a New Named AGY Box Environment${NC}\n"
-            local new_name
-            new_name=$(gum input --placeholder "agy-box-test" --header "Enter a name for the new box (e.g. agy-box-test, agy-box-v060):")
-            if [ -n "$new_name" ]; then
-              if [[ "$new_name" != agy-box* ]]; then
-                new_name="agy-box-$new_name"
-              fi
-              local mode_choice
-              mode_choice=$(gum choose --header "Select Container Mode:" \
-                "sandbox (Isolated Sandbox via Podman/Docker - Clean room, air-gapped credentials) [Recommended]" \
-                "workstation (Integrated Workstation via Distrobox - Host desktop & SSO)")
-              local chosen_mode="sandbox"
-              if [[ "$mode_choice" =~ workstation ]]; then
-                chosen_mode="workstation"
-              fi
-              local new_image
-              new_image=$(gum input --value "$IMAGE_NAME" --header "Enter container image to pull (press Enter for default):")
-              : "${new_image:=$IMAGE_NAME}"
-              cmd_install_official --name "$new_name" --image "$new_image" --mode "$chosen_mode"
-            else
-              ui_warn "Operation cancelled: no name provided."
-            fi
-            pause_key
-            menu_state="workspaces"
             ;;
           "📁 Manage Preserved Box Data...")
             clear
@@ -3278,12 +3296,6 @@ cmd_interactive() {
             if [ -n "$box_to_remove" ] && [ "$box_to_remove" != "🔙 Cancel" ]; then
               cmd_clean "$box_to_remove"
             fi
-            pause_key
-            ;;
-          "🛠️  Build Dev Workspace (Requires Containerfile in CWD)")
-            gum style --foreground 214 "⚠️  No Containerfile found in the current directory."
-            echo -e "To build a dev workspace, run this command from the agy-box repo root:"
-            echo -e "  cd /path/to/agy-box && agy-box-manager"
             pause_key
             ;;
           "🔙 Back to Main Menu")
