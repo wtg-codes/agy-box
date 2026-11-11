@@ -711,12 +711,14 @@ EOF2
   [ "$output" -eq 1 ]
 
   # Simulate existing container using port 6081
-  create_mock "podman" '
+  local mock_code='
 if [ "$1" = "ps" ] && [[ "$*" == *"{{.Ports}}"* ]]; then
   echo "6081->6080/tcp"
 fi
 exit 0
 '
+  create_mock "podman" "$mock_code"
+  create_mock "docker" "$mock_code"
   run calculate_box_port_offset "agy-box-gamma-delta"
   [ "$status" -eq 0 ]
   [ "$output" -eq 2 ]
