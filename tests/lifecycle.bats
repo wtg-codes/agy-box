@@ -280,7 +280,7 @@ EOF2
 
   run ./agy-box-manager desktop agy-box-test -p 6082 -r 2560x1440
   [ "$status" -eq 0 ]
-  run grep -F 'podman exec -d -u agyuser -w /home/agyuser agy-box-test sh -c exec /usr/local/bin/agy-vdi "$@" >/tmp/agy-vdi.log 2>&1 _ -p 6080 -p 6082 -r 2560x1440' "$mock_log"
+  run grep -F 'podman exec -d -u agyuser -w /home/agyuser agy-box-test sh -c exec /usr/local/bin/agy-vdi "$@" >/tmp/agy-vdi.log 2>&1 _ -p 6080 -r 2560x1440' "$mock_log"
   [ "$status" -eq 0 ]
 }
 

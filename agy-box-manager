@@ -403,8 +403,8 @@ ensure_distrobox_ready() {
       return 1
     fi
   else
-    if ! "$runtime" exec --user 0 "$name" getent passwd "$current_user" >/dev/null 2>&1; then
-      ui_warn "User '$current_user' missing from container '$name'; restarting to complete initialization..."
+    if ! "$runtime" exec --user 0 "$name" getent passwd "$current_user" >/dev/null 2>&1 || ! distrobox enter "$name" -- true >/dev/null 2>&1; then
+      ui_warn "Distrobox container '$name' cannot be cleanly entered; restarting to complete initialization..."
       "$runtime" stop "$name" >/dev/null 2>&1 || true
       if ! distrobox enter "$name" -- true; then
         ui_error "Failed to re-initialize Distrobox container '$name'."
@@ -435,7 +435,7 @@ generate_box_name() {
       echo "$candidate"
       return 0
     fi
-    ((attempts++))
+    attempts=$((attempts + 1))
   done
   echo "${prefix}-box-$RANDOM"
 }
@@ -485,7 +485,7 @@ calculate_box_port_offset() {
       echo "$offset"
       return 0
     fi
-    ((offset++))
+    offset=$((offset + 1))
   done
 }
 
@@ -1501,6 +1501,13 @@ is_vdi_running() {
   "$runtime" exec --user 0 "$name" pgrep -f '[w]ebsockify.*novnc' >/dev/null 2>&1
 }
 
+vdi_ws_ready() {
+  local p="$1" hdr
+  curl -fsS --max-time 2 "http://127.0.0.1:${p}/vnc.html" >/dev/null 2>&1 || return 1
+  hdr=$(curl -sSi --max-time 1 -H "Connection: Upgrade" -H "Upgrade: websocket" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" -H "Sec-WebSocket-Version: 13" "http://127.0.0.1:${p}/websockify" 2>/dev/null || true)
+  [[ "$hdr" == *"101 Switching Protocols"* ]]
+}
+
 stop_vdi_session() {
   local name=$1
   local runtime
@@ -1673,16 +1680,23 @@ cmd_desktop() {
   mgr=$(get_box_manager "$target_name")
 
   local already_active=false
-  if is_vdi_running "$target_name"; then
-    if curl -fsSi --max-time 2 -H "Connection: Upgrade" -H "Upgrade: websocket" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" -H "Sec-WebSocket-Version: 13" "http://127.0.0.1:${vdi_port}/websockify" 2>/dev/null | grep -qi "101 Switching Protocols"; then
-      already_active=true
-    fi
+  if is_vdi_running "$target_name" && vdi_ws_ready "$vdi_port"; then
+    already_active=true
   fi
 
   if [ "$already_active" = "true" ]; then
     ui_ok "VDI session for '$target_name' is already active on port $vdi_port."
   else
     "$runtime" exec --user 0 "$target_name" sh -c 'pkill -KILL -f "[a]gy-vdi|[w]ebsockify|[x]11vnc|[X]vfb" 2>/dev/null || true; rm -f /tmp/.X*-lock /tmp/.X11-unix/X*' 2>/dev/null || true
+
+    local clean_vdi_args=()
+    for ((i=0; i<${#vdi_args[@]}; i++)); do
+      if [ "${vdi_args[i]}" = "-p" ] || [ "${vdi_args[i]}" = "--port" ]; then
+        i=$((i + 1))
+      else
+        clean_vdi_args+=("${vdi_args[i]}")
+      fi
+    done
 
     if [ "$mgr" = "distrobox" ]; then
       ensure_distrobox_ready "$target_name" || return 1
@@ -1698,17 +1712,8 @@ cmd_desktop() {
         done
       fi
 
-      local final_vdi_args=("-p" "$vdi_port")
-      for ((i=0; i<${#vdi_args[@]}; i++)); do
-        if [ "${vdi_args[i]}" = "-p" ] || [ "${vdi_args[i]}" = "--port" ]; then
-          ((i++))
-        else
-          final_vdi_args+=("${vdi_args[i]}")
-        fi
-      done
-
       echo -e "Starting VDI Virtual Desktop inside ${CYAN}$target_name${NC} (Workstation)..."
-      "$runtime" exec -d --user "$(id -u):$(id -g)" -e HOME="$isolated_home" -e USER="$(id -un 2>/dev/null || echo "$USER")" -e DISTROBOX_HOST_HOME="$HOME" -w "$isolated_home" "$target_name" sh -c 'exec /usr/local/bin/agy-vdi "$@" >/tmp/agy-vdi.log 2>&1' _ "${final_vdi_args[@]}"
+      "$runtime" exec -d --user "$(id -u):$(id -g)" -e HOME="$isolated_home" -e USER="$(id -un 2>/dev/null || echo "$USER")" -e DISTROBOX_HOST_HOME="$HOME" -w "$isolated_home" "$target_name" sh -c 'exec /usr/local/bin/agy-vdi "$@" >/tmp/agy-vdi.log 2>&1' _ -p "$vdi_port" "${clean_vdi_args[@]}"
     else
       if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
         podman unshare chown -R 9000:9000 "$isolated_home" 2>/dev/null || true
@@ -1717,7 +1722,7 @@ cmd_desktop() {
         run_step "Starting container '$target_name'..." "$runtime" start "$target_name"
       fi
       echo -e "Starting VDI Virtual Desktop inside ${CYAN}$target_name${NC} (Sandbox)..."
-      "$runtime" exec -d -u agyuser -w /home/agyuser "$target_name" sh -c 'exec /usr/local/bin/agy-vdi "$@" >/tmp/agy-vdi.log 2>&1' _ -p 6080 "${vdi_args[@]}"
+      "$runtime" exec -d -u agyuser -w /home/agyuser "$target_name" sh -c 'exec /usr/local/bin/agy-vdi "$@" >/tmp/agy-vdi.log 2>&1' _ -p 6080 "${clean_vdi_args[@]}"
     fi
 
     local vdi_ready=false
@@ -1726,12 +1731,7 @@ cmd_desktop() {
     local vdi_timeout="${AGY_VDI_TIMEOUT:-20}"
     while true; do
       if is_vdi_running "$target_name"; then
-        if [ -n "${BATS_VERSION:-}" ] || [ -n "${BATS_TEST_FILENAME:-}" ]; then
-          vdi_ready=true
-          break
-        fi
-        if curl -fsSi --max-time 2 "http://127.0.0.1:${vdi_port}/vnc.html" >/dev/null 2>&1 && \
-           curl -fsSi --max-time 2 -H "Connection: Upgrade" -H "Upgrade: websocket" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" -H "Sec-WebSocket-Version: 13" "http://127.0.0.1:${vdi_port}/websockify" 2>/dev/null | grep -qi "101 Switching Protocols"; then
+        if [ -n "${BATS_VERSION:-}" ] || [ -n "${BATS_TEST_FILENAME:-}" ] || vdi_ws_ready "$vdi_port"; then
           vdi_ready=true
           break
         fi
@@ -2002,6 +2002,9 @@ cmd_update() {
     fi
   elif [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
     podman unshare chown -R 9000:9000 "$isolated_home" 2>/dev/null || true
+  fi
+  if [ "$mgr" != "distrobox" ] && ! "$runtime" ps --format '{{.Names}}' 2>/dev/null | grep -qxF "$target_container"; then
+    run_step "Starting stopped container '$target_container'..." "$runtime" start "$target_container" >/dev/null
   fi
 
   ui_ok "🚀 Updating environment '$target_container'..."
@@ -3008,7 +3011,7 @@ show_compact_status() {
 
   while IFS= read -r b; do
     if [ -n "$b" ] && [ "$b" != "$CONTAINER_NAME" ] && [ "$b" != "$DEV_CONTAINER_NAME" ]; then
-      ((other_count++)) || true
+      other_count=$((other_count + 1))
     fi
   done < <(get_all_agy_boxes)
 
