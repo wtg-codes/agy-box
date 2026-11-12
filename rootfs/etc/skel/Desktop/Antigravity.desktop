@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Google Antigravity
+Comment=Google Antigravity Agentic IDE
+Exec=/usr/local/bin/antigravity
+Icon=/usr/share/pixmaps/antigravity.png
+Terminal=false
+Categories=Development;IDE;

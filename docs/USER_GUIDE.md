@@ -451,7 +451,7 @@ The Antigravity toolchain is **pre-baked system-wide** into `/opt` and `/usr/loc
 * **Origin:** Linux x64 / arm64 tarball from `https://storage.googleapis.com/antigravity-public/antigravity-hub/2.0.1-6566078776737792/linux-x64/Antigravity.tar.gz`, verified by SHA-256 `0727e1f56961b6d2347941f278da69cc6c17de3befe988524848cd167380e9ab` (x64) / `5af56cc9dda954f369a61045b7da2f348bcb0b3507d272b4c0e9aa7cd6175d9b` (arm64).
 * **Wrapper:** launches with `--disable-dev-shm-usage --disable-gpu --no-sandbox` to avoid crashes under container runtimes, and points browser integration at `/usr/bin/google-chrome-stable`.
 * **Defaults:** the installer writes `settings.json` with telemetry disabled (`"antigravity.account.enableTelemetry": false`) if it does not exist yet; existing settings are preserved.
-* **Usage:** run `antigravity` or click **Antigravity 2.0** on the VDI desktop. It drives Chrome via CDP; settings live in `~/.config/Antigravity-box`.
+* **Usage:** run `antigravity` or click **Google Antigravity** on the VDI desktop. It drives Chrome via CDP; settings live in `~/.config/Antigravity-box`.
 
 ### Antigravity CLI (`agy`)
 * **Origin:** precompiled Linux x64 / arm64 tarball (`1.5.0-5269980577660928`).

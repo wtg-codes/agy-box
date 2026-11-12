@@ -210,6 +210,15 @@ if command -v distrobox &>/dev/null && \
     # --- Run Assertions Inside Distrobox ---
     log_info "Running test assertions inside the container..."
     distrobox enter "$CONTAINER_NAME" -- "$REPO_DIR/scripts/assert-box.sh"
+    distrobox enter "$CONTAINER_NAME" -- sh -c '
+        grep -q "^quick_exec=1" /etc/xdg/libfm/libfm.conf &&
+        grep -q "^quick_exec=1" /etc/skel/.config/libfm/libfm.conf &&
+        test -f /etc/skel/Desktop/Antigravity.desktop &&
+        ! test -e /etc/skel/Desktop/Antigravity2.desktop &&
+        grep -q -- "--password-store=basic" /usr/local/bin/antigravity &&
+        grep -q -- "--password-store=basic" /usr/bin/code &&
+        grep -q -- "--password-store=basic" /usr/bin/google-chrome-stable
+    '
 
     # --- Re-run (agy-box-manager update-toolchain path) ---
     log_info "Re-running the toolchain install to verify it is idempotent (update-toolchain path)..."
@@ -291,6 +300,15 @@ else
 
     log_info "Running test assertions inside sandbox container as agyuser..."
     "${RUNTIME}" exec -u agyuser -w /home/agyuser "$CONTAINER_NAME" /mnt/repo/scripts/assert-box.sh
+    "${RUNTIME}" exec -u agyuser -w /home/agyuser "$CONTAINER_NAME" sh -c '
+        grep -q "^quick_exec=1" /etc/xdg/libfm/libfm.conf &&
+        grep -q "^quick_exec=1" /home/agyuser/.config/libfm/libfm.conf &&
+        test -f /home/agyuser/Desktop/Antigravity.desktop &&
+        ! test -e /home/agyuser/Desktop/Antigravity2.desktop &&
+        grep -q -- "--password-store=basic" /usr/local/bin/antigravity &&
+        grep -q -- "--password-store=basic" /usr/bin/code &&
+        grep -q -- "--password-store=basic" /usr/bin/google-chrome-stable
+    '
 
     # --- Optional: headless VDI desktop (noVNC on :6080) ---
     if [[ "${VDI_TEST:-false}" = "true" ]]; then

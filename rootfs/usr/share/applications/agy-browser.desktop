@@ -1,7 +1,7 @@
 [Desktop Entry]
-Name=Chrome
+Name=Google Chrome
 Comment=Google Chrome Browser
-Exec=google-chrome-stable --no-sandbox
-Icon=google-chrome
+Exec=/usr/bin/google-chrome-stable
+Icon=/usr/share/pixmaps/google-chrome.png
 Type=Application
 Categories=Network;WebBrowser;

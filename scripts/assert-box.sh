@@ -61,6 +61,9 @@ assert_cmd "Zed" "zed" "zed --version" || errors=$((errors+1))
 assert_cmd "JetBrains IDE Installer" "agy-install-ide" "test -x /usr/local/bin/agy-install-ide" || errors=$((errors+1))
 assert_cmd "IceWM Startup Script" "icewm-session" "test -x /etc/X11/icewm/startup" || errors=$((errors+1))
 assert_cmd "IceWM Preferences" "icewm-session" "test -f /etc/X11/icewm/preferences" || errors=$((errors+1))
+assert_cmd "PCManFM quick_exec=1 config" "pcmanfm" "grep -q '^quick_exec=1' /etc/xdg/libfm/libfm.conf && grep -q '^quick_exec=1' /etc/skel/.config/libfm/libfm.conf" || errors=$((errors+1))
+assert_cmd "Deduplicated Desktop Launchers & Icons" "sh" "test -f /etc/skel/Desktop/Antigravity.desktop && ! test -e /etc/skel/Desktop/Antigravity2.desktop && grep -q '^Name=Google Antigravity$' /etc/skel/Desktop/Antigravity.desktop && grep -q '^Icon=/usr/share/pixmaps/antigravity.png$' /etc/skel/Desktop/Antigravity.desktop && test -s /usr/share/pixmaps/antigravity.png && grep -q '^Name=Python SDK & ADK$' /etc/skel/Desktop/AntigravitySDK.desktop" || errors=$((errors+1))
+assert_cmd "D-Bus session tools & wrapper --password-store=basic" "dbus-daemon" "command -v dbus-send >/dev/null && grep -q -- '--password-store=basic' /usr/local/bin/antigravity && grep -q -- '--password-store=basic' /usr/bin/code && grep -q -- '--password-store=basic' /usr/bin/google-chrome-stable" || errors=$((errors+1))
 
 assert_cmd "No bundled Open WebUI" "sh" "! test -e /opt/open-webui-venv && ! command -v open-webui >/dev/null 2>&1" || errors=$((errors+1))
 

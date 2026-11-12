@@ -111,7 +111,7 @@ UVEOF
 @test "install-agent-toolchain.sh installs the pinned toolchain into ~/.local (never /usr/bin) and cleans up legacy antigravity-ide" {
   mock_installer_env
   mkdir -p "$HOME/.local/bin" "$HOME/.local/share/antigravity-ide" "$HOME/Desktop"
-  touch "$HOME/.local/bin/antigravity-ide" "$HOME/Desktop/AntigravityIDE.desktop"
+  touch "$HOME/.local/bin/antigravity-ide" "$HOME/Desktop/AntigravityIDE.desktop" "$HOME/Desktop/Antigravity2.desktop" "$HOME/Desktop/google-antigravity.desktop"
   TMPDIR="$TEST_DIR" run ./scripts/install-agent-toolchain.sh
   echo "$output"
   [ "$status" -eq 0 ]
@@ -123,6 +123,9 @@ UVEOF
   [ ! -e "$HOME/.local/bin/antigravity-ide" ]
   [ ! -d "$HOME/.local/share/antigravity-ide" ]
   [ ! -e "$HOME/Desktop/AntigravityIDE.desktop" ]
+  [ ! -e "$HOME/Desktop/Antigravity2.desktop" ]
+  [ ! -e "$HOME/Desktop/google-antigravity.desktop" ]
+  grep -F -- '--password-store=basic' "$HOME/.local/bin/antigravity"
   [ ! -e "$HOME/.local/bin/agy.new" ]
   [ ! -e "$HOME/.local/share/antigravity.new" ]
 
@@ -350,11 +353,16 @@ EOF
   [ "$output" = "docker" ]
 }
 
-@test "Desktop and IceWM launchers use antigravity icon and dynamic SDK version lookup" {
-  grep -F 'Icon=antigravity' rootfs/etc/skel/Desktop/Antigravity2.desktop
-  refute_grep -F 'system-run' rootfs/etc/skel/Desktop/Antigravity2.desktop
-  grep -F '"antigravity" antigravity' rootfs/etc/X11/icewm/menu
-  grep -F '"antigravity" antigravity' rootfs/etc/X11/icewm/toolbar
+@test "Desktop and IceWM launchers use antigravity icon, deduplicated names, and dynamic SDK version lookup" {
+  [ -f rootfs/etc/skel/Desktop/Antigravity.desktop ]
+  [ ! -e rootfs/etc/skel/Desktop/Antigravity2.desktop ]
+  grep -F 'Name=Google Antigravity' rootfs/etc/skel/Desktop/Antigravity.desktop
+  grep -F 'Icon=/usr/share/pixmaps/antigravity.png' rootfs/etc/skel/Desktop/Antigravity.desktop
+  refute_grep -F 'system-run' rootfs/etc/skel/Desktop/Antigravity.desktop
+  grep -F 'Name=Python SDK & ADK' rootfs/etc/skel/Desktop/AntigravitySDK.desktop
+  grep -F 'quick_exec=1' rootfs/etc/skel/.config/libfm/libfm.conf
+  grep -F '"/usr/share/pixmaps/antigravity.png" /usr/local/bin/antigravity' rootfs/etc/X11/icewm/menu
+  grep -F '"/usr/share/pixmaps/antigravity.png" /usr/local/bin/antigravity' rootfs/etc/X11/icewm/toolbar
   refute_grep -F '"system-run" antigravity' rootfs/etc/X11/icewm/menu
   refute_grep -F '"system-run" antigravity' rootfs/etc/X11/icewm/toolbar
 
@@ -362,6 +370,34 @@ EOF
     grep -F "importlib.metadata.version('google-antigravity')" "$f"
     refute_grep -F 'v0.1.0' "$f"
   done
+}
+
+@test "antigravity wrapper passes --password-store=basic when isolated or lacking SecretService, and omits when SecretService exists" {
+  mock_installer_env
+  TMPDIR="$TEST_DIR" run ./scripts/install-agent-toolchain.sh
+  [ "$status" -eq 0 ]
+
+  cat <<EOF2 > "$HOME/.local/share/antigravity/antigravity"
+#!/bin/bash
+echo "ARGS:\$*"
+EOF2
+  chmod +x "$HOME/.local/share/antigravity/antigravity"
+
+  # 1. Unset DBUS_SESSION_BUS_ADDRESS -> --password-store=basic
+  run env -u DBUS_SESSION_BUS_ADDRESS -u AGY_PASSWORD_STORE -u AGY_KEYRING_MODE "$HOME/.local/bin/antigravity" --version
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"--password-store=basic"* ]]
+
+  # 2. AGY_KEYRING_MODE=isolated even when DBUS_SESSION_BUS_ADDRESS is set -> --password-store=basic
+  run env DBUS_SESSION_BUS_ADDRESS="unix:path=/tmp/fake" AGY_KEYRING_MODE="isolated" "$HOME/.local/bin/antigravity" --version
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"--password-store=basic"* ]]
+
+  # 3. Host D-Bus with org.freedesktop.secrets -> no --password-store=basic
+  create_mock "dbus-send" 'echo "   string \"org.freedesktop.secrets\""; exit 0'
+  run env PATH="$MOCK_BIN:$PATH" DBUS_SESSION_BUS_ADDRESS="unix:path=/tmp/fake" AGY_KEYRING_MODE="host" "$HOME/.local/bin/antigravity" --version
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"--password-store=basic"* ]]
 }
 
 

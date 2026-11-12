@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=Visual Studio Code
-Exec=code
-Icon=vscode
+Exec=/usr/bin/code
+Icon=/usr/share/pixmaps/vscode.png
 Terminal=false
 Categories=Development;IDE;

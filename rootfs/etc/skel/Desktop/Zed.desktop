@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=Zed
-Exec=zed
-Icon=zed
+Exec=/usr/local/bin/zed
+Icon=/usr/share/pixmaps/zed.png
 Terminal=false
 Categories=Development;IDE;

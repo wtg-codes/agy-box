@@ -9,6 +9,19 @@ Container images are published to `ghcr.io/wtg-codes/agy-box` (`:<version>`, `:<
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-11-12
+
+- **VDI Desktop Direct Launcher Execution (Zero `"Execute File"` Prompts)**:
+  - Enabled `quick_exec=1` across `/etc/xdg/libfm/libfm.conf` (`scripts/install-agent-deps.sh`), `/etc/skel/.config/libfm/libfm.conf`, and runtime `$HOME/.config/libfm/libfm.conf` (`agy-vdi`), alongside `shared-mime-info` and `desktop-file-utils`, eliminating PCManFM `"Execute File"` confirmation modals when clicking desktop shortcuts.
+- **VDI Desktop Launcher Deduplication & Icon Resolution**:
+  - Replaced legacy `Antigravity2.desktop` (`Antigravity 2.0 (Agent First Experience)`) with `Antigravity.desktop` (`Name=Google Antigravity`, `Icon=/usr/share/pixmaps/antigravity.png`), renamed `AntigravitySDK.desktop` to `Name=Python SDK & ADK` to prevent label truncation, and wired explicit pixmap icon paths across desktop shortcuts and IceWM `menu`/`toolbar`.
+  - Added automatic cleanup of legacy duplicate desktop shortcuts (`Antigravity2.desktop`, `AntigravityIDE.desktop`, `google-antigravity.desktop`) and missing shortcut seeding in `agy-vdi` and `agy-install-toolchain`.
+- **VDI Keyring & Persistent Authentication Passthrough**:
+  - Workstation (`distrobox`) `cmd_desktop` now forwards `DBUS_SESSION_BUS_ADDRESS`, `XDG_RUNTIME_DIR`, `GNOME_KEYRING_CONTROL`, `SSH_AUTH_SOCK`, and `AGY_KEYRING_MODE` when `AGY_KEYRING_MODE=host` (and omits host D-Bus variables when `AGY_KEYRING_MODE=isolated`), matching `distrobox enter` SecretService (`org.freedesktop.secrets`) behavior so Electron/Chromium OAuth sessions persist across CLI and VDI.
+  - Bundled `dbus-x11` and updated `agy-vdi` to automatically start a container-local session `dbus-daemon` and export `AGY_PASSWORD_STORE=basic` when running in Sandbox mode, `AGY_KEYRING_MODE=isolated`, or without `org.freedesktop.secrets`.
+  - Updated `/usr/local/bin/antigravity` (`$BIN_DIR/antigravity`), `/usr/bin/google-chrome-stable`, and `/usr/bin/code` wrappers to automatically pass `--password-store=basic` whenever host SecretService is unavailable or isolated.
+  - Hardened `apply_keyring_configuration` with rootless `podman unshare` fallback and ordered `podman unshare chown` healing after first-boot `distrobox enter`, preventing `Permission denied` errors on subuid-owned container homes (`9000:9000` Sandbox / first-boot Distrobox `.config`).
+
 ## [0.7.1] - 2026-11-12
 
 - **VDI Connection Reliability & IPv4 Dual-Stack Resolution**:
