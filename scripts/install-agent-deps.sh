@@ -21,7 +21,6 @@ apt-get update && apt-get install -y --no-install-recommends \
     gnupg \
     python3-pip \
     python3-keyring \
-    python3-keyrings.alt \
     apt-transport-https \
     ca-certificates \
     libsecret-1-0 \
@@ -97,8 +96,8 @@ case " \$* " in
         if [ "\${AGY_PASSWORD_STORE:-}" = "basic" ] || [ "\${AGY_KEYRING_MODE:-}" = "isolated" ] || [ -z "\${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
             use_basic=true
         elif command -v dbus-send >/dev/null 2>&1; then
-            if ! dbus-send --session --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListNames 2>/dev/null | grep -q 'org\.freedesktop\.secrets' && \\
-               ! dbus-send --session --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListActivatableNames 2>/dev/null | grep -q 'org\.freedesktop\.secrets'; then
+            if ! dbus-send --session --reply-timeout=1500 --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListNames 2>/dev/null | grep -q 'org\.freedesktop\.secrets' && \\
+               ! dbus-send --session --reply-timeout=1500 --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListActivatableNames 2>/dev/null | grep -q 'org\.freedesktop\.secrets'; then
                 use_basic=true
             fi
         fi
@@ -128,8 +127,8 @@ case " $* " in
         if [ "${AGY_PASSWORD_STORE:-}" = "basic" ] || [ "${AGY_KEYRING_MODE:-}" = "isolated" ] || [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
             use_basic=true
         elif command -v dbus-send >/dev/null 2>&1; then
-            if ! dbus-send --session --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListNames 2>/dev/null | grep -q 'org\.freedesktop\.secrets' && \
-               ! dbus-send --session --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListActivatableNames 2>/dev/null | grep -q 'org\.freedesktop\.secrets'; then
+            if ! dbus-send --session --reply-timeout=1500 --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListNames 2>/dev/null | grep -q 'org\.freedesktop\.secrets' && \
+               ! dbus-send --session --reply-timeout=1500 --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListActivatableNames 2>/dev/null | grep -q 'org\.freedesktop\.secrets'; then
                 use_basic=true
             fi
         fi
@@ -177,8 +176,8 @@ case " $* " in
         if [ "${AGY_PASSWORD_STORE:-}" = "basic" ] || [ "${AGY_KEYRING_MODE:-}" = "isolated" ] || [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
             use_basic=true
         elif command -v dbus-send >/dev/null 2>&1; then
-            if ! dbus-send --session --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListNames 2>/dev/null | grep -q 'org\.freedesktop\.secrets' && \
-               ! dbus-send --session --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListActivatableNames 2>/dev/null | grep -q 'org\.freedesktop\.secrets'; then
+            if ! dbus-send --session --reply-timeout=1500 --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListNames 2>/dev/null | grep -q 'org\.freedesktop\.secrets' && \
+               ! dbus-send --session --reply-timeout=1500 --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListActivatableNames 2>/dev/null | grep -q 'org\.freedesktop\.secrets'; then
                 use_basic=true
             fi
         fi

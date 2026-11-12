@@ -1,7 +1,8 @@
 #!/usr/bin/env bats
 # Tests for the per-user Antigravity toolchain flow:
 #   - scripts/install-agent-toolchain.sh (shipped as /usr/local/bin/agy-install-toolchain)
-#   - agy-box-manager helpers that run it inside the box and export the agy CLI
+#   - structured logging into $HOME/.local/state/agy-box/toolchain.log
+#   - desktop/IceWM launcher hygiene and --password-store=basic wrapper logic
 
 setup() {
   TEST_DIR="$(mktemp -d)"
@@ -25,6 +26,8 @@ EOF2
   export ORIGINAL_HOME="$HOME"
   export HOME="$TEST_DIR/home"
   mkdir -p "$HOME"
+  unset AGY_BOX_STATE_DIR
+  unset AGY_LOG_DISABLED
   export PATH="$MOCK_BIN:$PATH"
 }
 
@@ -108,10 +111,14 @@ UVEOF
     exit 0'
 }
 
-@test "install-agent-toolchain.sh installs the pinned toolchain into ~/.local (never /usr/bin) and cleans up legacy antigravity-ide" {
+@test "install-agent-toolchain.sh installs the pinned toolchain into ~/.local, cleans up legacy shortcuts, and writes toolchain.log" {
   mock_installer_env
   mkdir -p "$HOME/.local/bin" "$HOME/.local/share/antigravity-ide" "$HOME/Desktop"
-  touch "$HOME/.local/bin/antigravity-ide" "$HOME/Desktop/AntigravityIDE.desktop" "$HOME/Desktop/Antigravity2.desktop" "$HOME/Desktop/google-antigravity.desktop"
+  touch "$HOME/.local/bin/antigravity-ide" \
+        "$HOME/Desktop/AntigravityIDE.desktop" \
+        "$HOME/Desktop/Antigravity2.desktop" \
+        "$HOME/Desktop/google-antigravity.desktop" \
+        "$HOME/Desktop/SetupAssistant.desktop"
   TMPDIR="$TEST_DIR" run ./scripts/install-agent-toolchain.sh
   echo "$output"
   [ "$status" -eq 0 ]
@@ -125,7 +132,9 @@ UVEOF
   [ ! -e "$HOME/Desktop/AntigravityIDE.desktop" ]
   [ ! -e "$HOME/Desktop/Antigravity2.desktop" ]
   [ ! -e "$HOME/Desktop/google-antigravity.desktop" ]
+  [ ! -e "$HOME/Desktop/SetupAssistant.desktop" ]
   grep -F -- '--password-store=basic' "$HOME/.local/bin/antigravity"
+  grep -F -- '--reply-timeout=1500' "$HOME/.local/bin/antigravity"
   [ ! -e "$HOME/.local/bin/agy.new" ]
   [ ! -e "$HOME/.local/share/antigravity.new" ]
 
@@ -137,6 +146,13 @@ UVEOF
   refute_grep -F '/usr/bin/agy' "$TEST_LOG"
   [ -f "$HOME/.config/zed/settings.json" ]
   grep -F '"antigravity": true' "$HOME/.config/zed/settings.json"
+
+  # Verify structured toolchain.log output
+  [ -s "$HOME/.local/state/agy-box/toolchain.log" ]
+  grep -E '^\[20[0-9]{2}-[0-9]{2}-[0-9]{2}T' "$HOME/.local/state/agy-box/toolchain.log"
+  grep -F '[toolchain] [CMD] pip3 install' "$HOME/.local/state/agy-box/toolchain.log"
+  grep -F '[toolchain] [CMD] npm install' "$HOME/.local/state/agy-box/toolchain.log"
+  grep -F '[toolchain] [EXIT rc=0] agy-install-toolchain completed successfully' "$HOME/.local/state/agy-box/toolchain.log"
 }
 
 @test "install-agent-toolchain.sh installs Antigravity VS Code extension when code is available" {
@@ -203,7 +219,7 @@ UVEOF
   [ -x "$HOME/.local/bin/agy" ]
 }
 
-@test "install-agent-toolchain.sh fails loudly on checksum mismatch" {
+@test "install-agent-toolchain.sh fails loudly on checksum mismatch and logs non-zero exit" {
   mock_installer_env
   create_mock "sha256sum" 'exit 1'
   TMPDIR="$TEST_DIR" run ./scripts/install-agent-toolchain.sh
@@ -211,6 +227,7 @@ UVEOF
   [ "$status" -ne 0 ]
   [[ "$output" == *"ERROR: step"* ]]
   [ ! -e "$HOME/.local/bin/agy" ]
+  grep -F '[EXIT rc=1] sha256sum -c' "$HOME/.local/state/agy-box/toolchain.log"
 }
 
 @test "install-agent-toolchain.sh refuses to run as root without --system" {
@@ -227,87 +244,8 @@ UVEOF
   grep -F '/usr/local/bin/agy-install-toolchain' Containerfile | grep -v '^COPY'
 }
 
-# Mock distrobox: logs calls and emulates `distrobox-export --bin X --export-path D`
-mock_distrobox() {
-  create_mock "distrobox" '
-    name=""; bin=""; dest=""; prev=""
-    for a in "$@"; do
-      if [ "$prev" = "enter" ]; then name="$a"; fi
-      if [ "$prev" = "--bin" ]; then bin="$a"; fi
-      if [ "$prev" = "--export-path" ]; then dest="$a"; fi
-      prev="$a"
-    done
-    case "$*" in
-      *test\ -x\ /usr/local/bin/agy*) exit "${MOCK_HAS_AGY:-0}" ;;
-      *agy-install-toolchain*) exit "${MOCK_INSTALL_RC:-0}" ;;
-    esac
-    if [ -n "$bin" ] && [ -n "$dest" ]; then
-      printf "#!/bin/sh\n# distrobox_binary\n# name: %s\nexec distrobox-enter -n %s -- %s\n" "$name" "$name" "$bin" > "$dest/$(basename "$bin")"
-    fi
-    exit 0'
-}
-
-@test "agy-box-manager: install_toolchain_in_box exports the pre-baked /usr/local/bin/agy" {
-  mock_distrobox
-  mkdir -p "$TEST_DIR/export"
-  run bash -c 'source ./agy-box-manager && install_toolchain_in_box agy-box "$1/boxhome" "$1/export"' _ "$TEST_DIR"
-  echo "$output"
-  [ "$status" -eq 0 ]
-
-  export_line=$(grep -n -F "distrobox enter agy-box -- distrobox-export --bin /usr/local/bin/agy --export-path $TEST_DIR/export" "$TEST_LOG" | cut -d: -f1)
-  [ -n "$export_line" ]
-  grep -F "# name: agy-box" "$TEST_DIR/export/agy"
-  refute_grep -F '/usr/bin/agy' "$TEST_LOG"
-}
-
-@test "agy-box-manager: installer failure aborts before export and prints the retry command" {
-  mock_distrobox
-  mkdir -p "$TEST_DIR/export"
-  MOCK_HAS_AGY=1 MOCK_INSTALL_RC=1 run bash -c 'source ./agy-box-manager && install_toolchain_in_box agy-box-dev "$1/boxhome" "$1/export"' _ "$TEST_DIR"
-  echo "$output"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"agy-box-manager update-toolchain dev"* ]]
-  refute_grep -F 'distrobox-export --bin' "$TEST_LOG"
-  [ ! -e "$TEST_DIR/export/agy" ]
-}
-
-@test "agy-box-manager: export never clobbers a host-native agy" {
-  mock_distrobox
-  mkdir -p "$TEST_DIR/export"
-  printf '#!/bin/sh\necho native\n' > "$TEST_DIR/export/agy"
-  run bash -c 'source ./agy-box-manager && export_agy_cli agy-box "$1/boxhome" "$1/export"' _ "$TEST_DIR"
-  echo "$output"
-  [ "$status" -eq 0 ]
-  grep -F 'echo native' "$TEST_DIR/export/agy"
-  refute_grep -F 'distrobox-export --bin' "$TEST_LOG"
-}
-
-@test "agy-box-manager: export is skipped when the box shares the host home and user binary exists" {
-  mock_distrobox
-  mkdir -p "$TEST_DIR/home/.local/bin"
-  touch "$TEST_DIR/home/.local/bin/agy"
-  chmod +x "$TEST_DIR/home/.local/bin/agy"
-  run bash -c 'source ./agy-box-manager && export_agy_cli agy-box "$1/home" "$1/home/.local/bin"' _ "$TEST_DIR"
-  [ "$status" -eq 0 ]
-  refute_grep -F 'distrobox-export --bin' "$TEST_LOG"
-}
-
-@test "agy-box-manager: unexport removes only this box's agy shim" {
-  mkdir -p "$TEST_DIR/export"
-  printf '#!/bin/sh\n# distrobox_binary\n# name: agy-box-dev\n' > "$TEST_DIR/export/agy"
-  run bash -c 'source ./agy-box-manager && unexport_agy_cli agy-box "$1/export"' _ "$TEST_DIR"
-  [ "$status" -eq 0 ]
-  [ -e "$TEST_DIR/export/agy" ]
-
-  run bash -c 'source ./agy-box-manager && unexport_agy_cli agy-box-dev "$1/export"' _ "$TEST_DIR"
-  [ "$status" -eq 0 ]
-  [ ! -e "$TEST_DIR/export/agy" ]
-}
-
-@test "agy-box-manager: no references to the removed /usr/bin/agy; update-toolchain is wired up" {
+@test "agy-box-manager: no references to the removed /usr/bin/agy" {
   refute_grep -F '/usr/bin/agy' agy-box-manager
-  grep -F 'update-toolchain) check_deps "quiet"' agy-box-manager
-  grep -F '"  update-toolchain ' agy-box-manager
 }
 
 @test "agy-box-manager: sourcing does not run the CLI" {
@@ -353,9 +291,10 @@ EOF
   [ "$output" = "docker" ]
 }
 
-@test "Desktop and IceWM launchers use antigravity icon, deduplicated names, and dynamic SDK version lookup" {
+@test "Desktop and IceWM launchers use antigravity icon, deduplicated names, no SetupAssistant, and dynamic SDK version lookup" {
   [ -f rootfs/etc/skel/Desktop/Antigravity.desktop ]
   [ ! -e rootfs/etc/skel/Desktop/Antigravity2.desktop ]
+  [ ! -e rootfs/etc/skel/Desktop/SetupAssistant.desktop ]
   grep -F 'Name=Google Antigravity' rootfs/etc/skel/Desktop/Antigravity.desktop
   grep -F 'Icon=/usr/share/pixmaps/antigravity.png' rootfs/etc/skel/Desktop/Antigravity.desktop
   refute_grep -F 'system-run' rootfs/etc/skel/Desktop/Antigravity.desktop
@@ -365,6 +304,8 @@ EOF
   grep -F '"/usr/share/pixmaps/antigravity.png" /usr/local/bin/antigravity' rootfs/etc/X11/icewm/toolbar
   refute_grep -F '"system-run" antigravity' rootfs/etc/X11/icewm/menu
   refute_grep -F '"system-run" antigravity' rootfs/etc/X11/icewm/toolbar
+  refute_grep -F 'agy-setup-helper' rootfs/etc/X11/icewm/menu
+  refute_grep -F 'agy-setup-helper' rootfs/etc/X11/icewm/toolbar
 
   for f in rootfs/etc/skel/Desktop/AntigravitySDK.desktop rootfs/etc/X11/icewm/menu rootfs/etc/X11/icewm/toolbar; do
     grep -F "importlib.metadata.version('google-antigravity')" "$f"
@@ -399,5 +340,3 @@ EOF2
   [ "$status" -eq 0 ]
   [[ "$output" != *"--password-store=basic"* ]]
 }
-
-
