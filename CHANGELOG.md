@@ -20,6 +20,7 @@ Container images are published to `ghcr.io/wtg-codes/agy-box` (`:<version>`, `:<
   - Workstation (`distrobox`) `cmd_desktop` now forwards `DBUS_SESSION_BUS_ADDRESS`, `XDG_RUNTIME_DIR`, `GNOME_KEYRING_CONTROL`, `SSH_AUTH_SOCK`, and `AGY_KEYRING_MODE` when `AGY_KEYRING_MODE=host` (and omits host D-Bus variables when `AGY_KEYRING_MODE=isolated`), matching `distrobox enter` SecretService (`org.freedesktop.secrets`) behavior so Electron/Chromium OAuth sessions persist across CLI and VDI.
   - Bundled `dbus-x11` and updated `agy-vdi` to automatically start a container-local session `dbus-daemon` and export `AGY_PASSWORD_STORE=basic` when running in Sandbox mode, `AGY_KEYRING_MODE=isolated`, or without `org.freedesktop.secrets`.
   - Updated `/usr/local/bin/antigravity` (`$BIN_DIR/antigravity`), `/usr/bin/google-chrome-stable`, and `/usr/bin/code` wrappers to automatically pass `--password-store=basic` whenever host SecretService is unavailable or isolated.
+  - Hardened `apply_keyring_configuration` with rootless `podman unshare` fallback and ordered `podman unshare chown` healing after first-boot `distrobox enter`, preventing `Permission denied` errors on subuid-owned container homes (`9000:9000` Sandbox / first-boot Distrobox `.config`).
 
 ## [0.7.1] - 2026-11-12
 

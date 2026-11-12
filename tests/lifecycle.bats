@@ -866,8 +866,97 @@ exit 0
   [[ "$exec_line" != *"GNOME_KEYRING_CONTROL"* ]]
 }
 
+@test "agy-box-manager: apply_keyring_configuration falls back to podman unshare when .config is not writable" {
+  local mock_log="$TEST_DIR/keyring_unshare.log"
+  local iso_home="$HOME/.config/agy-box/home"
+  mkdir -p "$iso_home/.config"
+  chmod 0500 "$iso_home/.config"
 
+  create_mock "podman" '
+echo "podman $*" >> "'"$mock_log"'"
+if [ "$1" = "unshare" ]; then
+  chmod -R u+rwx "'"$iso_home"'" 2>/dev/null || true
+  shift
+  "$@"
+  exit $?
+fi
+exit 0
+'
 
+  run env AGY_KEYRING_MODE="isolated" bash -c 'source ./agy-box-manager && apply_keyring_configuration "'"$iso_home"'"'
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"Permission denied"* ]]
+  run grep -F "podman unshare bash -c" "$mock_log"
+  [ "$status" -eq 0 ]
+  [ -f "$iso_home/.config/python_keyring/keyringrc.cfg" ]
+  [ -f "$iso_home/.config/environment.d/keyring.conf" ]
 
+  chmod 0500 "$iso_home/.config"
+  run env AGY_KEYRING_MODE="host" bash -c 'source ./agy-box-manager && apply_keyring_configuration "'"$iso_home"'"'
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"Permission denied"* ]]
+  [ ! -e "$iso_home/.config/python_keyring/keyringrc.cfg" ]
+  [ ! -e "$iso_home/.config/environment.d/keyring.conf" ]
+}
 
+@test "agy-box-manager: cmd_install_official and cmd_desktop heal subuid ownership after distrobox enter" {
+  local mock_log="$TEST_DIR/ws_subuid_order.log"
+  local ws_home="$HOME/.config/agy-box/homes/agy-box-ws-perm"
+  mkdir -p "$HOME/.config/agy-box"
+  cat <<'EOF' > "$HOME/.config/agy-box/config.env"
+AGY_CONTAINER_MANAGER="podman"
+AGY_KEYRING_MODE="isolated"
+EOF
+
+  create_mock "podman" '
+echo "podman $*" >> "'"$mock_log"'"
+if [ "$1" = "unshare" ] && [ "$2" = "chown" ]; then
+  chmod -R u+rwx "'"$ws_home"'" 2>/dev/null || true
+  exit 0
+elif [ "$1" = "unshare" ]; then
+  chmod -R u+rwx "'"$ws_home"'" 2>/dev/null || true
+  shift
+  "$@"
+  exit $?
+elif [ "$1" = "ps" ]; then
+  if [ -f "'"$TEST_DIR"'/ws_created" ]; then echo "agy-box-ws-perm"; fi
+elif [ "$1" = "inspect" ] && [[ "$*" == *"manager"* ]]; then
+  echo "distrobox"
+elif [ "$1" = "inspect" ] && [[ "$*" == *"State.Running"* ]]; then
+  echo "true"
+elif [ "$1" = "exec" ] && [[ "$*" == *"pgrep"* ]]; then
+  if [ -f "'"$TEST_DIR"'/ws_vdi_started" ]; then exit 0; else exit 1; fi
+elif [ "$1" = "exec" ] && [ "$2" = "-d" ]; then
+  touch "'"$TEST_DIR"'/ws_vdi_started"
+fi
+exit 0
+'
+  create_mock "distrobox" '
+echo "distrobox $*" >> "'"$mock_log"'"
+if [ "$1" = "create" ]; then
+  touch "'"$TEST_DIR"'/ws_created"
+elif [ "$1" = "enter" ] && [[ "$*" == *"-- true"* ]]; then
+  mkdir -p "'"$ws_home"'/.config"
+  chmod 0500 "'"$ws_home"'/.config"
+fi
+exit 0
+'
+
+  run ./agy-box-manager install agy-box-ws-perm --mode workstation --yes --no-enter
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"Permission denied"* ]]
+  [ -f "$ws_home/.config/python_keyring/keyringrc.cfg" ]
+
+  local enter_line chown_last_line
+  enter_line=$(grep -nF "distrobox enter agy-box-ws-perm -- true" "$mock_log" | head -n1 | cut -d: -f1)
+  chown_last_line=$(grep -nF "podman unshare chown -R 0:0 $ws_home" "$mock_log" | tail -n1 | cut -d: -f1)
+  [ -n "$enter_line" ]
+  [ -n "$chown_last_line" ]
+  [ "$chown_last_line" -gt "$enter_line" ]
+
+  chmod 0500 "$ws_home/.config"
+  run ./agy-box-manager desktop agy-box-ws-perm --detach
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"Permission denied"* ]]
+}
 
