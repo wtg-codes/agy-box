@@ -13,13 +13,13 @@ assert_cmd() {
     local name=$1
     local cmd=$2
     local ver_cmd=$3
-    
+
     echo -n "Checking $name... "
     if ! command -v "$cmd" &>/dev/null; then
         echo -e "${RED}FAILED (not found in PATH)${NC}"
         return 1
     fi
-    
+
     # Verify it runs and outputs successfully
     local ver_out
     if ! ver_out=$(eval "$ver_cmd" 2>&1); then
@@ -28,7 +28,7 @@ assert_cmd() {
         echo -e "${YELLOW}Output:${NC} $ver_out"
         return 1
     fi
-    
+
     echo -e "${GREEN}PASSED${NC}"
     return 0
 }
@@ -45,6 +45,7 @@ assert_cmd "k9s" "k9s" "k9s version" || errors=$((errors+1))
 
 # Assert AI Agent Tools
 assert_cmd "Toolchain installer (agy-install-toolchain)" "agy-install-toolchain" "test -f /usr/local/bin/agy-install-toolchain && test -x /usr/local/bin/agy-install-toolchain" || errors=$((errors+1))
+assert_cmd "Container health doctor (agy-doctor)" "agy-doctor" "test -x /usr/local/bin/agy-doctor && agy-doctor --version | grep -q '0.8.0'" || errors=$((errors+1))
 assert_cmd "Gemini CLI" "gemini" "gemini --help" || errors=$((errors+1))
 assert_cmd "Google ADK" "adk" "adk --help" || errors=$((errors+1))
 assert_cmd "Antigravity CLI (agy)" "agy" "agy --version" || errors=$((errors+1))
@@ -52,13 +53,12 @@ assert_cmd "Antigravity SDK (Agent + LocalAgentConfig, offline)" "python3" "pyth
 # Login shells find the toolchain on PATH
 assert_cmd "Toolchain on login-shell PATH (profile.d)" "sh" "env PATH=/usr/local/bin:/usr/bin:/bin sh -c '. /etc/profile.d/agy-toolchain.sh && test -n \"\$(command -v agy)\"'" || errors=$((errors+1))
 
-# Assert Desktop Apps (Checking path & permissions)
+# Assert Desktop Apps & Clean Bloat Removal
 assert_cmd "Google Chrome" "google-chrome-stable" "google-chrome-stable --version" || errors=$((errors+1))
 assert_cmd "Google Antigravity (Agent UI)" "antigravity" "{ test -x /usr/local/bin/antigravity && test -d /opt/antigravity; } || { test -x \"$HOME/.local/bin/antigravity\" && test -d \"$HOME/.local/share/antigravity\"; }" || errors=$((errors+1))
-assert_cmd "No legacy Antigravity IDE" "sh" "! test -e /usr/local/bin/antigravity-ide && ! test -d /opt/antigravity-ide" || errors=$((errors+1))
+assert_cmd "No legacy Antigravity IDE or removed setup bloat" "sh" "! test -e /usr/local/bin/antigravity-ide && ! test -d /opt/antigravity-ide && ! test -e /etc/profile.d/agy-setup-check.sh && ! test -e /usr/local/bin/agy-setup-helper && ! test -e /usr/local/bin/agy-install-ide && ! test -e /etc/skel/Desktop/SetupAssistant.desktop" || errors=$((errors+1))
 assert_cmd "Visual Studio Code" "code" "code --version" || errors=$((errors+1))
 assert_cmd "Zed" "zed" "zed --version" || errors=$((errors+1))
-assert_cmd "JetBrains IDE Installer" "agy-install-ide" "test -x /usr/local/bin/agy-install-ide" || errors=$((errors+1))
 assert_cmd "IceWM Startup Script" "icewm-session" "test -x /etc/X11/icewm/startup" || errors=$((errors+1))
 assert_cmd "IceWM Preferences" "icewm-session" "test -f /etc/X11/icewm/preferences" || errors=$((errors+1))
 assert_cmd "PCManFM quick_exec=1 config" "pcmanfm" "grep -q '^quick_exec=1' /etc/xdg/libfm/libfm.conf && grep -q '^quick_exec=1' /etc/skel/.config/libfm/libfm.conf" || errors=$((errors+1))

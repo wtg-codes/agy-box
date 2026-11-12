@@ -4,85 +4,77 @@ set allow-duplicate-recipes := true
 
 manager := `if [ -f ./agy-box-manager ]; then echo "./agy-box-manager"; else echo "agy-box-manager"; fi`
 
-# Launch the interactive UI manager
+# Launch the interactive TUI manager
 agy:
     @{{manager}}
 
-# Pull and install the official release (or a named container: just agy-install test1, with optional --mode sandbox|workstation)
+# Pull the official release image and create a new stable box (default: --mode sandbox; optional: --mode workstation)
 agy-install *args="":
     @{{manager}} install {{args}}
 
-# Build a local development workspace from source
+# Build a box image from the local repository (main -> stable channel, other branches -> dev channel)
 agy-box-dev *args="":
     @{{manager}} dev {{args}}
 
-# Enter the official workspace (or a named container: just agy-enter test1)
+# Enter a box shell (auto-selects when 1 box exists, or pass name | stable | dev)
 agy-enter *args="":
     @{{manager}} enter {{args}}
 
-# Enter the development workspace
+# Enter a dev-channel box shell
 agy-enter-dev *args="":
     @{{manager}} enter dev {{args}}
 
-# Start VDI Desktop inside official workspace (or a named container: just agy-desktop test1)
+# Start or manage VDI Web Desktop for a box (auto-selects when 1 box exists, or pass name | stable | dev)
 agy-desktop *args="":
     @{{manager}} desktop {{args}}
 
-# Start VDI Desktop inside development workspace
+# Start or manage VDI Web Desktop for a dev-channel box
 agy-desktop-dev *args="":
     @{{manager}} desktop dev {{args}}
 
-# Check the status of AGY Boxes and preserved storage directories
+# View manager and per-box diagnostic logs (e.g. just agy-logs, just agy-logs dev --vdi)
+agy-logs *args="":
+    @{{manager}} logs {{args}}
+
+# Show status of all managed AGY Boxes and preserved storage directories
 agy-status:
     @{{manager}} status
 
-# Health checks plus workspace, toolchain, IDE & auth inventory
-agy-doctor:
-    @{{manager}} doctor
+# Run host and workspace health diagnostics
+agy-doctor *args="":
+    @{{manager}} doctor {{args}}
 
 # Alias of agy-doctor
-agy-check:
-    @{{manager}} doctor
+agy-check *args="":
+    @{{manager}} doctor {{args}}
 
-# Run the first-run configuration setup wizard
-agy-wizard *args="":
-    @{{manager}} wizard {{args}}
-
-# Update toolchain, IDE extensions, and container packages
+# Update toolchain, IDE extensions, and container OS packages
 agy-update *args="":
     @{{manager}} update {{args}}
 
-# Back up agy-box configuration and workspace state to a tar.gz archive
-agy-backup *args="":
-    @{{manager}} backup {{args}}
-
-# Restore agy-box configuration and workspace state from a tar.gz archive
-agy-restore *args="":
-    @{{manager}} restore {{args}}
-
-# Remove workspace or named box (prompts for data retention, or pass --purge / --keep)
+# Remove a box or all boxes (pass --all, --purge, --keep, -y)
 agy-clean *args="":
     @{{manager}} clean {{args}}
 
-# Remove the development workspace
+# Remove a dev-channel box
 agy-clean-dev *args="":
     @{{manager}} clean dev {{args}}
 
-# Install/update the Antigravity toolchain in the official workspace (or named box)
+# Install/update the Antigravity toolchain inside a box
 agy-update-toolchain *args="":
     @{{manager}} update-toolchain {{args}}
 
-# Install/update the Antigravity toolchain in the development workspace
+# Install/update the Antigravity toolchain inside a dev-channel box
 agy-update-toolchain-dev *args="":
     @{{manager}} update-toolchain dev {{args}}
 
-# Install the CLI tool globally to ~/.local/bin
+# Install agy-box-manager globally to ~/.local/bin
 agy-install-global:
     @{{manager}} install-global
 
-# Remove the global CLI installation
-agy-uninstall-global:
-    @{{manager}} uninstall-global
+# Remove the global agy-box-manager CLI installation
+agy-uninstall-global *args="":
+    @{{manager}} uninstall-global {{args}}
 
 # Prune exited containers, dangling images, and unused volumes to free up space
 agy-prune:
@@ -92,7 +84,7 @@ agy-prune:
     $runtime image prune -f || true; \
     $runtime volume prune -f || true
 
-# Test the dev image inside a temporary container
+# Build and test the local image inside an isolated container
 agy-test:
     @./scripts/test-box.sh
 
@@ -100,46 +92,19 @@ agy-test:
 agy-e2e tag="latest":
     @PULL=true VDI_TEST=true IMAGE_NAME="ghcr.io/wtg-codes/agy-box:{{tag}}" ./scripts/test-box.sh
 
-# Run health checks directly inside the active running container
+# Run active container assertions inside a running box (sandbox or workstation)
 agy-assert *args="":
-    @target_name="agy-box"; \
-    if [ "{{args}}" = "dev" ]; then target_name="agy-box-dev"; fi; \
-    if ! distrobox list --no-color 2>/dev/null | awk -F'|' -v name="$target_name" 'NR>1 {gsub(/^[ \t]+|[ \t]+$/, "", $2); if ($2 == name) exit 0} END {exit 1}'; then \
-        echo "Error: Container '$target_name' is not running or registered." >&2; \
-        exit 1; \
-    fi; \
-    echo "Running active assertions inside '$target_name'..."; \
-    distrobox enter "$target_name" -- ./scripts/assert-box.sh
+    @{{manager}} enter {{args}} -- bash -s < ./scripts/assert-box.sh
 
-# Setup local development workspace and export tools
+# Build a local development box and configure agy-box-manager completions
 setup-box:
-    @{{manager}} dev
-    @mkdir -p ~/.local/share/bash-completion/completions
-    @{{manager}} autocomplete bash > ~/.local/share/bash-completion/completions/agy-box-manager
-    @{{manager}} autocomplete bash > ~/.local/share/bash-completion/completions/agy
+    @{{manager}} dev --no-enter
 
-# Teardown local development workspace and cleanup tools
+# Teardown local development box
 teardown-box:
-    @{{manager}} clean dev
+    @{{manager}} clean dev --purge -y
 
-# Sync config directories/dotfiles to backup directory
-sync-workspace:
-    @mkdir -p ~/.config/agy-box/backup
-    @if [ -d ~/.config/environment.d ]; then \
-        mkdir -p ~/.config/agy-box/backup/environment.d; \
-        rsync -a --delete ~/.config/environment.d/ ~/.config/agy-box/backup/environment.d/; \
-    fi
-    @if [ -d ~/.config/agy-box ]; then \
-        mkdir -p ~/.config/agy-box/backup/agy-box; \
-        rsync -a --delete --exclude=backup --exclude=home ~/.config/agy-box/ ~/.config/agy-box/backup/agy-box/; \
-    fi
-    @if [ -d ~/.config/python_keyring ]; then \
-        mkdir -p ~/.config/agy-box/backup/python_keyring; \
-        rsync -a --delete ~/.config/python_keyring/ ~/.config/agy-box/backup/python_keyring/; \
-    fi
-    @echo "Workspace state successfully synchronized to ~/.config/agy-box/backup/"
-
-# Run Bats unit tests for installation scripts
+# Run Bats unit tests for manager and installation scripts
 test-scripts:
     @if command -v bats >/dev/null 2>&1; then \
         bats tests/; \

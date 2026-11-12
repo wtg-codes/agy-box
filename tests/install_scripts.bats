@@ -2,12 +2,10 @@
 
 setup() {
   export ORIG_PWD="$PWD"
-  # Create a unique temp directory and run inside it so mock files never touch the repo root
   TEST_DIR="$(mktemp -d)"
   cd "$TEST_DIR"
   MOCK_BIN="$TEST_DIR/bin"
-  
-  # Create directories before we mock mkdir
+
   mkdir -p "$MOCK_BIN"
   mkdir -p "$TEST_DIR/usr/bin"
   mkdir -p "$TEST_DIR/usr/local/bin"
@@ -16,11 +14,10 @@ setup() {
   mkdir -p "$TEST_DIR/etc/apt/sources.list.d"
   mkdir -p "$TEST_DIR/etc/xdg/libfm"
   mkdir -p "$TEST_DIR/usr/share/keyrings"
-  
+
   export TEST_LOG="$TEST_DIR/invocations.log"
   touch "$TEST_LOG"
-  
-  # Create a generic mock builder helper
+
   create_mock() {
     local cmd="$1"
     local code="$2"
@@ -32,8 +29,6 @@ EOF2
     chmod +x "$MOCK_BIN/$cmd"
   }
 
-  # Create specific mocks
-  # Mock curl: handles download files creation
   create_mock "curl" '
     for arg in "$@"; do
       if [[ "$arg" =~ http.*/([^/]+)$ ]]; then
@@ -52,12 +47,10 @@ EOF2
     done
     exit 0
   '
-  
-  # Mock sha256sum (drain non-tty stdin to prevent SIGPIPE under set -o pipefail)
+
   create_mock "sha256sum" '[ ! -t 0 ] && cat >/dev/null || true; exit 0'
   create_mock "sha512sum" '[ ! -t 0 ] && cat >/dev/null || true; exit 0'
-  
-  # Mock tar: creates expected files when run
+
   create_mock "tar" '
     if [[ "$*" =~ k9s ]]; then
       touch k9s
@@ -72,36 +65,21 @@ EOF2
     fi
     exit 0
   '
-  
-  # Mock install
+
   create_mock "install" 'exit 0'
-  
-  # Mock npm
   create_mock "npm" 'exit 0'
-
-  # Mock pip3
   create_mock "pip3" 'exit 0'
-  
-  # Mock apt-get
   create_mock "apt-get" 'exit 0'
-  
-  # Mock wget
   create_mock "wget" 'exit 0'
-  
-  # Mock gpg (drain non-tty stdin to prevent SIGPIPE under set -o pipefail)
   create_mock "gpg" '[ ! -t 0 ] && cat >/dev/null || true; exit 0'
-
-  # Mock ln and cp
   create_mock "ln" 'exit 0'
   create_mock "cp" 'exit 0'
 
-  # Prepend mock bin to PATH
   export ORIGINAL_PATH="$PATH"
   export PATH="$MOCK_BIN:$PATH"
 }
 
 teardown() {
-  # Restore PATH and clean up temp directory
   export PATH="$ORIGINAL_PATH"
   cd "$ORIG_PWD" || true
   rm -rf "$TEST_DIR"
@@ -110,32 +88,23 @@ teardown() {
 @test "install-tools.sh pins and installs correct versions of kubectl, k9s, and helm" {
   run "$ORIG_PWD/scripts/install-tools.sh"
   [ "$status" -eq 0 ]
-  
-  # Verify kubectl version in curl commands
+
   grep -F 'curl -LO --http1.1 --connect-timeout 5 --retry 5 --retry-delay 2 https://dl.k8s.io/release/v1.36.1/bin/linux/amd64/kubectl' "$TEST_LOG"
-  
-  # Verify kubectl SHA256 verification
   grep -F 'sha256sum -c -' "$TEST_LOG"
-  
-  # Verify k9s version in curl commands
   grep -F 'curl -sSLO --http1.1 --connect-timeout 5 --retry 5 --retry-delay 2 https://github.com/derailed/k9s/releases/download/v0.50.18/k9s_Linux_amd64.tar.gz' "$TEST_LOG"
   grep -F 'curl -sSLO --http1.1 --connect-timeout 5 --retry 5 --retry-delay 2 https://github.com/derailed/k9s/releases/download/v0.50.18/checksums.sha256' "$TEST_LOG"
-  
-  # Verify helm version in curl commands
   grep -F 'curl -sSLO --http1.1 --connect-timeout 5 --retry 5 --retry-delay 2 https://get.helm.sh/helm-v3.21.0-linux-amd64.tar.gz' "$TEST_LOG"
 }
 
-@test "install-agent-deps.sh pins and installs correct versions of gum, google-chrome-stable, vs code, and zed" {
-  # Mock system commands to prevent actual wrapper modification or errors
-  # (e.g. mv, printf, chmod, mkdir) since we don't want them to execute/fail
+@test "install-agent-deps.sh installs gum, chrome, vs code, and zed without python3-keyrings.alt" {
   create_mock "mv" 'exit 0'
   create_mock "printf" 'exit 0'
   create_mock "chmod" 'exit 0'
   create_mock "mkdir" 'exit 0'
-  
+
   touch "$TEST_DIR/usr/bin/google-chrome-stable"
   touch "$TEST_DIR/usr/bin/code"
-  
+
   sed -e "s|/etc/apt|$TEST_DIR/etc/apt|g" \
       -e "s|/etc/xdg|$TEST_DIR/etc/xdg|g" \
       -e "s|/usr/share|$TEST_DIR/usr/share|g" \
@@ -144,15 +113,17 @@ teardown() {
       -e "s|/var/lib|$TEST_DIR/var/lib|g" \
       "$ORIG_PWD/scripts/install-agent-deps.sh" > "$TEST_DIR/install-agent-deps.sh"
   chmod +x "$TEST_DIR/install-agent-deps.sh"
-  
+
   run "$TEST_DIR/install-agent-deps.sh"
   [ "$status" -eq 0 ]
-  
-  # Verify gum, dbus-x11, libfm quick_exec=1, google-chrome-stable, vs code, and zed
+
   grep -F 'dbus-x11' "$TEST_LOG"
+  ! grep -F 'python3-keyrings.alt' "$TEST_LOG"
   grep -F 'quick_exec=1' "$TEST_DIR/etc/xdg/libfm/libfm.conf"
   grep -F -- '--password-store=basic' "$TEST_DIR/usr/bin/google-chrome-stable"
+  grep -F -- '--reply-timeout=1500' "$TEST_DIR/usr/bin/google-chrome-stable"
   grep -F -- '--password-store=basic' "$TEST_DIR/usr/bin/code"
+  grep -F -- '--reply-timeout=1500' "$TEST_DIR/usr/bin/code"
   grep -F 'apt-get install -y --no-install-recommends gum=0.17.0' "$TEST_LOG"
   grep -F 'apt-get install -y --no-install-recommends google-chrome-stable' "$TEST_LOG"
   grep -F 'apt-get install -y --no-install-recommends code' "$TEST_LOG"
@@ -166,10 +137,10 @@ teardown() {
   create_mock "printf" 'exit 0'
   create_mock "chmod" 'exit 0'
   create_mock "mkdir" 'exit 0'
-  
+
   touch "$TEST_DIR/usr/bin/google-chrome-stable"
   touch "$TEST_DIR/usr/bin/code"
-  
+
   sed -e "s|/etc/apt|$TEST_DIR/etc/apt|g" \
       -e "s|/etc/xdg|$TEST_DIR/etc/xdg|g" \
       -e "s|/usr/share|$TEST_DIR/usr/share|g" \
@@ -178,13 +149,15 @@ teardown() {
       -e "s|/var/lib|$TEST_DIR/var/lib|g" \
       "$ORIG_PWD/scripts/install-agent-deps.sh" > "$TEST_DIR/install-agent-deps.sh"
   chmod +x "$TEST_DIR/install-agent-deps.sh"
-  
+
   run "$TEST_DIR/install-agent-deps.sh" arm64
   [ "$status" -eq 0 ]
-  
+
   grep -F 'dbus-x11' "$TEST_LOG"
+  ! grep -F 'python3-keyrings.alt' "$TEST_LOG"
   grep -F 'quick_exec=1' "$TEST_DIR/etc/xdg/libfm/libfm.conf"
   grep -F -- '--password-store=basic' "$TEST_DIR/usr/bin/google-chrome-stable"
+  grep -F -- '--reply-timeout=1500' "$TEST_DIR/usr/bin/google-chrome-stable"
   grep -F -- '--password-store=basic' "$TEST_DIR/usr/bin/code"
   grep -F 'apt-get install -y --no-install-recommends gum=0.17.0' "$TEST_LOG"
   grep -E 'apt-get install -y --no-install-recommends chromium' "$TEST_LOG"
@@ -195,21 +168,19 @@ teardown() {
 @test "install-tools.sh on arm64 fetches and installs arm64 versions" {
   run "$ORIG_PWD/scripts/install-tools.sh" arm64
   [ "$status" -eq 0 ]
-  
+
   grep -F 'curl -LO --http1.1 --connect-timeout 5 --retry 5 --retry-delay 2 https://dl.k8s.io/release/v1.36.1/bin/linux/arm64/kubectl' "$TEST_LOG"
   grep -F 'curl -sSLO --http1.1 --connect-timeout 5 --retry 5 --retry-delay 2 https://github.com/derailed/k9s/releases/download/v0.50.18/k9s_Linux_arm64.tar.gz' "$TEST_LOG"
   grep -F 'curl -sSLO --http1.1 --connect-timeout 5 --retry 5 --retry-delay 2 https://get.helm.sh/helm-v3.21.0-linux-arm64.tar.gz' "$TEST_LOG"
 }
 
-@test "agy-install-ide --help displays usage" {
-  run "$ORIG_PWD/rootfs/usr/local/bin/agy-install-ide" --help
+@test "agy-doctor --help and --version work and agy-install-ide is removed" {
+  [ ! -e "$ORIG_PWD/rootfs/usr/local/bin/agy-install-ide" ]
+  run "$ORIG_PWD/rootfs/usr/local/bin/agy-doctor" --help
   [ "$status" -eq 0 ]
-  [[ "$output" == *"Usage: agy-install-ide"* ]]
-}
+  [[ "$output" == *"Usage: agy-doctor"* ]]
 
-@test "agy-install-ide --version displays version" {
-  run "$ORIG_PWD/rootfs/usr/local/bin/agy-install-ide" --version
+  run "$ORIG_PWD/rootfs/usr/local/bin/agy-doctor" --version
   [ "$status" -eq 0 ]
-  [[ "$output" == *"agy-install-ide v"* ]]
+  [[ "$output" == *"agy-doctor version 0.8.0"* ]]
 }
-

@@ -17,9 +17,11 @@
 
 # 📦 Antigravity Dev Box (agy-box)
 
-agy-box is agy and friends in a box of your choice! This repository builds `agy-box`, the workspace and sandbox container for the `bluefin-wtg` ecosystem: an Ubuntu 24.04 LTS environment (`quay.io/toolbx/ubuntu-toolbox:24.04`, digest-pinned, native `linux/amd64` and `linux/arm64`) with the complete Google Antigravity agent toolchain, modern IDEs, Chrome, and a browser-based VDI desktop pre-baked. It runs as a host-integrated workstation via Distrobox (Bluefin and other Universal Blue hosts are first-class) or standalone as an isolated rootless Podman/Docker sandbox (`distrobox` not required).
+`agy-box` is `agy` and friends in an isolated box fleet! This repository builds `agy-box`, an Ubuntu 24.04 LTS container environment (`quay.io/toolbx/ubuntu-toolbox:24.04`, digest-pinned, native `linux/amd64` and `linux/arm64`) pre-baked with the complete Google Antigravity agent toolchain, VS Code, Zed, Chrome/Chromium, and a browser-based IceWM noVNC VDI desktop.
 
-The published container image is **`ghcr.io/wtg-codes/agy-box`** (`:latest` tracks `main`; releases are tagged `:<major>.<minor>.<patch>` and `:<major>.<minor>`, e.g. `:0.6.0` and `:0.6`).
+By default, every box runs as a fast, standalone **Sandbox** via rootless Podman or Docker (`distrobox` not required), with optional **Workstation** mode (`--mode workstation` via Distrobox) when you want native host Wayland/X11 windows and host SecretService integration.
+
+The published container image is **`ghcr.io/wtg-codes/agy-box`** (`:latest` tracks `main`; releases are tagged `:<major>.<minor>.<patch>` and `:<major>.<minor>`, e.g. `:0.8.0` and `:0.8`).
 
 > 🌐 **Project website: [wtg-codes.github.io/agy-box](https://wtg-codes.github.io/agy-box/)** — quick-start command, feature tour, architecture diagrams, and command reference.
 
@@ -27,56 +29,59 @@ The published container image is **`ghcr.io/wtg-codes/agy-box`** (`:latest` trac
 
 ## Quick Start (No Clone Required)
 
-Launch the interactive workspace manager and install the environment directly from your terminal without cloning this repository:
+Launch the interactive workspace manager directly from your terminal without cloning this repository:
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/wtg-codes/agy-box/main/agy-box-manager)
 ```
 
-*(From the interactive menu, simply select **"Install CLI Globally"** to save the tool to your system permanently!)*
+*(From **System Tools**, select **"Install CLI Globally (~/.local/bin)"** to save `agy-box-manager` permanently — zero host `.bashrc`/`.zshrc` edits and zero host binary overwrites!)*
 
-### Bluefin / Universal Blue (Podman + Distrobox)
-
-On **Bluefin, Bazzite, and Aurora**, Podman, Distrobox, and Homebrew are already there, so the full workflow is:
+### CLI Workflow
 
 ```bash
-# 1. Install the manager (or use the one-liner above and pick "Install CLI Globally")
+# 1. Install the manager CLI to ~/.local/bin/agy-box-manager
 agy-box-manager install-global
 
-# 2. Pull ghcr.io/wtg-codes/agy-box:latest and create the Distrobox workstation
+# 2. Pull ghcr.io/wtg-codes/agy-box:latest and create a new stable box (e.g. agy-box-golden-spark)
+#    Defaults to fast isolated Sandbox mode; pass '--mode workstation' for Distrobox integration
 agy-box-manager install
 
-# 3. Work inside it (GUI apps render natively on your desktop), or use the browser VDI
+# 3. Enter your box shell or launch the browser VDI desktop (auto-selects when 1 box is installed)
 agy-box-manager enter
-agy-box-manager desktop      # then open http://127.0.0.1:6080/vnc.html?autoconnect=true&resize=scale&path=websockify
-```
+agy-box-manager desktop      # http://127.0.0.1:6080/vnc.html?autoconnect=true&resize=scale&path=websockify
 
-The `agy` CLI is exported to your host's `~/.local/bin`, so `agy --version` works straight from the host shell. If you cloned the repo, `just agy` opens the same interactive menu, and the `ujust agy-*` recipes are available through the Bluefin integration.
+# 4. Inspect structured manager & container logs at any time
+agy-box-manager logs
+```
 
 ## Prerequisites
 
-- **An x86_64 (amd64) or aarch64 (arm64) Linux host**: standard PCs/servers, NVIDIA DGX Spark workstations, Apple Silicon (Asahi Linux), and ChromeOS Crostini.
+- **An x86_64 (amd64) or aarch64 (arm64) Linux host**: standard PCs/servers, Bluefin / Universal Blue desktops, NVIDIA DGX Spark workstations, Apple Silicon (Asahi Linux), and ChromeOS Crostini.
 - **A container runtime**: **Podman** (recommended) or **Docker**.
-- **Distrobox** *(optional)*: required only for integrated workstation mode (`--mode workstation`). Sandbox mode (`--mode sandbox` via Podman or Docker) works standalone and auto-falls back when `distrobox` is not installed on the host.
-- **Gum** *(optional)*: powers the interactive TUI menu (CLI subcommands run without it; if missing in menu mode, the manager installs it via Homebrew when available, otherwise prints install instructions).
+- **Distrobox** *(optional)*: required only when explicitly requesting `--mode workstation`. Default `--mode sandbox` runs standalone on Podman or Docker.
+- **Gum** *(optional)*: powers the interactive TUI menu (all CLI subcommands run without it; if missing in menu mode, the manager installs it via Homebrew when available, otherwise prints install instructions).
 
-The manager does not install Podman, Docker, or Distrobox for you; see the [Setup & Troubleshooting Guide](docs/SETUP.md) for per-distro install commands.
+The manager never modifies host shell RC files or overwrites host `~/.local/bin/agy`; see the [Setup & Troubleshooting Guide](docs/SETUP.md) for per-distro container runtime setup.
 
 ## What's Inside
 
 - **Google Antigravity** (`antigravity`, `2.31.0`) — the agent-first UI / Hub (with extracted desktop icon).
 - **Antigravity CLI** (`agy`, `1.5.5`), **Google Antigravity Python SDK** (`google-antigravity`, `0.1.23`), **Google ADK** (`google-adk` / `adk`, `2.1.0`), and **Gemini CLI** (`@google/gemini-cli` / `gemini`, `0.43.0`).
-- **VS Code** and **Zed** pre-configured for Antigravity: containers ship `/etc/skel/.vscode/extensions.json` recommending `Google.google-antigravity` and Zed `auto_install_extensions` (build-time root Electron `code --install-extension` was sunsetted for deterministic, Marketplace-resilient builds), with user-space extension installation on demand via `agy-install-toolchain` or `agy-box-manager update --ides`; **JetBrains** IntelliJ IDEA / PyCharm on demand via `agy-install-ide`.
+- **VS Code** (`code`) and **Zed** (`zed`) pre-configured with `Google.google-antigravity` workspace recommendations and Zed `auto_install_extensions` (with user-space extension updates via `agy-install-toolchain` or `agy-box-manager update --ides`).
 - **Google Chrome** (amd64) / **Chromium** (arm64) for CDP browser automation.
 - **CNCF tooling**: `kubectl`, `helm`, `k9s` (pinned, checksum-verified).
-- **IceWM noVNC VDI desktop** (`agy-vdi`) on port `6080`.
-- **First-run setup assistant** (`agy-setup-helper`): keyring, API keys, Chrome, Git identity, and security audits.
+- **IceWM noVNC VDI desktop** (`agy-vdi`) starting on port `6080` (`6081`, `6082`, ... automatically across multiple boxes).
+- **Non-blocking container health diagnostics** (`agy-doctor`) and structured tool logs under `~/.local/state/agy-box/*.log` + host `~/.config/agy-box/logs/`.
 
-The toolchain is baked system-wide into `/opt` and `/usr/local/bin` at build time (so the Syft SBOM is complete) and can be updated per user with `agy-install-toolchain`.
+The toolchain is baked system-wide into `/opt` and `/usr/local/bin` at build time (so the Syft SBOM is complete) and can be updated per box with `agy-install-toolchain` or `agy-box-manager update`.
 
-## Architecture
+## Unified Multi-Box Fleet Architecture
 
-In workstation mode (`--mode workstation`), agy-box runs via **Distrobox** with an isolated home (`~/.config/agy-box/home`), read-only mounts of your `~/.ssh`, `~/.config/gcloud`, and `~/.gitconfig`, and forwarded Wayland/X11, D-Bus keyring, and audio sockets. In sandbox mode (`--mode sandbox` — default for named boxes, and automatic fallback when `distrobox` is absent), boxes run standalone as fully isolated rootless Podman/Docker containers with zero host credential mounts.
+Every managed box is an equal peer with a permanent two-word name (`agy-box-<adj>-<noun>` on the `stable` channel, `agy-box-dev-<adj>-<noun>` when built via `agy-box-manager dev` from a non-`main` git branch) and a dedicated isolated home at `~/.config/agy-box/homes/<box-name>`:
+
+- **Sandbox mode (`--mode sandbox`, default)**: runs standalone via rootless Podman or Docker with isolated container credentials, automatic VDI port allocation (`6080+`), and zero host credential mounts unless explicitly seeded.
+- **Workstation mode (`--mode workstation`, optional)**: runs via **Distrobox** with forwarded host Wayland/X11, audio, and D-Bus SecretService (`AGY_KEYRING_MODE="host"`).
 
 ![agy-box System Topology](docs/diagrams/rendered/system-topology.svg)
 
@@ -86,22 +91,24 @@ See the [System Architecture Guide](docs/architecture/system-architecture.md) fo
 
 | Action | Command | Just |
 | :--- | :--- | :--- |
-| Interactive menu | `agy-box-manager` | `just agy` |
-| Install / update a box | `agy-box-manager install [-n <name>] [-i <img>] [--mode workstation\|sandbox] [--enter]` | `just agy-install` |
-| Enter a box | `agy-box-manager enter [name\|dev]` | `just agy-enter` |
-| Start the VDI web desktop | `agy-box-manager desktop [name\|dev] [-p port]` | `just agy-desktop` |
+| Interactive TUI menu | `agy-box-manager` | `just agy` |
+| Create a new stable box | `agy-box-manager install [-m sandbox\|workstation] [-i <img>] [-n <name>] [-y]` | `just agy-install` |
+| Build a box from local repo | `agy-box-manager dev [-m sandbox\|workstation] [--channel stable\|dev]` | `just agy-box-dev` |
+| Enter a box shell | `agy-box-manager enter [box\|stable\|dev]` | `just agy-enter` |
+| Start / manage VDI web desktop | `agy-box-manager desktop [box\|stable\|dev] [-p port] [-d\|--stop\|--status]` | `just agy-desktop` |
+| View manager & box logs | `agy-box-manager logs [box\|stable\|dev] [-n N] [-f] [--vdi\|--doctor\|--toolchain]` | `just agy-logs` |
 | Status of all boxes & storage | `agy-box-manager status` | `just agy-status` |
-| Health checks & component inventory | `agy-box-manager doctor` (alias `check`) | `just agy-check` |
-| Update toolchain, IDE extensions & packages | `agy-box-manager update [name\|dev] [--all\|--check]` | `just agy-update` |
-| Remove a box | `agy-box-manager clean [name\|dev] [--purge\|--keep]` | `just agy-clean` |
+| Host & box health diagnostics | `agy-box-manager doctor [box]` (alias `check`) | `just agy-doctor` |
+| Update toolchain, IDEs & OS | `agy-box-manager update [box\|stable\|dev] [--all\|--check]` | `just agy-update` |
+| Remove a box or all boxes | `agy-box-manager clean [box\|--all] [--purge\|--keep] [-y]` | `just agy-clean` |
 
-Local container images (`localhost/...`) are supported directly by `agy-box-manager install --image <localhost/...>` without attempting a remote registry pull. The full command reference (wizard, backup/restore, ports, dev builds, global install, side-by-side test boxes) is in the [User Guide](docs/USER_GUIDE.md#8-command-reference).
+When exactly one box is installed, `enter`, `desktop`, `update`, and `clean` select it automatically; with multiple boxes, pass the full name, two-word slug (`golden-spark`), or channel (`stable` / `dev`), or pick interactively in `gum`. See the [User Guide](docs/USER_GUIDE.md#8-command-reference) for the complete reference.
 
 ## Documentation
 
-- 📘 **[User Guide](docs/USER_GUIDE.md)** — canonical handbook: setup, the 4 ways to work, IDEs, AI authentication, CLI mastery, maintenance, cloud deployments, and FAQ.
-- 🛠️ **[Setup & Troubleshooting Guide](docs/SETUP.md)** — prerequisites, rootless engine configuration, PATH issues, keyring isolation.
-- 🏛️ **[System Architecture Guide](docs/architecture/system-architecture.md)** — host bridging, D-Bus keyring, setup assistant flow, ports, CI/CD, and ADRs.
+- 📘 **[User Guide](docs/USER_GUIDE.md)** — canonical handbook: quickstart, sandbox vs workstation modes, IDEs, AI authentication, CLI mastery, diagnostics & logs, cloud deployments, and FAQ.
+- 🛠️ **[Setup & Troubleshooting Guide](docs/SETUP.md)** — prerequisites, rootless engine configuration, PATH setup, keyring behavior.
+- 🏛️ **[System Architecture Guide](docs/architecture/system-architecture.md)** — host bridging, keyring behavior, ports, CI/CD, and ADRs.
 - ⚙️ **[Settings Reference](docs/settings-reference.md)** — Antigravity and CLI settings schema.
 - 🤝 **[Contributing](CONTRIBUTING.md)** — repository layout, local development workflow, CI, releases, and GHCR maintenance.
 - 🗺️ **[Roadmap / TODO](TODO.md)** and **[Changelog](CHANGELOG.md)**.
@@ -109,7 +116,7 @@ Local container images (`localhost/...`) are supported directly by `agy-box-mana
 
 ## Testing
 
-`just agy-test` builds `localhost/agy-box:dev` (skipped if nothing changed; `FORCE_BUILD=true` overrides), creates a temporary workstation distrobox (automatically falling back to a standalone Podman/Docker sandbox when `distrobox` is not installed), and runs `scripts/assert-box.sh` against it. `just agy-e2e [tag]` runs the same harness against the published `ghcr.io/wtg-codes/agy-box:<tag>` image (default `latest`) including the VDI check, and `just test-scripts` runs the Bats unit tests for the install scripts. See [CONTRIBUTING.md](CONTRIBUTING.md#2-local-development-workflow) for the full workflow.
+`just agy-test` builds `localhost/agy-box:dev` (skipped if nothing changed; `FORCE_BUILD=true` overrides), provisions a temporary box, and runs `scripts/assert-box.sh` against it. `just agy-e2e [tag]` runs the same harness against the published `ghcr.io/wtg-codes/agy-box:<tag>` image (default `latest`) including the VDI check, and `just test-scripts` runs the Bats unit test suite across `agy-box-manager`, `agy-doctor`, and the installation scripts. See [CONTRIBUTING.md](CONTRIBUTING.md#2-local-development-workflow) for the full workflow.
 
 ## License
 

@@ -34,7 +34,6 @@ case ":${PATH}:" in
 esac
 
 # Load and export environment variables defined in environment.d
-# Helper to source all .conf files from a directory
 _load_env_dir() {
     local dir="$1"
     if [ -d "$dir" ]; then
@@ -71,18 +70,35 @@ BLUE='\033[0;34m'
 RED='\033[0;31m'
 NC='\033[0m'
 
+VDI_STATE_DIR="${AGY_BOX_STATE_DIR:-${HOME}/.local/state/agy-box}"
+VDI_LOG_FILE="${VDI_STATE_DIR}/vdi.log"
+VDI_COMPAT_LOG="${AGY_VDI_COMPAT_LOG:-/tmp/agy-vdi.log}"
+
+vdi_log() {
+    local tag="$1"
+    shift
+    [[ "${AGY_LOG_DISABLED:-0}" == "1" ]] && return 0
+    if [[ -w "$VDI_LOG_FILE" ]] && ! [[ /dev/fd/1 -ef "$VDI_LOG_FILE" ]]; then
+        printf '[%s] [agy-vdi] [%s] %s\n' "$(date -Iseconds)" "$tag" "$*" >> "$VDI_LOG_FILE" 2>/dev/null || true
+    elif [[ /dev/fd/1 -ef "$VDI_LOG_FILE" ]]; then
+        printf '[%s] [agy-vdi] [%s] %s\n' "$(date -Iseconds)" "$tag" "$*"
+    fi
+}
+
 # Health-check helper: wait for a TCP port to be listening
 wait_for_port() {
     local port="$1" label="$2" retries="$HEALTH_CHECK_RETRIES"
     for ((i=1; i<=retries; i++)); do
         if ss -tlnp 2>/dev/null | grep -q ":${port} "; then
             echo -e "${GREEN}[OK] ${label} is listening on port ${port}.${NC}"
+            vdi_log "EXIT" "rc=0 ${label} listening on port ${port} (attempt ${i}/${retries})"
             return 0
         fi
         sleep "$HEALTH_CHECK_INTERVAL"
     done
     echo -e "${RED}[ERROR] ${label} failed to start — port ${port} is not listening after ${retries}s.${NC}"
     echo -e "${YELLOW}[TIP] Check if WAYLAND_DISPLAY or XDG_SESSION_TYPE leaked into the container.${NC}"
+    vdi_log "EXIT" "rc=1 ${label} failed to listen on port ${port} after ${retries}s"
     exit 1
 }
 
@@ -125,6 +141,15 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Initialize container-side structured log file & /tmp/agy-vdi.log symlink
+if [[ "${AGY_LOG_DISABLED:-0}" != "1" ]]; then
+    mkdir -p "$VDI_STATE_DIR" 2>/dev/null || true
+    touch "$VDI_LOG_FILE" 2>/dev/null || true
+    if [[ -f "$VDI_LOG_FILE" ]]; then
+        ln -sf "$VDI_LOG_FILE" "$VDI_COMPAT_LOG" 2>/dev/null || true
+    fi
+fi
+
 # Compute port offsets to avoid X11 and VNC collisions when running multiple instances
 if [[ "$WEB_PORT" =~ ^[0-9]+$ ]] && [[ "$WEB_PORT" -ne 6080 ]]; then
     PORT_OFFSET=$((WEB_PORT - 6080))
@@ -138,14 +163,18 @@ if [[ "$RESOLUTION" =~ ^([0-9]+)x([0-9]+)$ ]]; then
     HEIGHT="${BASH_REMATCH[2]}"
 else
     echo -e "${YELLOW}[WARN] Invalid resolution '$RESOLUTION'. Defaulting to 1920x1080.${NC}" >&2
+    vdi_log "WARN" "Invalid resolution '${RESOLUTION}'; defaulting to 1920x1080"
     WIDTH=1920
     HEIGHT=1080
 fi
 
+vdi_log "INFO" "Starting VDI session (display=:${DISPLAY_PORT}, vnc_port=${VNC_PORT}, web_port=${WEB_PORT}, resolution=${WIDTH}x${HEIGHT})"
+
 # shellcheck disable=SC2329
 cleanup() {
     echo -e "\n${YELLOW}[INFO] Cleaning up VDI session services...${NC}"
-    
+    vdi_log "INFO" "Cleaning up VDI session services on display :${DISPLAY_PORT}"
+
     # Terminate background jobs in the current process group
     local jobs_to_kill
     jobs_to_kill=$(jobs -p)
@@ -165,8 +194,9 @@ cleanup() {
     # Clean up lock files
     rm -f "/tmp/.X${DISPLAY_PORT}-lock" || true
     rm -f "/tmp/.X11-unix/X${DISPLAY_PORT}" || true
-    
+
     echo -e "${GREEN}[SUCCESS] VDI cleanup complete. Bye!${NC}"
+    vdi_log "INFO" "VDI session cleanup complete"
 }
 
 trap cleanup EXIT INT TERM HUP
@@ -180,14 +210,13 @@ for cmd in Xvfb x11vnc icewm-session websockify; do
     if ! command -v "$cmd" &>/dev/null; then
         echo -e "${RED}[ERROR] Dependency '$cmd' is not installed in the container.${NC}"
         echo -e "${YELLOW}[TIP] Make sure the container was rebuilt with the latest VDI packages.${NC}"
+        vdi_log "ERROR" "Dependency '${cmd}' missing; aborting VDI startup"
+        vdi_log "EXIT" "rc=1 missing dependency ${cmd}"
         exit 1
     fi
 done
 
 # Clean up stale Chrome/Electron singleton lock files from previous sessions.
-# When a container is destroyed or renamed, Chrome's profile lock (a symlink
-# pointing to "hostname-pid") becomes stale. Chrome sees the hostname mismatch
-# and refuses to start, believing "another computer" holds the lock.
 _cleanup_stale_chrome_locks() {
     local profile_dir="$1"
     local lock_file="${profile_dir}/SingletonLock"
@@ -199,6 +228,7 @@ _cleanup_stale_chrome_locks() {
         current_host=$(hostname)
         if [[ "$lock_host" != "$current_host" ]]; then
             echo -e "${YELLOW}[WARN] Removing stale Chrome lock from previous session (${lock_host}).${NC}"
+            vdi_log "WARN" "Removed stale Chrome lock in ${profile_dir} (lock_host=${lock_host}, current_host=${current_host})"
             rm -f "${profile_dir}/SingletonLock" "${profile_dir}/SingletonCookie" "${profile_dir}/SingletonSocket" 2>/dev/null || true
         fi
     fi
@@ -229,12 +259,15 @@ elif grep -q '^\[config\]' "${HOME}/.config/libfm/libfm.conf"; then
 else
     printf '\n[config]\nquick_exec=1\n' >> "${HOME}/.config/libfm/libfm.conf"
 fi
+vdi_log "INFO" "Configured PCManFM quick_exec=1 in ${HOME}/.config/libfm/libfm.conf"
 
 # Deduplicate legacy desktop shortcuts and seed missing launchers from /etc/skel/Desktop
 mkdir -p "${HOME}/Desktop"
 rm -f "${HOME}/Desktop/Antigravity2.desktop" \
       "${HOME}/Desktop/AntigravityIDE.desktop" \
-      "${HOME}/Desktop/google-antigravity.desktop" 2>/dev/null || true
+      "${HOME}/Desktop/google-antigravity.desktop" \
+      "${HOME}/Desktop/SetupAssistant.desktop" \
+      "${HOME}/Desktop/Setup.desktop" 2>/dev/null || true
 if [[ -f "${HOME}/Desktop/AntigravitySDK.desktop" && -f /etc/skel/Desktop/AntigravitySDK.desktop ]] && \
    grep -q '^Name=Google Antigravity (SDK)$' "${HOME}/Desktop/AntigravitySDK.desktop" 2>/dev/null; then
     cp -f /etc/skel/Desktop/AntigravitySDK.desktop "${HOME}/Desktop/AntigravitySDK.desktop" 2>/dev/null || true
@@ -250,6 +283,7 @@ if [[ -f "${HOME}/.local/bin/antigravity" && -f /usr/local/bin/antigravity ]] &&
    ! grep -q -- '--password-store=basic' "${HOME}/.local/bin/antigravity" 2>/dev/null; then
     cp -f /usr/local/bin/antigravity "${HOME}/.local/bin/antigravity" 2>/dev/null || true
     chmod 0755 "${HOME}/.local/bin/antigravity" 2>/dev/null || true
+    vdi_log "INFO" "Upgraded user ~/.local/bin/antigravity wrapper with --password-store=basic fallback"
 fi
 
 # Configure session D-Bus & SecretService / persistent basic password-store fallback
@@ -259,7 +293,7 @@ _dbus_bus_reachable() {
         [[ -S "${BASH_REMATCH[1]}" ]] || return 1
     fi
     if command -v dbus-send &>/dev/null; then
-        dbus-send --session --dest=org.freedesktop.DBus --type=method_call --print-reply \
+        dbus-send --session --reply-timeout=1500 --dest=org.freedesktop.DBus --type=method_call --print-reply \
             /org/freedesktop/DBus org.freedesktop.DBus.ListNames >/dev/null 2>&1 || return 1
     fi
     return 0
@@ -267,11 +301,11 @@ _dbus_bus_reachable() {
 
 _dbus_has_secrets_service() {
     command -v dbus-send &>/dev/null || return 1
-    if dbus-send --session --dest=org.freedesktop.DBus --type=method_call --print-reply \
+    if dbus-send --session --reply-timeout=1500 --dest=org.freedesktop.DBus --type=method_call --print-reply \
         /org/freedesktop/DBus org.freedesktop.DBus.ListNames 2>/dev/null | grep -q 'org\.freedesktop\.secrets'; then
         return 0
     fi
-    if dbus-send --session --dest=org.freedesktop.DBus --type=method_call --print-reply \
+    if dbus-send --session --reply-timeout=1500 --dest=org.freedesktop.DBus --type=method_call --print-reply \
         /org/freedesktop/DBus org.freedesktop.DBus.ListActivatableNames 2>/dev/null | grep -q 'org\.freedesktop\.secrets'; then
         return 0
     fi
@@ -290,35 +324,46 @@ if ! _dbus_bus_reachable; then
         export XDG_RUNTIME_DIR
     fi
     if command -v dbus-daemon >/dev/null 2>&1; then
+        vdi_log "CMD" "dbus-daemon --session --fork --print-address=1 --print-pid=1"
         dbus_out=$(dbus-daemon --session --fork --print-address=1 --print-pid=1 2>/dev/null || true)
         if [[ -n "$dbus_out" ]]; then
             DBUS_SESSION_BUS_ADDRESS=$(printf '%s\n' "$dbus_out" | sed -n '1p')
             LOCAL_DBUS_PID=$(printf '%s\n' "$dbus_out" | sed -n '2p')
             export DBUS_SESSION_BUS_ADDRESS
+            vdi_log "INFO" "Spawned local session dbus-daemon (pid=${LOCAL_DBUS_PID}, bus=${DBUS_SESSION_BUS_ADDRESS})"
         fi
     fi
     export AGY_PASSWORD_STORE=basic
+    vdi_log "INFO" "Keyring mode: AGY_PASSWORD_STORE=basic (session bus started locally)"
 elif [[ "${AGY_KEYRING_MODE:-host}" == "isolated" ]] || ! _dbus_has_secrets_service; then
     export AGY_PASSWORD_STORE=basic
+    vdi_log "INFO" "Keyring mode: AGY_PASSWORD_STORE=basic (isolated or org.freedesktop.secrets absent)"
+else
+    vdi_log "INFO" "Keyring mode: host SecretService active over ${DBUS_SESSION_BUS_ADDRESS:-session-bus}"
 fi
 
 # 1. Start Xvfb (Virtual Framebuffer)
 echo -e "${BLUE}[INFO] Starting Xvfb virtual display :${DISPLAY_PORT} with resolution ${WIDTH}x${HEIGHT}...${NC}"
+vdi_log "CMD" "Xvfb :${DISPLAY_PORT} -screen 0 ${WIDTH}x${HEIGHT}x24"
 Xvfb ":${DISPLAY_PORT}" -screen 0 "${WIDTH}x${HEIGHT}x24" &
 XVFB_PID=$!
+vdi_log "INFO" "Xvfb started (pid=${XVFB_PID})"
 sleep 1.5
 
 # Export display for subsequent tools
 export DISPLAY=":${DISPLAY_PORT}"
 
-# 2. Start IceWM Session Manager
+# 2. Start IceWM Session Manager (launches PCManFM desktop icons via /etc/X11/icewm/startup)
 echo -e "${BLUE}[INFO] Starting IceWM Session Manager...${NC}"
+vdi_log "CMD" "icewm-session (DISPLAY=${DISPLAY}, PCManFM desktop enabled)"
 icewm-session &
 ICEWM_PID=$!
+vdi_log "INFO" "icewm-session started (pid=${ICEWM_PID})"
 sleep 1
 
 # 3. Start x11vnc server
 echo -e "${BLUE}[INFO] Starting x11vnc server (listening on localhost)...${NC}"
+vdi_log "CMD" "x11vnc -display :${DISPLAY_PORT} -listen 127.0.0.1 -rfbport ${VNC_PORT} -nopw -forever -shared -quiet"
 x11vnc -display ":${DISPLAY_PORT}" \
        -listen 127.0.0.1 \
        -rfbport "${VNC_PORT}" \
@@ -327,16 +372,21 @@ x11vnc -display ":${DISPLAY_PORT}" \
        -shared \
        -quiet &
 X11VNC_PID=$!
+vdi_log "INFO" "x11vnc started (pid=${X11VNC_PID})"
 sleep 1.5
 wait_for_port "${VNC_PORT}" "x11vnc"
 
 # 4. Start noVNC/websockify bridge
 echo -e "${BLUE}[INFO] Starting noVNC WebSocket bridge...${NC}"
 if [[ -d "/usr/share/novnc" ]]; then
+    vdi_log "CMD" "websockify --web /usr/share/novnc/ ${WEB_PORT} 127.0.0.1:${VNC_PORT}"
     websockify --web /usr/share/novnc/ "${WEB_PORT}" "127.0.0.1:${VNC_PORT}" &
     WEBSOCKIFY_PID=$!
+    vdi_log "INFO" "websockify started (pid=${WEBSOCKIFY_PID})"
 else
     echo -e "${RED}[ERROR] noVNC directory /usr/share/novnc not found.${NC}"
+    vdi_log "ERROR" "noVNC directory /usr/share/novnc not found"
+    vdi_log "EXIT" "rc=1 /usr/share/novnc missing"
     exit 1
 fi
 sleep 1.5
@@ -354,6 +404,8 @@ elif command -v hostname &>/dev/null; then
 fi
 local_ip=$(echo "${local_ip:-}" | xargs 2>/dev/null || true)
 
+vdi_log "INFO" "VDI ready at http://127.0.0.1:${WEB_PORT}/vnc.html?autoconnect=true&resize=scale&path=websockify"
+
 echo -e "\n${GREEN}==================================================${NC}"
 echo -e "${GREEN}  agy-box VDI virtual desktop is running!         ${NC}"
 echo -e "${GREEN}==================================================${NC}"
@@ -370,9 +422,9 @@ echo ""
 echo -e "${YELLOW}Press [q] or [Ctrl+C] to stop the virtual desktop session.${NC}"
 
 # 5. Set up the desktop environment
-# Launch a terminal on the desktop (users launch Antigravity App, VS Code, or Zed via desktop/toolbar icons)
 if command -v xterm &>/dev/null; then
     echo -e "${BLUE}[INFO] Launching terminal...${NC}"
+    vdi_log "CMD" "xterm -T 'agy-box Terminal'"
     xterm -fa 'Monospace' -fs 12 -bg '#1a1b2e' -fg '#e0e0e0' -geometry 100x35+50+50 -T 'agy-box Terminal' &
 fi
 
@@ -382,6 +434,7 @@ while true; do
         if read -r -s -n 1 -t 2 key; then
             if [[ "$key" == "q" || "$key" == "Q" ]]; then
                 echo -e "\n${BLUE}[INFO] Ending VDI session...${NC}"
+                vdi_log "INFO" "User requested VDI shutdown"
                 exit 0
             fi
         fi
@@ -390,18 +443,26 @@ while true; do
     fi
     if ! kill -0 "$XVFB_PID" 2>/dev/null; then
         echo -e "${RED}[ERROR] Xvfb crashed unexpectedly.${NC}"
+        vdi_log "ERROR" "Xvfb (pid=${XVFB_PID}) crashed unexpectedly"
+        vdi_log "EXIT" "rc=1 Xvfb crash"
         exit 1
     fi
     if ! kill -0 "$ICEWM_PID" 2>/dev/null; then
         echo -e "${RED}[ERROR] icewm-session crashed or exited unexpectedly.${NC}"
+        vdi_log "ERROR" "icewm-session (pid=${ICEWM_PID}) crashed unexpectedly"
+        vdi_log "EXIT" "rc=1 icewm-session crash"
         exit 1
     fi
     if ! kill -0 "$X11VNC_PID" 2>/dev/null; then
         echo -e "${RED}[ERROR] x11vnc crashed unexpectedly.${NC}"
+        vdi_log "ERROR" "x11vnc (pid=${X11VNC_PID}) crashed unexpectedly"
+        vdi_log "EXIT" "rc=1 x11vnc crash"
         exit 1
     fi
     if ! kill -0 "$WEBSOCKIFY_PID" 2>/dev/null; then
         echo -e "${RED}[ERROR] websockify crashed unexpectedly.${NC}"
+        vdi_log "ERROR" "websockify (pid=${WEBSOCKIFY_PID}) crashed unexpectedly"
+        vdi_log "EXIT" "rc=1 websockify crash"
         exit 1
     fi
 done

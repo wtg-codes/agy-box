@@ -9,6 +9,22 @@ Container images are published to `ghcr.io/wtg-codes/agy-box` (`:<version>`, `:<
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-12
+
+- **Unified Multi-Box Fleet Architecture (Zero Singleton Special Cases)**:
+  - Eliminated the split between a singleton primary `agy-box` (`~/.config/agy-box/home`), singleton `agy-box-dev` (`~/.config/agy-box/home-dev`), and secondary custom boxes. Every managed box is now an equal peer with a unique, permanent two-word slug and isolated home under `~/.config/agy-box/homes/<box-name>`.
+  - Added explicit `stable` (`agy-box-<adj>-<noun>`) and `dev` (`agy-box-dev-<adj>-<noun>`) channels: `agy-box-manager install` provisions `stable` boxes from GHCR, while `agy-box-manager dev` detects the checked-out Git ref (`main` or `v*` tag → `localhost/agy-box:stable` on `stable`; any other branch or `--channel dev` → `localhost/agy-box:dev` on `dev`) and reuses the unified provisioning pipeline.
+  - Recorded per-box metadata in `~/.config/agy-box/homes/<box>/.agy-box-meta` and OCI labels (`agy-box.managed=true`, `agy-box.channel`, `agy-box.branch`, `agy-box.mode`), added smart `resolve_target_box` resolution (auto-selects when 1 box exists, resolves `stable`/`dev` channels and two-word suffixes, prompts via `gum` when interactive), allocated VDI ports starting cleanly at `6080` (`offset=0` when free), rejected box renaming, and added `clean --all [--purge|--keep] [-y]`.
+- **Default Isolated Sandbox Runtime (`AGY_DEFAULT_MODE="sandbox"`)**:
+  - Unified legacy `AGY_PRIMARY_ENGINE` / `AGY_NAMED_ENGINE` into `AGY_DEFAULT_MODE="sandbox"` (migrating existing `config.env` files automatically). `install` and `dev` now provision fast standalone Podman/Docker sandboxes by default, making `distrobox` strictly optional on the host and required only when `--mode workstation` is requested.
+- **Zero Host Dotfile/Shim Mutation & Container Streamlining**:
+  - Removed all host `.bashrc` / `.zshrc` / `fish` RC mutations, `ujust` / `shell_integration.sh` injection, and `export_agy_cli` / `_agy` host shim exports so `~/.local/bin/agy` on the host is never touched or shadowed.
+  - Removed `python3-keyrings.alt` / `EncryptedKeyring` file-keyring injection, login-blocking `/etc/profile.d/agy-setup-check.sh` + `agy-setup-helper` + `SetupAssistant.desktop`, on-demand `agy-install-ide` (JetBrains), and manager `wizard`, `backup`/`restore`, `ports`, and pre-menu TUI splash screen.
+  - Added fast, non-blocking `/usr/local/bin/agy-doctor` (`setsid -w` TTY-detached checks with `timeout -k 1`, 3s `SIGALRM` keyring guard, and `--reply-timeout=1500` D-Bus probes across `agy-doctor`, `antigravity`, `code`, `google-chrome-stable`, and `agy-vdi`).
+- **End-to-End Structured Tool Logging & `agy-box-manager logs`**:
+  - Logged every external host command (`run_step`, `run_step_live`, `run_logged`) with UTC `[CMD]` and `[EXIT rc=... elapsed=...s]` records to `~/.config/agy-box/logs/agy-box-manager.log` (5 MB rotation) and per-box `~/.config/agy-box/logs/<box>.log`, printing actionable `📋 Diagnostic log:` hints on any non-zero exit.
+  - Added structured container state logs under `~/.local/state/agy-box/{doctor,vdi,toolchain,entrypoint}.log` (with `/tmp/agy-vdi.log` compatibility symlink) and surfaced all host + container logs via `agy-box-manager logs [box] [-n N] [-f] [--vdi|--doctor|--toolchain|--entrypoint|--manager|--all]`, `just agy-logs`, and TUI `System Tools > View Diagnostic Logs`.
+
 ## [0.7.2] - 2026-11-12
 
 - **VDI Desktop Direct Launcher Execution (Zero `"Execute File"` Prompts)**:
@@ -162,7 +178,10 @@ First tagged release.
 - Shell autocompletion, user-mode systemd support, keyring cache fallback, port mapping dashboard ([#6]), SSH-agent forwarding ([#7]), container resource limits ([#8]), devcontainer template ([#9]), workspace state sync ([#10]), and doctor diagnostics ([#11]).
 - Unified CI/CD workflow with lint, build, test, SBOM, and attestation jobs, and automatic GitHub Releases on `v*` tags.
 
-[Unreleased]: https://github.com/wtg-codes/agy-box/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/wtg-codes/agy-box/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/wtg-codes/agy-box/compare/v0.7.2...v0.8.0
+[0.7.2]: https://github.com/wtg-codes/agy-box/compare/v0.7.1...v0.7.2
+[0.7.1]: https://github.com/wtg-codes/agy-box/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/wtg-codes/agy-box/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/wtg-codes/agy-box/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/wtg-codes/agy-box/compare/v0.4.2...v0.5.0
