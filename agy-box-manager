@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # --- Configuration ---
-VERSION="0.7.1"
+VERSION="0.7.2"
 IMAGE_NAME="ghcr.io/wtg-codes/agy-box:latest"
 DEV_IMAGE_NAME="agy-box:dev"
 CONTAINER_NAME="agy-box"
@@ -182,7 +182,7 @@ apply_keyring_configuration() {
   if [ -z "${HOME:-}" ]; then
     return 0
   fi
-  local iso_home="$HOME/.config/agy-box/home"
+  local iso_home="${1:-$HOME/.config/agy-box/home}"
   mkdir -p "$iso_home/.config/python_keyring"
   mkdir -p "$iso_home/.config/environment.d"
   mkdir -p "$iso_home/.local/share/keyrings"
@@ -1700,6 +1700,7 @@ cmd_desktop() {
 
     if [ "$mgr" = "distrobox" ]; then
       ensure_distrobox_ready "$target_name" || return 1
+      apply_keyring_configuration "$isolated_home"
 
       if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
         podman unshare chown -R 0:0 "$isolated_home" 2>/dev/null || true
@@ -1712,8 +1713,22 @@ cmd_desktop() {
         done
       fi
 
+      local env_flags=(-e HOME="$isolated_home" -e USER="$(id -un 2>/dev/null || echo "${USER:-}")" -e DISTROBOX_HOST_HOME="$HOME" -e AGY_KEYRING_MODE="${AGY_KEYRING_MODE:-host}")
+      if [ "${AGY_KEYRING_MODE:-host}" != "isolated" ]; then
+        [ -n "${XDG_RUNTIME_DIR:-}" ] && env_flags+=(-e XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR")
+        [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ] && env_flags+=(-e DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS")
+        [ -n "${GNOME_KEYRING_CONTROL:-}" ] && env_flags+=(-e GNOME_KEYRING_CONTROL="$GNOME_KEYRING_CONTROL")
+        if [ -n "${SSH_AUTH_SOCK:-}" ]; then
+          if [ -e /run/ssh-agent ] || "$runtime" exec "$target_name" test -e /run/ssh-agent 2>/dev/null; then
+            env_flags+=(-e SSH_AUTH_SOCK="/run/ssh-agent")
+          else
+            env_flags+=(-e SSH_AUTH_SOCK="$SSH_AUTH_SOCK")
+          fi
+        fi
+      fi
+
       echo -e "Starting VDI Virtual Desktop inside ${CYAN}$target_name${NC} (Workstation)..."
-      "$runtime" exec -d --user "$(id -u):$(id -g)" -e HOME="$isolated_home" -e USER="$(id -un 2>/dev/null || echo "$USER")" -e DISTROBOX_HOST_HOME="$HOME" -w "$isolated_home" "$target_name" sh -c 'exec /usr/local/bin/agy-vdi "$@" >/tmp/agy-vdi.log 2>&1' _ -p "$vdi_port" "${clean_vdi_args[@]}"
+      "$runtime" exec -d --user "$(id -u):$(id -g)" "${env_flags[@]}" -w "$isolated_home" "$target_name" sh -c 'exec /usr/local/bin/agy-vdi "$@" >/tmp/agy-vdi.log 2>&1' _ -p "$vdi_port" "${clean_vdi_args[@]}"
     else
       if [ "$runtime" = "podman" ] && [ -d "$isolated_home" ]; then
         podman unshare chown -R 9000:9000 "$isolated_home" 2>/dev/null || true

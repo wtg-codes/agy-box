@@ -17,6 +17,13 @@ export GALLIUM_DRIVER=llvmpipe
 unset WAYLAND_DISPLAY
 unset XDG_SESSION_TYPE
 
+if [[ -z "${HOME:-}" ]]; then
+    HOME="$(getent passwd "$(id -u)" 2>/dev/null | cut -d: -f6 || echo "/tmp")"
+    export HOME
+fi
+
+LOCAL_DBUS_PID=""
+
 # The Antigravity toolchain (antigravity, agy, gemini, adk) is
 # installed per user into ~/.local/bin by agy-install-toolchain. agy-vdi is
 # started via `distrobox enter -- agy-vdi` (non-login shell, host PATH), so add
@@ -151,6 +158,10 @@ cleanup() {
         kill -9 $jobs_to_kill 2>/dev/null || true
     fi
 
+    if [[ -n "${LOCAL_DBUS_PID:-}" ]]; then
+        kill "$LOCAL_DBUS_PID" 2>/dev/null || true
+    fi
+
     # Clean up lock files
     rm -f "/tmp/.X${DISPLAY_PORT}-lock" || true
     rm -f "/tmp/.X11-unix/X${DISPLAY_PORT}" || true
@@ -207,9 +218,94 @@ pkill -f "x11vnc.*${VNC_PORT}" 2>/dev/null || true
 pkill -f "websockify.*${WEB_PORT}" 2>/dev/null || true
 rm -f "/tmp/.X${DISPLAY_PORT}-lock" "/tmp/.X11-unix/X${DISPLAY_PORT}" 2>/dev/null || true
 
+# Ensure PCManFM (libfm) executes .desktop icons directly without "Execute File" modal prompt
+mkdir -p "${HOME}/.config/libfm"
+if [[ ! -f "${HOME}/.config/libfm/libfm.conf" ]]; then
+    printf '[config]\nquick_exec=1\n' > "${HOME}/.config/libfm/libfm.conf"
+elif grep -q '^[#[:space:]]*quick_exec=' "${HOME}/.config/libfm/libfm.conf"; then
+    sed -i 's/^[#[:space:]]*quick_exec=.*/quick_exec=1/' "${HOME}/.config/libfm/libfm.conf"
+elif grep -q '^\[config\]' "${HOME}/.config/libfm/libfm.conf"; then
+    sed -i '/^\[config\]/a quick_exec=1' "${HOME}/.config/libfm/libfm.conf"
+else
+    printf '\n[config]\nquick_exec=1\n' >> "${HOME}/.config/libfm/libfm.conf"
+fi
+
+# Deduplicate legacy desktop shortcuts and seed missing launchers from /etc/skel/Desktop
+mkdir -p "${HOME}/Desktop"
+rm -f "${HOME}/Desktop/Antigravity2.desktop" \
+      "${HOME}/Desktop/AntigravityIDE.desktop" \
+      "${HOME}/Desktop/google-antigravity.desktop" 2>/dev/null || true
+if [[ -f "${HOME}/Desktop/AntigravitySDK.desktop" && -f /etc/skel/Desktop/AntigravitySDK.desktop ]] && \
+   grep -q '^Name=Google Antigravity (SDK)$' "${HOME}/Desktop/AntigravitySDK.desktop" 2>/dev/null; then
+    cp -f /etc/skel/Desktop/AntigravitySDK.desktop "${HOME}/Desktop/AntigravitySDK.desktop" 2>/dev/null || true
+fi
+if [[ -d /etc/skel/Desktop ]]; then
+    cp -rn /etc/skel/Desktop/. "${HOME}/Desktop/" 2>/dev/null || true
+fi
+chmod +x "${HOME}"/Desktop/*.desktop 2>/dev/null || true
+
+# Upgrade any outdated user-level ~/.local/bin/antigravity wrapper lacking --password-store=basic
+if [[ -f "${HOME}/.local/bin/antigravity" && -f /usr/local/bin/antigravity ]] && \
+   head -n 1 "${HOME}/.local/bin/antigravity" 2>/dev/null | grep -q '^#!' && \
+   ! grep -q -- '--password-store=basic' "${HOME}/.local/bin/antigravity" 2>/dev/null; then
+    cp -f /usr/local/bin/antigravity "${HOME}/.local/bin/antigravity" 2>/dev/null || true
+    chmod 0755 "${HOME}/.local/bin/antigravity" 2>/dev/null || true
+fi
+
+# Configure session D-Bus & SecretService / persistent basic password-store fallback
+_dbus_bus_reachable() {
+    [[ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]] || return 1
+    if [[ "$DBUS_SESSION_BUS_ADDRESS" =~ unix:path=([^,;]+) ]]; then
+        [[ -S "${BASH_REMATCH[1]}" ]] || return 1
+    fi
+    if command -v dbus-send &>/dev/null; then
+        dbus-send --session --dest=org.freedesktop.DBus --type=method_call --print-reply \
+            /org/freedesktop/DBus org.freedesktop.DBus.ListNames >/dev/null 2>&1 || return 1
+    fi
+    return 0
+}
+
+_dbus_has_secrets_service() {
+    command -v dbus-send &>/dev/null || return 1
+    if dbus-send --session --dest=org.freedesktop.DBus --type=method_call --print-reply \
+        /org/freedesktop/DBus org.freedesktop.DBus.ListNames 2>/dev/null | grep -q 'org\.freedesktop\.secrets'; then
+        return 0
+    fi
+    if dbus-send --session --dest=org.freedesktop.DBus --type=method_call --print-reply \
+        /org/freedesktop/DBus org.freedesktop.DBus.ListActivatableNames 2>/dev/null | grep -q 'org\.freedesktop\.secrets'; then
+        return 0
+    fi
+    return 1
+}
+
+if [[ "${AGY_KEYRING_MODE:-host}" == "isolated" ]]; then
+    unset DBUS_SESSION_BUS_ADDRESS
+fi
+
+if ! _dbus_bus_reachable; then
+    if [[ -z "${XDG_RUNTIME_DIR:-}" || ! -d "${XDG_RUNTIME_DIR}" || ! -w "${XDG_RUNTIME_DIR}" ]]; then
+        XDG_RUNTIME_DIR="/tmp/agy-runtime-$(id -u)"
+        mkdir -p "$XDG_RUNTIME_DIR"
+        chmod 700 "$XDG_RUNTIME_DIR"
+        export XDG_RUNTIME_DIR
+    fi
+    if command -v dbus-daemon >/dev/null 2>&1; then
+        dbus_out=$(dbus-daemon --session --fork --print-address=1 --print-pid=1 2>/dev/null || true)
+        if [[ -n "$dbus_out" ]]; then
+            DBUS_SESSION_BUS_ADDRESS=$(printf '%s\n' "$dbus_out" | sed -n '1p')
+            LOCAL_DBUS_PID=$(printf '%s\n' "$dbus_out" | sed -n '2p')
+            export DBUS_SESSION_BUS_ADDRESS
+        fi
+    fi
+    export AGY_PASSWORD_STORE=basic
+elif [[ "${AGY_KEYRING_MODE:-host}" == "isolated" ]] || ! _dbus_has_secrets_service; then
+    export AGY_PASSWORD_STORE=basic
+fi
+
 # 1. Start Xvfb (Virtual Framebuffer)
 echo -e "${BLUE}[INFO] Starting Xvfb virtual display :${DISPLAY_PORT} with resolution ${WIDTH}x${HEIGHT}...${NC}"
 Xvfb ":${DISPLAY_PORT}" -screen 0 "${WIDTH}x${HEIGHT}x24" &
+XVFB_PID=$!
 sleep 1.5
 
 # Export display for subsequent tools
@@ -218,6 +314,7 @@ export DISPLAY=":${DISPLAY_PORT}"
 # 2. Start IceWM Session Manager
 echo -e "${BLUE}[INFO] Starting IceWM Session Manager...${NC}"
 icewm-session &
+ICEWM_PID=$!
 sleep 1
 
 # 3. Start x11vnc server
@@ -229,6 +326,7 @@ x11vnc -display ":${DISPLAY_PORT}" \
        -forever \
        -shared \
        -quiet &
+X11VNC_PID=$!
 sleep 1.5
 wait_for_port "${VNC_PORT}" "x11vnc"
 
@@ -236,6 +334,7 @@ wait_for_port "${VNC_PORT}" "x11vnc"
 echo -e "${BLUE}[INFO] Starting noVNC WebSocket bridge...${NC}"
 if [[ -d "/usr/share/novnc" ]]; then
     websockify --web /usr/share/novnc/ "${WEB_PORT}" "127.0.0.1:${VNC_PORT}" &
+    WEBSOCKIFY_PID=$!
 else
     echo -e "${RED}[ERROR] noVNC directory /usr/share/novnc not found.${NC}"
     exit 1
@@ -289,19 +388,19 @@ while true; do
     else
         sleep 2
     fi
-    if ! kill -0 %1 2>/dev/null; then
+    if ! kill -0 "$XVFB_PID" 2>/dev/null; then
         echo -e "${RED}[ERROR] Xvfb crashed unexpectedly.${NC}"
         exit 1
     fi
-    if ! kill -0 %2 2>/dev/null; then
+    if ! kill -0 "$ICEWM_PID" 2>/dev/null; then
         echo -e "${RED}[ERROR] icewm-session crashed or exited unexpectedly.${NC}"
         exit 1
     fi
-    if ! kill -0 %3 2>/dev/null; then
+    if ! kill -0 "$X11VNC_PID" 2>/dev/null; then
         echo -e "${RED}[ERROR] x11vnc crashed unexpectedly.${NC}"
         exit 1
     fi
-    if ! kill -0 %4 2>/dev/null; then
+    if ! kill -0 "$WEBSOCKIFY_PID" 2>/dev/null; then
         echo -e "${RED}[ERROR] websockify crashed unexpectedly.${NC}"
         exit 1
     fi

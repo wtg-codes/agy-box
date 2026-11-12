@@ -552,14 +552,14 @@ EOF2
   [ "$status" -eq 0 ]
 }
 
-@test "agy-box-manager: VERSION is 0.7.1" {
+@test "agy-box-manager: VERSION is 0.7.2" {
   run bash -c 'source ./agy-box-manager && echo "$VERSION"'
   [ "$status" -eq 0 ]
-  [ "$output" = "0.7.1" ]
+  [ "$output" = "0.7.2" ]
 
   run ./agy-box-manager version
   [ "$status" -eq 0 ]
-  [[ "$output" == *"agy-box-manager version 0.7.1"* ]]
+  [[ "$output" == *"agy-box-manager version 0.7.2"* ]]
 }
 
 @test "agy-box-manager: script size is strictly under 120000 bytes and avoids E2BIG" {
@@ -569,11 +569,11 @@ EOF2
 
   run /usr/bin/bash -c "$(cat ./agy-box-manager)" --version
   [ "$status" -eq 0 ]
-  [[ "$output" == *"agy-box-manager version 0.7.1"* ]]
+  [[ "$output" == *"agy-box-manager version 0.7.2"* ]]
 
   run bash <(cat ./agy-box-manager) --version
   [ "$status" -eq 0 ]
-  [[ "$output" == *"agy-box-manager version 0.7.1"* ]]
+  [[ "$output" == *"agy-box-manager version 0.7.2"* ]]
 }
 
 @test "agy-box-manager: run_step surfaces failure logs without swallowing gum spin" {
@@ -785,6 +785,85 @@ exit 0
   run env AGY_VDI_TIMEOUT=1 ./agy-box-manager desktop agy-box-test --detach
   [ "$status" -ne 0 ]
   [[ "$output" == *"❌ Error: VDI failed to start:"* ]]
+}
+
+@test "agy-box-manager: workstation cmd_desktop passes DBUS_SESSION_BUS_ADDRESS and XDG_RUNTIME_DIR when AGY_KEYRING_MODE=host" {
+  local mock_log="$TEST_DIR/desktop_ws_host.log"
+  mkdir -p "$HOME/.config/agy-box"
+  cat <<'EOF' > "$HOME/.config/agy-box/config.env"
+AGY_CONTAINER_MANAGER="podman"
+AGY_KEYRING_MODE="host"
+EOF
+
+  create_mock "podman" '
+echo "podman $*" >> "'"$mock_log"'"
+if [ "$1" = "ps" ]; then
+  echo "agy-box-ws"
+elif [ "$1" = "inspect" ] && [[ "$*" == *"manager"* ]]; then
+  echo "distrobox"
+elif [ "$1" = "inspect" ] && [[ "$*" == *"State.Running"* ]]; then
+  echo "true"
+elif [ "$1" = "exec" ] && [[ "$*" == *"pgrep"* ]]; then
+  if [ -f "'"$TEST_DIR"'/vdi_started" ]; then exit 0; else exit 1; fi
+elif [ "$1" = "exec" ] && [ "$2" = "-d" ]; then
+  touch "'"$TEST_DIR"'/vdi_started"
+fi
+exit 0
+'
+  create_mock "distrobox" 'exit 0'
+
+  run env DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/1000/bus" \
+          XDG_RUNTIME_DIR="/run/user/1000" \
+          GNOME_KEYRING_CONTROL="/run/user/1000/keyring" \
+          ./agy-box-manager desktop agy-box-ws -p 6092 --detach
+  [ "$status" -eq 0 ]
+
+  local exec_line
+  exec_line=$(grep -F "podman exec -d" "$mock_log")
+  [[ "$exec_line" == *"-e AGY_KEYRING_MODE=host"* ]]
+  [[ "$exec_line" == *"-e XDG_RUNTIME_DIR=/run/user/1000"* ]]
+  [[ "$exec_line" == *"-e DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus"* ]]
+  [[ "$exec_line" == *"-e GNOME_KEYRING_CONTROL=/run/user/1000/keyring"* ]]
+  [[ "$exec_line" == *"-p 6092"* ]]
+}
+
+@test "agy-box-manager: workstation cmd_desktop omits DBUS_SESSION_BUS_ADDRESS when AGY_KEYRING_MODE=isolated" {
+  local mock_log="$TEST_DIR/desktop_ws_isolated.log"
+  mkdir -p "$HOME/.config/agy-box"
+  cat <<'EOF' > "$HOME/.config/agy-box/config.env"
+AGY_CONTAINER_MANAGER="podman"
+AGY_KEYRING_MODE="isolated"
+EOF
+
+  create_mock "podman" '
+echo "podman $*" >> "'"$mock_log"'"
+if [ "$1" = "ps" ]; then
+  echo "agy-box-ws"
+elif [ "$1" = "inspect" ] && [[ "$*" == *"manager"* ]]; then
+  echo "distrobox"
+elif [ "$1" = "inspect" ] && [[ "$*" == *"State.Running"* ]]; then
+  echo "true"
+elif [ "$1" = "exec" ] && [[ "$*" == *"pgrep"* ]]; then
+  if [ -f "'"$TEST_DIR"'/vdi_started_iso" ]; then exit 0; else exit 1; fi
+elif [ "$1" = "exec" ] && [ "$2" = "-d" ]; then
+  touch "'"$TEST_DIR"'/vdi_started_iso"
+fi
+exit 0
+'
+  create_mock "distrobox" 'exit 0'
+
+  run env DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/1000/bus" \
+          XDG_RUNTIME_DIR="/run/user/1000" \
+          GNOME_KEYRING_CONTROL="/run/user/1000/keyring" \
+          ./agy-box-manager desktop agy-box-ws --detach
+  [ "$status" -eq 0 ]
+
+  local exec_line
+  exec_line=$(grep -F "podman exec -d" "$mock_log")
+  [[ "$exec_line" == *"-e AGY_KEYRING_MODE=isolated"* ]]
+  [[ "$exec_line" != *"DBUS_SESSION_BUS_ADDRESS"* ]]
+  [[ "$exec_line" != *"XDG_RUNTIME_DIR"* ]]
+  [[ "$exec_line" != *"GNOME_KEYRING_CONTROL"* ]]
 }
 
 

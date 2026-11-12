@@ -1,6 +1,6 @@
 [Desktop Entry]
 Type=Application
-Name=Google Antigravity (SDK)
+Name=Python SDK & ADK
 Exec=xterm -fa 'Monospace' -fs 12 -bg '#1a1b2e' -fg '#e0e0e0' -geometry 100x35 -hold -e python3 -c "import google.antigravity, importlib.metadata; print('Google Antigravity SDK v' + importlib.metadata.version('google-antigravity')); print('Imported successfully!'); exec(compile('import code; code.interact(local=globals())', '<string>', 'exec'))"
 Icon=python
 Terminal=false

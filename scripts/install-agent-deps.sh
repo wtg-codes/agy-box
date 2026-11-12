@@ -34,8 +34,28 @@ apt-get update && apt-get install -y --no-install-recommends \
     websockify \
     xterm \
     pcmanfm \
+    dbus-x11 \
+    shared-mime-info \
+    desktop-file-utils \
+    hicolor-icon-theme \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+# Configure PCManFM (libfm) to launch trusted desktop shortcuts without "Execute File" prompt
+if [ -f /etc/xdg/libfm/libfm.conf ]; then
+    if grep -q '^[#[:space:]]*quick_exec=' /etc/xdg/libfm/libfm.conf; then
+        sed -i 's/^[#[:space:]]*quick_exec=.*/quick_exec=1/' /etc/xdg/libfm/libfm.conf
+    elif grep -q '^\[config\]' /etc/xdg/libfm/libfm.conf; then
+        sed -i '/^\[config\]/a quick_exec=1' /etc/xdg/libfm/libfm.conf
+    else
+        printf '\n[config]\nquick_exec=1\n' >> /etc/xdg/libfm/libfm.conf
+    fi
+else
+    mkdir -p /etc/xdg/libfm 2>/dev/null || true
+    if [ -d /etc/xdg/libfm ]; then
+        printf '[config]\nquick_exec=1\n' > /etc/xdg/libfm/libfm.conf
+    fi
+fi
 
 # 2. Install Node.js (v22 LTS) via NodeSource (for Gemini CLI and modern tooling)
 echo "Installing Node.js 22 LTS via NodeSource..."
@@ -67,7 +87,28 @@ if [[ "$TARGETARCH" = "arm64" ]]; then
     else
         CHROMIUM_BIN="/usr/bin/chromium"
     fi
-    printf '#!/bin/bash\nexec %s --disable-dev-shm-usage --disable-gpu --disable-crash-reporter --no-sandbox "$@"\n' "${CHROMIUM_BIN}" > /usr/bin/google-chrome-stable
+    cat <<EOF > /usr/bin/google-chrome-stable
+#!/bin/bash
+extra_flags=()
+case " \$* " in
+    *" --password-store="*) ;;
+    *)
+        use_basic=false
+        if [ "\${AGY_PASSWORD_STORE:-}" = "basic" ] || [ "\${AGY_KEYRING_MODE:-}" = "isolated" ] || [ -z "\${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+            use_basic=true
+        elif command -v dbus-send >/dev/null 2>&1; then
+            if ! dbus-send --session --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListNames 2>/dev/null | grep -q 'org\.freedesktop\.secrets' && \\
+               ! dbus-send --session --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListActivatableNames 2>/dev/null | grep -q 'org\.freedesktop\.secrets'; then
+                use_basic=true
+            fi
+        fi
+        if [ "\$use_basic" = "true" ]; then
+            extra_flags+=("--password-store=basic")
+        fi
+        ;;
+esac
+exec ${CHROMIUM_BIN} --disable-dev-shm-usage --disable-gpu --disable-crash-reporter --no-sandbox "\${extra_flags[@]}" "\$@"
+EOF
     chmod +x /usr/bin/google-chrome-stable
 else
     echo "Installing Google Chrome for amd64..."
@@ -75,10 +116,45 @@ else
     echo 'deb [arch=amd64 signed-by=/usr/share/keyrings/googlechrome-linux-keyring.gpg] https://dl.google.com/linux/chrome/deb/ stable main' > /etc/apt/sources.list.d/google.list
     apt-get update && apt-get install -y --no-install-recommends google-chrome-stable && rm -rf /var/lib/apt/lists/*
     
-    # Apply wrappers for Electron/Chrome stability in containers
+    # Apply wrappers for Electron/Chrome stability and container keyring fallback
     mv /usr/bin/google-chrome-stable /usr/bin/google-chrome-stable.orig
-    printf '#!/bin/bash\nexec /usr/bin/google-chrome-stable.orig --disable-dev-shm-usage --disable-gpu --disable-crash-reporter --no-sandbox "$@"\n' > /usr/bin/google-chrome-stable
+    cat <<'EOF' > /usr/bin/google-chrome-stable
+#!/bin/bash
+extra_flags=()
+case " $* " in
+    *" --password-store="*) ;;
+    *)
+        use_basic=false
+        if [ "${AGY_PASSWORD_STORE:-}" = "basic" ] || [ "${AGY_KEYRING_MODE:-}" = "isolated" ] || [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+            use_basic=true
+        elif command -v dbus-send >/dev/null 2>&1; then
+            if ! dbus-send --session --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListNames 2>/dev/null | grep -q 'org\.freedesktop\.secrets' && \
+               ! dbus-send --session --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListActivatableNames 2>/dev/null | grep -q 'org\.freedesktop\.secrets'; then
+                use_basic=true
+            fi
+        fi
+        if [ "$use_basic" = "true" ]; then
+            extra_flags+=("--password-store=basic")
+        fi
+        ;;
+esac
+exec /usr/bin/google-chrome-stable.orig --disable-dev-shm-usage --disable-gpu --disable-crash-reporter --no-sandbox "${extra_flags[@]}" "$@"
+EOF
     chmod +x /usr/bin/google-chrome-stable
+fi
+
+mkdir -p /usr/share/pixmaps 2>/dev/null || true
+if [ ! -e /usr/share/pixmaps/google-chrome.png ]; then
+    for candidate_icon in \
+        /opt/google/chrome/product_logo_128.png \
+        /usr/share/icons/hicolor/128x128/apps/google-chrome.png \
+        /usr/share/icons/hicolor/128x128/apps/chromium.png \
+        /usr/share/pixmaps/chromium.png; do
+        if [ -f "$candidate_icon" ]; then
+            ln -sf "$candidate_icon" /usr/share/pixmaps/google-chrome.png
+            break
+        fi
+    done
 fi
 
 # 5. Install Visual Studio Code
@@ -91,8 +167,32 @@ apt-get update && apt-get install -y --no-install-recommends code && rm -rf /var
 # Apply container wrapper for Visual Studio Code
 if [ -f /usr/bin/code ]; then
     mv /usr/bin/code /usr/bin/code.orig
-    printf '#!/bin/bash\nexec /usr/bin/code.orig --disable-dev-shm-usage --no-sandbox "$@"\n' > /usr/bin/code
+    cat <<'EOF' > /usr/bin/code
+#!/bin/bash
+extra_flags=()
+case " $* " in
+    *" --password-store="*) ;;
+    *)
+        use_basic=false
+        if [ "${AGY_PASSWORD_STORE:-}" = "basic" ] || [ "${AGY_KEYRING_MODE:-}" = "isolated" ] || [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+            use_basic=true
+        elif command -v dbus-send >/dev/null 2>&1; then
+            if ! dbus-send --session --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListNames 2>/dev/null | grep -q 'org\.freedesktop\.secrets' && \
+               ! dbus-send --session --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListActivatableNames 2>/dev/null | grep -q 'org\.freedesktop\.secrets'; then
+                use_basic=true
+            fi
+        fi
+        if [ "$use_basic" = "true" ]; then
+            extra_flags+=("--password-store=basic")
+        fi
+        ;;
+esac
+exec /usr/bin/code.orig --disable-dev-shm-usage --no-sandbox "${extra_flags[@]}" "$@"
+EOF
     chmod +x /usr/bin/code
+fi
+if [ -f /usr/share/pixmaps/com.visualstudio.code.png ] && [ ! -e /usr/share/pixmaps/vscode.png ]; then
+    ln -sf /usr/share/pixmaps/com.visualstudio.code.png /usr/share/pixmaps/vscode.png
 fi
 
 # 6. Install Zed Editor
@@ -121,5 +221,8 @@ fi
 if [ -d /usr/local/share/zed/share/applications ]; then
     mkdir -p /usr/share/applications
     cp /usr/local/share/zed/share/applications/*.desktop /usr/share/applications/ 2>/dev/null || true
+fi
+if command -v gtk-update-icon-cache >/dev/null 2>&1 && [ -d /usr/share/icons/hicolor ]; then
+    gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
 fi
 

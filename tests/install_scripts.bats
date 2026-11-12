@@ -14,6 +14,7 @@ setup() {
   mkdir -p "$TEST_DIR/usr/local/share"
   mkdir -p "$TEST_DIR/var/lib/apt/lists"
   mkdir -p "$TEST_DIR/etc/apt/sources.list.d"
+  mkdir -p "$TEST_DIR/etc/xdg/libfm"
   mkdir -p "$TEST_DIR/usr/share/keyrings"
   
   export TEST_LOG="$TEST_DIR/invocations.log"
@@ -136,6 +137,7 @@ teardown() {
   touch "$TEST_DIR/usr/bin/code"
   
   sed -e "s|/etc/apt|$TEST_DIR/etc/apt|g" \
+      -e "s|/etc/xdg|$TEST_DIR/etc/xdg|g" \
       -e "s|/usr/share|$TEST_DIR/usr/share|g" \
       -e "s|/usr/local|$TEST_DIR/usr/local|g" \
       -e "s|/usr/bin|$TEST_DIR/usr/bin|g" \
@@ -146,7 +148,11 @@ teardown() {
   run "$TEST_DIR/install-agent-deps.sh"
   [ "$status" -eq 0 ]
   
-  # Verify gum, google-chrome-stable, vs code, and zed
+  # Verify gum, dbus-x11, libfm quick_exec=1, google-chrome-stable, vs code, and zed
+  grep -F 'dbus-x11' "$TEST_LOG"
+  grep -F 'quick_exec=1' "$TEST_DIR/etc/xdg/libfm/libfm.conf"
+  grep -F -- '--password-store=basic' "$TEST_DIR/usr/bin/google-chrome-stable"
+  grep -F -- '--password-store=basic' "$TEST_DIR/usr/bin/code"
   grep -F 'apt-get install -y --no-install-recommends gum=0.17.0' "$TEST_LOG"
   grep -F 'apt-get install -y --no-install-recommends google-chrome-stable' "$TEST_LOG"
   grep -F 'apt-get install -y --no-install-recommends code' "$TEST_LOG"
@@ -165,6 +171,7 @@ teardown() {
   touch "$TEST_DIR/usr/bin/code"
   
   sed -e "s|/etc/apt|$TEST_DIR/etc/apt|g" \
+      -e "s|/etc/xdg|$TEST_DIR/etc/xdg|g" \
       -e "s|/usr/share|$TEST_DIR/usr/share|g" \
       -e "s|/usr/local|$TEST_DIR/usr/local|g" \
       -e "s|/usr/bin|$TEST_DIR/usr/bin|g" \
@@ -175,6 +182,10 @@ teardown() {
   run "$TEST_DIR/install-agent-deps.sh" arm64
   [ "$status" -eq 0 ]
   
+  grep -F 'dbus-x11' "$TEST_LOG"
+  grep -F 'quick_exec=1' "$TEST_DIR/etc/xdg/libfm/libfm.conf"
+  grep -F -- '--password-store=basic' "$TEST_DIR/usr/bin/google-chrome-stable"
+  grep -F -- '--password-store=basic' "$TEST_DIR/usr/bin/code"
   grep -F 'apt-get install -y --no-install-recommends gum=0.17.0' "$TEST_LOG"
   grep -E 'apt-get install -y --no-install-recommends chromium' "$TEST_LOG"
   grep -F 'apt-get install -y --no-install-recommends code' "$TEST_LOG"

@@ -219,6 +219,9 @@ PYEOF
             cp -f "$SHARE_DIR/antigravity/resources/icon.png" /usr/share/pixmaps/antigravity.png
             cp -f "$SHARE_DIR/antigravity/resources/icon.png" /usr/share/icons/hicolor/512x512/apps/antigravity.png
             chmod 0644 /usr/share/pixmaps/antigravity.png /usr/share/icons/hicolor/512x512/apps/antigravity.png
+            if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+                gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
+            fi
         else
             mkdir -p "$HOME/.local/share/icons/hicolor/512x512/apps"
             cp -f "$SHARE_DIR/antigravity/resources/icon.png" "$HOME/.local/share/icons/hicolor/512x512/apps/antigravity.png"
@@ -229,6 +232,28 @@ fi
 app_exec="$SHARE_DIR/antigravity/antigravity"
 write_file_atomic "$BIN_DIR/antigravity" 0755 << EOF
 #!/bin/bash
+target_bin="$app_exec"
+if [ "$MODE" = "system" ] && [ -n "\${HOME:-}" ] && [ -x "\$HOME/.local/share/antigravity/antigravity" ]; then
+    target_bin="\$HOME/.local/share/antigravity/antigravity"
+fi
+extra_flags=()
+case " \$* " in
+    *" --password-store="*) ;;
+    *)
+        use_basic=false
+        if [ "\${AGY_PASSWORD_STORE:-}" = "basic" ] || [ "\${AGY_KEYRING_MODE:-}" = "isolated" ] || [ -z "\${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+            use_basic=true
+        elif command -v dbus-send >/dev/null 2>&1; then
+            if ! dbus-send --session --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListNames 2>/dev/null | grep -q 'org\.freedesktop\.secrets' && \\
+               ! dbus-send --session --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListActivatableNames 2>/dev/null | grep -q 'org\.freedesktop\.secrets'; then
+                use_basic=true
+            fi
+        fi
+        if [ "\$use_basic" = "true" ]; then
+            extra_flags+=("--password-store=basic")
+        fi
+        ;;
+esac
 if [ -e /run/.containerenv ] || [ -e /run/.toolboxenv ]; then
     mkdir -p "\$HOME/.config/Antigravity-box/User"
     if [ ! -f "\$HOME/.config/Antigravity-box/User/settings.json" ]; then
@@ -236,11 +261,20 @@ if [ -e /run/.containerenv ] || [ -e /run/.toolboxenv ]; then
     elif command -v jq &>/dev/null; then
         jq '.["antigravity.browser.chromeBinaryPath"] = "/usr/bin/google-chrome-stable" | .["window.titleBarStyle"] = "native"' "\$HOME/.config/Antigravity-box/User/settings.json" > "\$HOME/.config/Antigravity-box/User/settings.json.tmp" && mv "\$HOME/.config/Antigravity-box/User/settings.json.tmp" "\$HOME/.config/Antigravity-box/User/settings.json"
     fi
-    exec "$app_exec" --user-data-dir "\$HOME/.config/Antigravity-box" --disable-dev-shm-usage --disable-gpu --disable-crash-reporter --no-sandbox "\$@"
+    exec "\$target_bin" --user-data-dir "\$HOME/.config/Antigravity-box" --disable-dev-shm-usage --disable-gpu --disable-crash-reporter --no-sandbox "\${extra_flags[@]}" "\$@"
 else
-    exec "$app_exec" --disable-dev-shm-usage --disable-gpu --disable-crash-reporter --no-sandbox "\$@"
+    exec "\$target_bin" --disable-dev-shm-usage --disable-gpu --disable-crash-reporter --no-sandbox "\${extra_flags[@]}" "\$@"
 fi
 EOF
+
+if [ "$MODE" = "user" ] && [ -z "${BATS_TEST_FILENAME:-}" ] && { [ -e /run/.containerenv ] || [ -e /run/.toolboxenv ]; }; then
+    if [ -f /usr/local/bin/antigravity ] && ! grep -q -- '--password-store=basic' /usr/local/bin/antigravity 2>/dev/null; then
+        if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+            sudo cp -f "$BIN_DIR/antigravity" /usr/local/bin/antigravity 2>/dev/null || true
+            sudo chmod 0755 /usr/local/bin/antigravity 2>/dev/null || true
+        fi
+    fi
+fi
 
 # Disable Antigravity telemetry (only when no settings exist yet)
 if [ "$MODE" = "system" ]; then
@@ -251,17 +285,25 @@ else
 fi
 
 
-# --- 2. Clean Up Legacy Antigravity IDE (Removed) ----------------------------
+# --- 2. Clean Up Legacy Antigravity IDE & Duplicate Desktop Icons -------------
 # Antigravity IDE (antigravity-ide) has been retired in favor of Google Antigravity App (antigravity),
 # Antigravity CLI (agy), VS Code, Zed, and JetBrains IDEs. Clean up any legacy installation artifacts.
 rm -f "$BIN_DIR/antigravity-ide" 2>/dev/null || true
 rm -rf "$SHARE_DIR/antigravity-ide" 2>/dev/null || true
 if [ "$MODE" = "system" ]; then
-    rm -f "/etc/skel/Desktop/AntigravityIDE.desktop" 2>/dev/null || true
+    rm -f "/etc/skel/Desktop/Antigravity2.desktop" \
+          "/etc/skel/Desktop/AntigravityIDE.desktop" \
+          "/etc/skel/Desktop/google-antigravity.desktop" 2>/dev/null || true
     rm -rf "/etc/skel/.config/Antigravity-ide" "/etc/skel/.config/Antigravity-ide-box" 2>/dev/null || true
 elif [ -n "${HOME:-}" ]; then
-    rm -f "$HOME/Desktop/AntigravityIDE.desktop" 2>/dev/null || true
+    rm -f "$HOME/Desktop/Antigravity2.desktop" \
+          "$HOME/Desktop/AntigravityIDE.desktop" \
+          "$HOME/Desktop/google-antigravity.desktop" 2>/dev/null || true
     rm -rf "$HOME/.config/Antigravity-ide" "$HOME/.config/Antigravity-ide-box" 2>/dev/null || true
+    if [ -d /etc/skel/Desktop ] && [ -d "$HOME/Desktop" ]; then
+        cp -rn /etc/skel/Desktop/. "$HOME/Desktop/" 2>/dev/null || true
+        chmod +x "$HOME"/Desktop/*.desktop 2>/dev/null || true
+    fi
 fi
 
 

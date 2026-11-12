@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=Google Chrome
-Exec=google-chrome-stable
-Icon=google-chrome
+Exec=/usr/bin/google-chrome-stable
+Icon=/usr/share/pixmaps/google-chrome.png
 Terminal=false
 Categories=Network;

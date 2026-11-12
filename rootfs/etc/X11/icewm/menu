@@ -1,12 +1,12 @@
 # IceWM Start Menu for agy-box VDI desktop
 
 prog "Terminal" "utilities-terminal" xterm -fa 'Monospace' -fs 12 -bg '#1a1b2e' -fg '#e0e0e0' -geometry 100x35
-prog "Google Chrome" "google-chrome" google-chrome-stable
-prog "Antigravity 2.0 (Agent First Experience)" "antigravity" antigravity
-prog "Visual Studio Code" "vscode" code
-prog "Zed" "zed" zed
+prog "Google Chrome" "/usr/share/pixmaps/google-chrome.png" /usr/bin/google-chrome-stable
+prog "Google Antigravity" "/usr/share/pixmaps/antigravity.png" /usr/local/bin/antigravity
+prog "Visual Studio Code" "/usr/share/pixmaps/vscode.png" /usr/bin/code
+prog "Zed" "/usr/share/pixmaps/zed.png" /usr/local/bin/zed
 prog "Antigravity CLI (agy)" "utilities-terminal" xterm -fa 'Monospace' -fs 12 -bg '#1a1b2e' -fg '#e0e0e0' -geometry 100x35 -e agy
-prog "Google Antigravity (SDK)" "python" xterm -fa 'Monospace' -fs 12 -bg '#1a1b2e' -fg '#e0e0e0' -geometry 100x35 -hold -e python3 -c "import google.antigravity, importlib.metadata; print('Google Antigravity SDK v' + importlib.metadata.version('google-antigravity')); print('Imported successfully!'); exec(compile('import code; code.interact(local=globals())', '<string>', 'exec'))"
+prog "Python SDK & ADK" "python" xterm -fa 'Monospace' -fs 12 -bg '#1a1b2e' -fg '#e0e0e0' -geometry 100x35 -hold -e python3 -c "import google.antigravity, importlib.metadata; print('Google Antigravity SDK v' + importlib.metadata.version('google-antigravity')); print('Imported successfully!'); exec(compile('import code; code.interact(local=globals())', '<string>', 'exec'))"
 prog "Workspace Setup Assistant" "preferences-system" xterm -fa 'Monospace' -fs 12 -bg '#1a1b2e' -fg '#e0e0e0' -geometry 100x35 -e agy-setup-helper
 
 separator
