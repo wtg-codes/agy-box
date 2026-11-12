@@ -280,7 +280,7 @@ EOF2
 
   run ./agy-box-manager desktop agy-box-test -p 6082 -r 2560x1440
   [ "$status" -eq 0 ]
-  run grep -F "podman exec -d -u agyuser -w /home/agyuser agy-box-test /usr/local/bin/agy-vdi -p 6080 -p 6082 -r 2560x1440" "$mock_log"
+  run grep -F 'podman exec -d -u agyuser -w /home/agyuser agy-box-test sh -c exec /usr/local/bin/agy-vdi "$@" >/tmp/agy-vdi.log 2>&1 _ -p 6080 -r 2560x1440' "$mock_log"
   [ "$status" -eq 0 ]
 }
 
@@ -552,28 +552,28 @@ EOF2
   [ "$status" -eq 0 ]
 }
 
-@test "agy-box-manager: VERSION is 0.7.0" {
+@test "agy-box-manager: VERSION is 0.7.1" {
   run bash -c 'source ./agy-box-manager && echo "$VERSION"'
   [ "$status" -eq 0 ]
-  [ "$output" = "0.7.0" ]
+  [ "$output" = "0.7.1" ]
 
   run ./agy-box-manager version
   [ "$status" -eq 0 ]
-  [[ "$output" == *"agy-box-manager version 0.7.0"* ]]
+  [[ "$output" == *"agy-box-manager version 0.7.1"* ]]
 }
 
-@test "agy-box-manager: script size is strictly under 125000 bytes and avoids E2BIG" {
+@test "agy-box-manager: script size is strictly under 120000 bytes and avoids E2BIG" {
   local size
   size=$(wc -c < ./agy-box-manager)
-  [ "$size" -lt 125000 ]
+  [ "$size" -lt 120000 ]
 
   run /usr/bin/bash -c "$(cat ./agy-box-manager)" --version
   [ "$status" -eq 0 ]
-  [[ "$output" == *"agy-box-manager version 0.7.0"* ]]
+  [[ "$output" == *"agy-box-manager version 0.7.1"* ]]
 
   run bash <(cat ./agy-box-manager) --version
   [ "$status" -eq 0 ]
-  [[ "$output" == *"agy-box-manager version 0.7.0"* ]]
+  [[ "$output" == *"agy-box-manager version 0.7.1"* ]]
 }
 
 @test "agy-box-manager: run_step surfaces failure logs without swallowing gum spin" {
@@ -684,8 +684,107 @@ EOF2
   run ./agy-box-manager desktop agy-box-test --detach
   [ "$status" -eq 0 ]
   [[ "$output" == *"VDI Desktop is accessible at"* ]]
-  run grep -F "podman exec -d -u agyuser -w /home/agyuser agy-box-test /usr/local/bin/agy-vdi -p 6080" "$mock_log"
+  run grep -F 'podman exec -d -u agyuser -w /home/agyuser agy-box-test sh -c exec /usr/local/bin/agy-vdi "$@" >/tmp/agy-vdi.log 2>&1 _ -p 6080' "$mock_log"
   [ "$status" -eq 0 ]
+}
+
+@test "agy-box-manager: generate_box_name produces two-word kebab name and avoids collisions" {
+  source ./agy-box-manager
+  local name1 name2
+  name1=$(generate_box_name "agy-box")
+  [[ "$name1" =~ ^agy-box-[a-z]+-[a-z]+$ ]]
+
+  mkdir -p "$HOME/.config/agy-box/homes/$name1"
+  name2=$(generate_box_name "agy-box")
+  [[ "$name2" =~ ^agy-box-[a-z]+-[a-z]+$ ]]
+  [ "$name1" != "$name2" ]
+}
+
+@test "agy-box-manager: calculate_box_port_offset allocates lowest unused offset >= 1" {
+  source ./agy-box-manager
+  run calculate_box_port_offset "agy-box"
+  [ "$status" -eq 0 ]
+  [ "$output" -eq 0 ]
+
+  run calculate_box_port_offset "agy-box-alpha-beta"
+  [ "$status" -eq 0 ]
+  [ "$output" -eq 1 ]
+
+  # Simulate existing container using port 6081
+  local mock_code='
+if [ "$1" = "ps" ] && [[ "$*" == *"{{.Ports}}"* ]]; then
+  echo "6081->6080/tcp"
+fi
+exit 0
+'
+  create_mock "podman" "$mock_code"
+  create_mock "docker" "$mock_code"
+  run calculate_box_port_offset "agy-box-gamma-delta"
+  [ "$status" -eq 0 ]
+  [ "$output" -eq 2 ]
+}
+
+@test "agy-box-manager: ensure_distrobox_ready initializes stopped and recovers half-initialized containers" {
+  local mock_log="$TEST_DIR/ready_mock.log"
+  create_mock "podman" '
+echo "podman $*" >> "'"$mock_log"'"
+if [ "$1" = "inspect" ] && [[ "$*" == *"State.Running"* ]]; then
+  echo "false"
+fi
+exit 0
+'
+  create_mock "distrobox" '
+echo "distrobox $*" >> "'"$mock_log"'"
+exit 0
+'
+
+  run bash -c 'source ./agy-box-manager && ensure_distrobox_ready "test-box"'
+  [ "$status" -eq 0 ]
+  run grep -F "distrobox enter test-box -- true" "$mock_log"
+  [ "$status" -eq 0 ]
+
+  rm -f "$mock_log"
+  local pass_file="$TEST_DIR/passwd_checked"
+  create_mock "podman" '
+echo "podman $*" >> "'"$mock_log"'"
+if [ "$1" = "inspect" ] && [[ "$*" == *"State.Running"* ]]; then
+  echo "true"
+elif [ "$1" = "exec" ] && [[ "$*" == *"getent passwd"* ]]; then
+  if [ ! -f "'"$pass_file"'" ]; then
+    touch "'"$pass_file"'"
+    exit 1
+  else
+    exit 0
+  fi
+fi
+exit 0
+'
+  run bash -c 'source ./agy-box-manager && ensure_distrobox_ready "test-box"'
+  [ "$status" -eq 0 ]
+  run grep -F "podman stop test-box" "$mock_log"
+  [ "$status" -eq 0 ]
+  run grep -F "distrobox enter test-box -- true" "$mock_log"
+  [ "$status" -eq 0 ]
+}
+
+@test "agy-box-manager: cmd_desktop reports error and exits 1 when VDI fails to start" {
+  local mock_log="$TEST_DIR/desktop_fail_mock.log"
+  create_mock "podman" '
+echo "podman $*" >> "'"$mock_log"'"
+if [ "$1" = "ps" ]; then
+  echo "agy-box-test"
+elif [ "$1" = "exec" ] && [[ "$*" == *"pgrep"* ]]; then
+  exit 1
+elif [ "$1" = "exec" ] && [[ "$*" == *"cat /tmp/agy-vdi.log"* ]]; then
+  echo "Error: unable to find user wtg: no matching entries in passwd file" >&2
+fi
+exit 0
+'
+  create_mock "distrobox" 'exit 0'
+
+  run env AGY_VDI_TIMEOUT=1 ./agy-box-manager desktop agy-box-test --detach
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"❌ Error: VDI failed to start:"* ]]
 }
 
 

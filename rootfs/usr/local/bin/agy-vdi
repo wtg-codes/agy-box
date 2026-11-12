@@ -201,13 +201,11 @@ for chrome_profile in \
     _cleanup_stale_chrome_locks "$chrome_profile"
 done
 
-# Check if Xvfb is already running on :99
-if [[ -f "/tmp/.X${DISPLAY_PORT}-lock" ]] || [[ -S "/tmp/.X11-unix/X${DISPLAY_PORT}" ]]; then
-    echo -e "${YELLOW}[WARN] Port :${DISPLAY_PORT} lock file or socket exists. Cleaning up...${NC}"
-    rm -f "/tmp/.X${DISPLAY_PORT}-lock" || true
-    rm -f "/tmp/.X11-unix/X${DISPLAY_PORT}" || true
-fi
-
+# Clean up any stale VDI processes or lock files on our target ports/display
+pkill -f "Xvfb :${DISPLAY_PORT}" 2>/dev/null || true
+pkill -f "x11vnc.*${VNC_PORT}" 2>/dev/null || true
+pkill -f "websockify.*${WEB_PORT}" 2>/dev/null || true
+rm -f "/tmp/.X${DISPLAY_PORT}-lock" "/tmp/.X11-unix/X${DISPLAY_PORT}" 2>/dev/null || true
 
 # 1. Start Xvfb (Virtual Framebuffer)
 echo -e "${BLUE}[INFO] Starting Xvfb virtual display :${DISPLAY_PORT} with resolution ${WIDTH}x${HEIGHT}...${NC}"
@@ -237,7 +235,7 @@ wait_for_port "${VNC_PORT}" "x11vnc"
 # 4. Start noVNC/websockify bridge
 echo -e "${BLUE}[INFO] Starting noVNC WebSocket bridge...${NC}"
 if [[ -d "/usr/share/novnc" ]]; then
-    websockify --web /usr/share/novnc/ "0.0.0.0:${WEB_PORT}" "127.0.0.1:${VNC_PORT}" &
+    websockify --web /usr/share/novnc/ "${WEB_PORT}" "127.0.0.1:${VNC_PORT}" &
 else
     echo -e "${RED}[ERROR] noVNC directory /usr/share/novnc not found.${NC}"
     exit 1
@@ -248,20 +246,23 @@ wait_for_port "${WEB_PORT}" "websockify"
 # Detect host/container primary LAN IP address
 local_ip=""
 if command -v ip &>/dev/null; then
-    local_ip=$(ip route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' || hostname -I | awk '{print $1}')
+    local_ip=$(ip route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}' || true)
+    if [[ -z "$local_ip" ]] && command -v hostname &>/dev/null; then
+        local_ip=$(hostname -I 2>/dev/null | awk '{print $1}' || true)
+    fi
 elif command -v hostname &>/dev/null; then
-    local_ip=$(hostname -I | awk '{print $1}')
+    local_ip=$(hostname -I 2>/dev/null | awk '{print $1}' || true)
 fi
-local_ip=$(echo "${local_ip:-}" | xargs)
+local_ip=$(echo "${local_ip:-}" | xargs 2>/dev/null || true)
 
 echo -e "\n${GREEN}==================================================${NC}"
 echo -e "${GREEN}  agy-box VDI virtual desktop is running!         ${NC}"
 echo -e "${GREEN}==================================================${NC}"
 echo -e "${BLUE}Access the desktop inside your web browser at:${NC}"
-echo -e "👉 ${GREEN}http://localhost:${WEB_PORT}/vnc.html?autoconnect=true&resize=scale${NC}"
+echo -e "👉 ${GREEN}http://127.0.0.1:${WEB_PORT}/vnc.html?autoconnect=true&resize=scale&path=websockify${NC}"
 
 if [[ -n "$local_ip" && "$local_ip" != "127.0.0.1" ]]; then
-    echo -e "👉 ${GREEN}http://${local_ip}:${WEB_PORT}/vnc.html?autoconnect=true&resize=scale${NC} (LAN Access)"
+    echo -e "👉 ${GREEN}http://${local_ip}:${WEB_PORT}/vnc.html?autoconnect=true&resize=scale&path=websockify${NC} (LAN Access)"
 fi
 echo ""
 echo -e "${YELLOW}[WARNING] Security Notice: VDI is listening on all interfaces (0.0.0.0) without a password.${NC}"

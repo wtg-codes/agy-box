@@ -48,7 +48,7 @@ agy-box-manager install
 
 # 3. Work inside it (GUI apps render natively on your desktop), or use the browser VDI
 agy-box-manager enter
-agy-box-manager desktop      # then open http://localhost:6080/vnc.html?autoconnect=true&resize=scale
+agy-box-manager desktop      # then open http://127.0.0.1:6080/vnc.html?autoconnect=true&resize=scale&path=websockify
 ```
 
 The `agy` CLI is exported to your host's `~/.local/bin`, so `agy --version` works straight from the host shell. If you cloned the repo, `just agy` opens the same interactive menu, and the `ujust agy-*` recipes are available through the Bluefin integration.
