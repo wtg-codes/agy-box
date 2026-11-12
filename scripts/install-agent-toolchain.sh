@@ -27,6 +27,24 @@ set -Eeuo pipefail
 
 PROG="agy-install-toolchain"
 CURRENT_STEP="initialisation"
+TOOLCHAIN_LOG_FILE=""
+
+tc_log() {
+    [ -n "${TOOLCHAIN_LOG_FILE:-}" ] || return 0
+    printf '[%s] [toolchain] %s\n' "$(date -Iseconds)" "$*" >> "$TOOLCHAIN_LOG_FILE" 2>/dev/null || true
+}
+
+run_tc_cmd() {
+    local rc=0 s e
+    s=$(date +%s%3N 2>/dev/null || echo 0)
+    [[ "$s" =~ ^[0-9]+$ ]] || s=$(( $(date +%s) * 1000 ))
+    tc_log "[CMD] $*"
+    "$@" || rc=$?
+    e=$(date +%s%3N 2>/dev/null || echo 0)
+    [[ "$e" =~ ^[0-9]+$ ]] || e=$(( $(date +%s) * 1000 ))
+    tc_log "[EXIT rc=${rc} duration_ms=$((e - s))] $*"
+    return "$rc"
+}
 
 usage() {
     cat <<EOF
@@ -51,12 +69,14 @@ for arg in "$@"; do
 done
 
 die() {
+    tc_log "[ERROR] $*"
     echo "${PROG}: ERROR: $*" >&2
     exit 1
 }
 
 on_error() {
     local rc=$1 line=$2
+    tc_log "[ERROR] step '${CURRENT_STEP}' failed (exit ${rc}, line ${line})"
     echo "" >&2
     echo "${PROG}: ERROR: step '${CURRENT_STEP}' failed (exit ${rc}, line ${line})." >&2
     echo "${PROG}: The Antigravity toolchain may be incomplete. Re-run '${PROG}' to retry." >&2
@@ -65,6 +85,7 @@ trap 'on_error $? $LINENO' ERR
 
 step() {
     CURRENT_STEP="$1"
+    tc_log "[STEP] $1"
     echo "==> $1"
 }
 
@@ -85,6 +106,34 @@ else
     BIN_DIR="$HOME/.local/bin"
     SHARE_DIR="$HOME/.local/share"
 fi
+
+if [ "$MODE" != "system" ]; then
+    # Ensure user directories in HOME are writable when distrobox initializes files as root.
+    for d in "$HOME/.config" "$HOME/.gemini" "$HOME/.local" "$HOME/.vscode" "$HOME/Desktop"; do
+        if [ -e "$d" ] && [ ! -w "$d" ]; then
+            if command -v sudo &>/dev/null && sudo -n true 2>/dev/null; then
+                sudo chown -R "$(id -u):$(id -g)" "$d" 2>/dev/null || true
+                chmod -R u+rwX "$d" 2>/dev/null || true
+            fi
+        fi
+    done
+fi
+
+if [ "${AGY_LOG_DISABLED:-0}" != "1" ]; then
+    if [ -n "${AGY_BOX_STATE_DIR:-}" ]; then
+        mkdir -p "$AGY_BOX_STATE_DIR" 2>/dev/null || true
+        if [ -w "$AGY_BOX_STATE_DIR" ]; then
+            TOOLCHAIN_LOG_FILE="$AGY_BOX_STATE_DIR/toolchain.log"
+        fi
+    elif [ "$MODE" != "system" ] && [ -n "${HOME:-}" ] && [ -w "$HOME" ]; then
+        mkdir -p "$HOME/.local/state/agy-box" 2>/dev/null || true
+        if [ -w "$HOME/.local/state/agy-box" ]; then
+            TOOLCHAIN_LOG_FILE="$HOME/.local/state/agy-box/toolchain.log"
+        fi
+    fi
+fi
+
+tc_log "[INFO] Starting ${PROG} (mode=${MODE}, bin_dir=${BIN_DIR})"
 
 arch="$(uname -m)"
 case "$arch" in
@@ -115,17 +164,6 @@ if [ "$MODE" = "system" ]; then
     :  # system mode bootstraps its own pinned uv below
 else
     command -v pip3 >/dev/null 2>&1 || die "required command 'pip3' not found in PATH for user install."
-    # Ensure user directories in HOME are writable. When distrobox initializes,
-    # files from /etc/skel may be copied with root ownership if the container was
-    # started by root/distrobox-init. Fix ownership using passwordless sudo.
-    for d in "$HOME/.config" "$HOME/.gemini" "$HOME/.local" "$HOME/.vscode" "$HOME/Desktop"; do
-        if [ -e "$d" ] && [ ! -w "$d" ]; then
-            if command -v sudo &>/dev/null && sudo -n true 2>/dev/null; then
-                sudo chown -R "$(id -u):$(id -g)" "$d" 2>/dev/null || true
-                chmod -R u+rwX "$d" 2>/dev/null || true
-            fi
-        fi
-    done
 fi
 
 mkdir -p "$BIN_DIR" "$SHARE_DIR"
@@ -137,8 +175,12 @@ trap cleanup EXIT
 # download_verify <url> <sha256|sha512> <hash> <dest-file>
 download_verify() {
     local url=$1 algo=$2 hash=$3 dest=$4
-    curl -fsSL --http1.1 --connect-timeout 5 --retry 5 --retry-delay 2 "$url" -o "$dest"
-    echo "$hash  $dest" | "${algo}sum" -c -
+    run_tc_cmd curl -fsSL --http1.1 --connect-timeout 5 --retry 5 --retry-delay 2 "$url" -o "$dest"
+    local vrc=0
+    tc_log "[CMD] ${algo}sum -c (${dest})"
+    echo "$hash  $dest" | "${algo}sum" -c - || vrc=$?
+    tc_log "[EXIT rc=${vrc}] ${algo}sum -c (${dest})"
+    return "$vrc"
 }
 
 # install_app_tarball <url> <sha256> <install-dir>
@@ -150,7 +192,7 @@ install_app_tarball() {
     download_verify "$url" sha256 "$sha" "$tarball"
     rm -rf "${dest}.new"
     mkdir -p "${dest}.new"
-    tar -xzf "$tarball" -C "${dest}.new" --strip-components=1
+    run_tc_cmd tar -xzf "$tarball" -C "${dest}.new" --strip-components=1
     if [ "$MODE" = "system" ]; then
         chmod -R ugo+rX "${dest}.new"
     fi
@@ -165,6 +207,7 @@ write_file_atomic() {
     cat > "${dest}.new"
     chmod "$mode" "${dest}.new"
     mv -f "${dest}.new" "$dest"
+    tc_log "[INFO] Installed wrapper ${dest} (mode=${mode})"
 }
 
 # ensure_default_settings <settings.json>: create with telemetry disabled if
@@ -244,8 +287,8 @@ case " \$* " in
         if [ "\${AGY_PASSWORD_STORE:-}" = "basic" ] || [ "\${AGY_KEYRING_MODE:-}" = "isolated" ] || [ -z "\${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
             use_basic=true
         elif command -v dbus-send >/dev/null 2>&1; then
-            if ! dbus-send --session --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListNames 2>/dev/null | grep -q 'org\.freedesktop\.secrets' && \\
-               ! dbus-send --session --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListActivatableNames 2>/dev/null | grep -q 'org\.freedesktop\.secrets'; then
+            if ! dbus-send --session --reply-timeout=1500 --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListNames 2>/dev/null | grep -q 'org\.freedesktop\.secrets' && \\
+               ! dbus-send --session --reply-timeout=1500 --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListActivatableNames 2>/dev/null | grep -q 'org\.freedesktop\.secrets'; then
                 use_basic=true
             fi
         fi
@@ -286,19 +329,21 @@ fi
 
 
 # --- 2. Clean Up Legacy Antigravity IDE & Duplicate Desktop Icons -------------
-# Antigravity IDE (antigravity-ide) has been retired in favor of Google Antigravity App (antigravity),
-# Antigravity CLI (agy), VS Code, Zed, and JetBrains IDEs. Clean up any legacy installation artifacts.
 rm -f "$BIN_DIR/antigravity-ide" 2>/dev/null || true
 rm -rf "$SHARE_DIR/antigravity-ide" 2>/dev/null || true
 if [ "$MODE" = "system" ]; then
     rm -f "/etc/skel/Desktop/Antigravity2.desktop" \
           "/etc/skel/Desktop/AntigravityIDE.desktop" \
-          "/etc/skel/Desktop/google-antigravity.desktop" 2>/dev/null || true
+          "/etc/skel/Desktop/google-antigravity.desktop" \
+          "/etc/skel/Desktop/SetupAssistant.desktop" \
+          "/etc/skel/Desktop/Setup.desktop" 2>/dev/null || true
     rm -rf "/etc/skel/.config/Antigravity-ide" "/etc/skel/.config/Antigravity-ide-box" 2>/dev/null || true
 elif [ -n "${HOME:-}" ]; then
     rm -f "$HOME/Desktop/Antigravity2.desktop" \
           "$HOME/Desktop/AntigravityIDE.desktop" \
-          "$HOME/Desktop/google-antigravity.desktop" 2>/dev/null || true
+          "$HOME/Desktop/google-antigravity.desktop" \
+          "$HOME/Desktop/SetupAssistant.desktop" \
+          "$HOME/Desktop/Setup.desktop" 2>/dev/null || true
     rm -rf "$HOME/.config/Antigravity-ide" "$HOME/.config/Antigravity-ide-box" 2>/dev/null || true
     if [ -d /etc/skel/Desktop ] && [ -d "$HOME/Desktop" ]; then
         cp -rn /etc/skel/Desktop/. "$HOME/Desktop/" 2>/dev/null || true
@@ -314,11 +359,12 @@ CLI_EXEC_ID="6740358537805824"
 CLI_URL="https://storage.googleapis.com/antigravity-public/antigravity-cli/${CLI_VERSION}-${CLI_EXEC_ID}/${CLI_ARCH}/${CLI_TARBALL}"
 
 download_verify "$CLI_URL" sha512 "$CLI_SHA512" "$WORK_DIR/$CLI_TARBALL"
-tar -xzf "$WORK_DIR/$CLI_TARBALL" -C "$WORK_DIR" antigravity
+run_tc_cmd tar -xzf "$WORK_DIR/$CLI_TARBALL" -C "$WORK_DIR" antigravity
 # Copy next to the target and rename, so a running agy is replaced atomically.
 cp "$WORK_DIR/antigravity" "$BIN_DIR/agy.new"
 chmod 0755 "$BIN_DIR/agy.new"
 mv -f "$BIN_DIR/agy.new" "$BIN_DIR/agy"
+tc_log "[INFO] Installed Antigravity CLI binary ${BIN_DIR}/agy"
 
 
 # --- 4 & 5. Antigravity SDK & Google ADK --------------------------------------
@@ -339,8 +385,8 @@ if [ "$MODE" = "system" ]; then
 
     PY_VENV="/opt/agy-python"
     rm -rf "$PY_VENV"
-    python3 -m venv --without-pip "$PY_VENV"
-    "$UV_BIN" pip install --python "$PY_VENV/bin/python" \
+    run_tc_cmd python3 -m venv --without-pip "$PY_VENV"
+    run_tc_cmd "$UV_BIN" pip install --python "$PY_VENV/bin/python" \
         pip google-adk==2.1.0 google-antigravity==0.1.23
     ln -sf "$PY_VENV/bin/adk" /usr/local/bin/adk
     # Enable system python3 to find the packages via .pth file
@@ -355,10 +401,10 @@ if [ "$MODE" = "system" ]; then
     done
 else
     step "Installing Antigravity SDK"
-    pip3 install --user --break-system-packages --no-cache-dir --retries 10 google-antigravity==0.1.23
+    run_tc_cmd pip3 install --user --break-system-packages --no-cache-dir --retries 10 google-antigravity==0.1.23
 
     step "Installing Google ADK"
-    pip3 install --user --break-system-packages --no-cache-dir --retries 10 google-adk==2.1.0
+    run_tc_cmd pip3 install --user --break-system-packages --no-cache-dir --retries 10 google-adk==2.1.0
 fi
 
 
@@ -366,9 +412,9 @@ fi
 step "Installing Gemini CLI"
 if [ "$MODE" = "system" ]; then
     NODE_OPTIONS="${NODE_OPTIONS:---jitless}" UV_THREADPOOL_SIZE=1 \
-        npm install -g --prefix /usr/local --omit=dev --no-audit --no-fund @google/gemini-cli@0.43.0
+        run_tc_cmd npm install -g --prefix /usr/local --omit=dev --no-audit --no-fund @google/gemini-cli@0.43.0
 else
-    npm install -g --prefix "$HOME/.local" --omit=dev --no-audit --no-fund @google/gemini-cli@0.43.0
+    run_tc_cmd npm install -g --prefix "$HOME/.local" --omit=dev --no-audit --no-fund @google/gemini-cli@0.43.0
 fi
 
 
@@ -380,7 +426,7 @@ if [ "$MODE" = "system" ]; then
     fi
 elif command -v code >/dev/null 2>&1; then
     step "Installing Antigravity extension for Visual Studio Code"
-    code --install-extension Google.google-antigravity --force || true
+    run_tc_cmd code --install-extension Google.google-antigravity --force || true
 fi
 
 
@@ -411,6 +457,7 @@ if [ "$missing" -ne 0 ]; then
     die "${missing} toolchain component(s) missing after install."
 fi
 
+tc_log "[EXIT rc=0] ${PROG} completed successfully (mode=${MODE})"
 if [ "$MODE" = "system" ]; then
     echo "Agent toolchain installed successfully at system level ($BIN_DIR, $SHARE_DIR)."
 else

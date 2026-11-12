@@ -1,0 +1,76 @@
+#!/bin/bash
+# agy-doctor - Fast, non-interactive container health & keyring check.
+set -Eeuo pipefail
+VERSION="0.8.0"
+export PATH="${HOME:-/tmp}/.local/bin:$PATH"
+_doc_log() {
+    [[ "${AGY_LOG_DISABLED:-0}" == "1" ]] && return 0
+    local dir="${AGY_BOX_STATE_DIR:-${HOME:-/tmp}/.local/state/agy-box}"
+    mkdir -p "$dir" 2>/dev/null || return 0
+    printf '[%s] [agy-doctor] %s\n' "$(date -Iseconds)" "$*" >> "$dir/doctor.log" 2>/dev/null || true
+}
+run_timed_check() {
+    local t="$1" name="$2" out rc=0 s e pfx=(); shift 2
+    out=$(mktemp "${TMPDIR:-/tmp}/agy-doc.XXXXXX")
+    s=$(date +%s%3N 2>/dev/null || echo 0); [[ "$s" =~ ^[0-9]+$ ]] || s=$(( $(date +%s) * 1000 ))
+    _doc_log "[CMD] ${name}: $* (timeout=${t}s)"
+    command -v setsid &>/dev/null && pfx+=(setsid -w)
+    command -v timeout &>/dev/null && pfx+=(timeout -k 1 "${t}s")
+    AGY_IN_TIMED=1 "${pfx[@]}" bash -c '"$@"' _ "$@" </dev/null >"$out" 2>&1 || rc=$?
+    e=$(date +%s%3N 2>/dev/null || echo 0); [[ "$e" =~ ^[0-9]+$ ]] || e=$(( $(date +%s) * 1000 ))
+    [[ -s "$out" ]] && while IFS= read -r l || [[ -n "$l" ]]; do _doc_log "[OUT] [${name}] $l"; done < "$out"
+    rm -f "$out"; _doc_log "[EXIT rc=${rc} duration_ms=$((e - s))] ${name}"; return "$rc"
+}
+_keyring_py() {
+    command -v python3 &>/dev/null || { echo "python3 missing"; return 1; }
+    python3 -c '
+import getpass, os, re, shutil, signal, subprocess, sys
+signal.signal(signal.SIGALRM, lambda *_: (_ for _ in ()).throw(TimeoutError("SIGALRM 3s")))
+signal.alarm(3)
+def _no_tty(*_a, **_k): raise RuntimeError("Interactive prompt suppressed during health check")
+getpass.getpass = _no_tty
+try: import keyring
+except Exception as e: print(f"keyring import failed: {e}"); sys.exit(2)
+try:
+    kr = keyring.get_keyring(); cls = f"{kr.__class__.__module__}.{kr.__class__.__name__}"
+    eff = (kr.backends[0] if getattr(kr, "backends", None) else None) if kr.__class__.__name__ == "ChainerBackend" else kr
+    if eff is None: print(f"backend={cls} effective=none"); sys.exit(3)
+    ecls = f"{eff.__class__.__module__}.{eff.__class__.__name__}"
+except ModuleNotFoundError as e:
+    cfg, rcp = os.environ.get("PYTHON_KEYRING_BACKEND", ""), os.path.expanduser("~/.config/python_keyring/keyringrc.cfg")
+    if os.path.isfile(rcp): cfg += " " + open(rcp, encoding="utf-8", errors="ignore").read()
+    if "EncryptedKeyring" in cfg and not os.environ.get("KEYRING_CRYPT_PASSWORD"):
+        print("backend=keyrings.alt.file.EncryptedKeyring status=missing_crypt_password"); sys.exit(4)
+    print(f"backend_error={e}"); sys.exit(2)
+print(f"backend={cls} effective={ecls}"); el = ecls.lower()
+if any(x in el for x in (".fail.", ".null.")): sys.exit(3)
+if ("encryptedkeyring" in el or "cryptedfilekeyring" in el) and not os.environ.get("KEYRING_CRYPT_PASSWORD"):
+    print("EncryptedKeyring missing KEYRING_CRYPT_PASSWORD"); sys.exit(4)
+if any(x in el for x in ("secretservice", "secretstorage", "libsecret", "dbus")):
+    ds = shutil.which("dbus-send") or sys.exit(3)
+    def _db(*a): return subprocess.run([ds, "--session", "--reply-timeout=1500", "--type=method_call", "--print-reply", *a], stdin=subprocess.DEVNULL, capture_output=True, text=True)
+    r1 = _db("--dest=org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus.ListNames")
+    r2 = _db("--dest=org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus.ListActivatableNames") if "org.freedesktop.secrets" not in r1.stdout else r1
+    if "org.freedesktop.secrets" not in (r1.stdout + r2.stdout): print("org.freedesktop.secrets unavailable"); sys.exit(3)
+    rl = _db("--dest=org.freedesktop.secrets", "/org/freedesktop/secrets/aliases/default", "org.freedesktop.DBus.Properties.Get", "string:org.freedesktop.Secret.Collection", "string:Locked")
+    if rl.returncode == 0 and re.search(r"\bboolean\s+true\b", rl.stdout, re.I): print("Host keyring collection is locked"); sys.exit(5)
+try:
+    keyring.set_password("agy_box_test", "probe", "ok"); assert keyring.get_password("agy_box_test", "probe") == "ok"; keyring.delete_password("agy_box_test", "probe")
+except TimeoutError as e: print(f"timeout: {e}"); sys.exit(124)
+except Exception as e: print(f"probe_failed: {e}"); sys.exit(3)
+'
+}
+check_keyring() { if [[ "${AGY_IN_TIMED:-0}" == "1" ]]; then _keyring_py; else run_timed_check 5 check_keyring _keyring_py; fi; }
+check_dbus() { run_timed_check 3 check_dbus dbus-send --session --reply-timeout=2000 --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListNames; }
+export -f _doc_log run_timed_check _keyring_py check_keyring check_dbus
+main() {
+    case "${1:-}" in -v|--version) echo "agy-doctor version ${VERSION}"; return 0 ;; -h|--help) echo "Usage: agy-doctor [--version|--help]"; return 0 ;; esac
+    local fail=0 kr_rc=0 c
+    for c in agy antigravity gemini adk google-chrome-stable code zed git; do
+        if command -v "$c" &>/dev/null; then printf '[OK] %s\n' "$c"; _doc_log "[INFO] tool=$c status=ok"; else printf '[WARN] %s missing\n' "$c"; _doc_log "[WARN] tool=$c status=missing"; fail=1; fi
+    done
+    check_keyring || kr_rc=$?
+    case "$kr_rc" in 0) echo "[OK] keyring: healthy" ;; 3) echo "[INFO] keyring: basic password-store fallback" ;; 5) echo "[WARN] keyring: host D-Bus collection is locked" ;; *) echo "[WARN] keyring: check exited rc=${kr_rc}" ;; esac
+    return "$fail"
+}
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then main "$@"; fi
