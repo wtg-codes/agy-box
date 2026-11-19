@@ -9,6 +9,12 @@ Container images are published to `ghcr.io/wtg-codes/agy-box` (`:<version>`, `:<
 
 ## [Unreleased]
 
+### Added
+- **Security Policy (`SECURITY.md`)**: Added vulnerability reporting instructions (GitHub Private Vulnerability Reporting and fallback email), supported version policy, and SLSA build provenance / SPDX SBOM verification guidance.
+
+### Changed
+- **Compliance & CI Hardening Roadmap (`TODO.md`)**: Tracked follow-ups for SHA-pinning remaining mutable GitHub Actions across workflows, monitoring scheduled CI/CD runs, integrating `gitleaks` with RFC 6455 false-positive allowlisting, enforcing SPDX/REUSE license headers, and removing the hardcoded fallback LAN IP in `sdk-smoke.yml`.
+
 ## [0.8.0] - 2026-11-12
 
 - **Unified Multi-Box Fleet Architecture (Zero Singleton Special Cases)**:
