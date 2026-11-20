@@ -13,10 +13,9 @@ Security updates are applied to the latest release series and the `main` branch 
 
 **Please do not report security vulnerabilities through public GitHub issues, discussions, or pull requests.**
 
-Instead, please report suspected vulnerabilities privately using one of the following channels:
+Instead, please report suspected vulnerabilities privately using **GitHub Private Vulnerability Reporting**:
 
-1. **GitHub Private Vulnerability Reporting (Preferred):** Open a private security advisory at <https://github.com/wtg-codes/agy-box/security/advisories/new>.
-2. **Direct Email:** If you cannot use GitHub advisories, email `wtgranstaff@gmail.com` with `[SECURITY] agy-box:` in the subject line.
+- Open a private security advisory at <https://github.com/wtg-codes/agy-box/security/advisories/new>.
 
 When submitting a report, please include as much of the following as possible:
 
