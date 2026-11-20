@@ -20,7 +20,7 @@ In Linux environments (and inside the `agy-box` container), configurations are d
 | **Skel Seed Configuration** | `/etc/skel/.gemini/antigravity-cli/settings.json` | Default template seeded to new user home directories inside `agy-box`. |
 
 > [!NOTE]
-> When running `agy-box` via `agy-box-manager`, the user's home directory is isolated by default to `~/.config/agy-box/home` on the host. Paths shown as `~/` within this document map directly to that isolated home directory inside the container.
+> When running `agy-box` via `agy-box-manager`, each managed box uses an isolated home directory at `~/.config/agy-box/homes/<box-name>` on the host. Paths shown as `~/` within this document map directly to that per-box home directory inside the container.
 
 ---
 
@@ -179,30 +179,29 @@ Rules files can be placed at the root of a repository or in subdirectories. As t
 
 `agy-box-manager` reads user-level host settings from `~/.config/agy-box/config.env`.
 
-If this file does not exist when `agy-box-manager` is invoked, it is automatically initialized with secure, deterministic default values. You can also run the interactive setup wizard at any time via:
+If this file does not exist when `agy-box-manager` is invoked, it is automatically initialized with secure, deterministic default values. You can inspect active host, runtime, and keyring readiness at any time via:
 ```bash
-agy-box-manager wizard
-```
-Or force re-initialization of defaults non-interactively:
-```bash
-agy-box-manager wizard --defaults
+./agy-box-manager doctor
 ```
 
 ### Example `~/.config/agy-box/config.env`
 
 ```bash
+# Default box isolation mode ("sandbox" standalone Podman/Docker, or "workstation" Distrobox)
+AGY_DEFAULT_MODE="sandbox"
+
 # Container runtime engine ("podman" or "docker")
 AGY_CONTAINER_MANAGER="podman"
 
 # Keyring credential security mode ("host" or "isolated")
-#   host:     Shares host D-Bus Secret Service for seamless single sign-on
-#   isolated: Uses encrypted container-local file keyring (air-gapped credentials)
-AGY_KEYRING_MODE="host"
+#   host:     Shares host D-Bus Secret Service in workstation mode for single sign-on
+#   isolated: Unmaps host session bus and uses container-local D-Bus / --password-store=basic
+AGY_KEYRING_MODE="isolated"
 
 # Antigravity agent authentication method ("oauth", "api-key", "service-account")
 AGY_AUTH_METHOD="oauth"
 
-# Default preferred editor inside container ("code", "zed", "jetbrains", "none")
+# Default preferred editor inside container ("code", "zed", "none")
 AGY_DEFAULT_IDE="code"
 
 # Host profile seeding ("true" to mount ~/.gitconfig, ~/.ssh, ~/.config/gcloud; "false" for pristine isolation)
@@ -216,10 +215,11 @@ AGY_TELEMETRY="false"
 
 | Variable | Type | Allowed Values | Default | Description |
 | :--- | :--- | :--- | :--- | :--- |
-| `AGY_CONTAINER_MANAGER` | `string` | `"podman"`, `"docker"` | Auto-detected (`"podman"` if available, else `"docker"`) | The container runtime engine used to build and execute Distrobox containers. Honored whenever `$DBX_CONTAINER_MANAGER` is not explicitly set in the host environment. |
-| `AGY_KEYRING_MODE` | `string` | `"host"`, `"isolated"` | `"host"` | Keyring credential storage mode. In `"host"` mode, the container shares the host's D-Bus Secret Service (GNOME Keyring / KWallet). In `"isolated"` mode, the host session bus is unmapped (`--unsetenv=DBUS_SESSION_BUS_ADDRESS`) and Python keyring is configured to use container-local `EncryptedKeyring` (`keyrings.alt.file.EncryptedKeyring`), ensuring complete air-gapped credential isolation. |
+| `AGY_DEFAULT_MODE` | `string` | `"sandbox"`, `"workstation"` | `"sandbox"` | Default isolation mode for `install` and `dev`. `"sandbox"` runs standalone via rootless Podman or Docker without requiring `distrobox`; `"workstation"` integrates with host Wayland/X11 and D-Bus via Distrobox. |
+| `AGY_CONTAINER_MANAGER` | `string` | `"podman"`, `"docker"` | Auto-detected (`"podman"` if available, else `"docker"`) | The container runtime engine used to manage `agy-box` containers. Honored whenever `$DBX_CONTAINER_MANAGER` is not explicitly set in the host environment. |
+| `AGY_KEYRING_MODE` | `string` | `"host"`, `"isolated"` | `"isolated"` (`sandbox`) / `"host"` (`workstation`) | Keyring credential storage mode. In `"host"` mode (Workstation), the container shares the host's D-Bus Secret Service (GNOME Keyring / KWallet). In `"isolated"` mode, the host session bus is unmapped and browser/Electron wrappers fall back to container-local `--password-store=basic` for air-gapped credential isolation. |
 | `AGY_AUTH_METHOD` | `string` | `"oauth"`, `"api-key"`, `"service-account"` | `"oauth"` | Authentication flow used for Google Antigravity services and models. `"oauth"` provides zero-config browser sign-in on first launch. |
-| `AGY_DEFAULT_IDE` | `string` | `"code"`, `"zed"`, `"jetbrains"`, `"none"` | `"code"` | The default editor to open when entering interactive workspace sessions or launching from the desktop. |
+| `AGY_DEFAULT_IDE` | `string` | `"code"`, `"zed"`, `"none"` | `"code"` | The default editor to open when entering interactive workspace sessions or launching from the desktop. |
 | `AGY_PROFILE_SEEDING` | `string` | `"true"`, `"false"` | `"false"` | When set to `"true"`, mounts host `~/.gitconfig`, `~/.ssh`, and `~/.config/gcloud` into the container as read-only volumes. When set to `"false"`, launches pristine, empty profile directories for maximum privacy. |
 | `AGY_TELEMETRY` | `string` | `"true"`, `"false"` | `"false"` | Global telemetry opt-in. Kept disabled (`"false"`) by default. |
 
@@ -238,4 +238,21 @@ MEMORY_LIMIT="16g"
 ```
 
 When present, `agy-box-manager install` and `dev` automatically inject `--cpus` and `-m` flags into the container engine.
+
+---
+
+## 8. Container TLS Egress Allowlist & MCP Gateway Reference
+
+When deploying `agy-box` in locked-down enterprise or egress-filtered container networks (`OpenShell`, rootless Podman network policies, or egress proxies), allow outbound TCP `:443` (HTTPS) to the following **16 runtime domains**:
+
+| Category | Required HTTPS (`:443`) Domains |
+| :--- | :--- |
+| **Antigravity & Gemini Model / Agent APIs (7)** | `businessaicode.googleapis.com`, `aiplatform.googleapis.com`, `aicode.googleapis.com`, `cloudaicompanion.googleapis.com`, `cloudcode-pa.googleapis.com`, `daily-cloudcode-pa.googleapis.com`, `generativelanguage.googleapis.com` |
+| **Google OAuth & Identity Endpoints (5)** | `accounts.google.com`, `oauth2.googleapis.com`, `www.googleapis.com`, `openidconnect.googleapis.com`, `securetoken.googleapis.com` |
+| **Toolchain & Package Registry Updates (4)** | `dl.google.com`, `storage.googleapis.com`, `pypi.org`, `registry.npmjs.org` |
+
+- **Optional Remote MCP Endpoints:** Add `*.googleapis.com:443` (or explicit `drivemcp.googleapis.com`, `workspacemcp.googleapis.com`, and `developerknowledge.googleapis.com`) when using Google Workspace Remote MCP (`/mcp/v1`) or Developer Knowledge MCP (`/mcp`).
+- **Optional Interactive GitHub Release Downloads:** Add `github.com` and `objects.githubusercontent.com` on `:443` if running interactive GitHub release installers inside egress-restricted sandboxes.
+- **Containerized Local MCP Routing:** For running multiple containerized stdio/SSE MCP servers behind a single audited endpoint, prefer the official MIT-licensed [`docker/mcp-gateway`](https://github.com/docker/mcp-gateway).
+- **Credential Hygiene Verification:** Run `agy-doctor` inside the container to verify `~/.gemini/config/mcp_config.json` is restricted to mode `0600` and that project-scoped `.agents/mcp_config.json` files do not contain literal `"clientSecret"` values.
 

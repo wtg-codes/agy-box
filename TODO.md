@@ -67,4 +67,5 @@ Ideas that are not scheduled yet. Each needs a decision before implementation.
 - **Monitor scheduled CI/CD & maintenance runs**: Track nightly `CI/CD` (`ci.yml`), weekly `GHCR cleanup` (`ghcr-cleanup.yml`), and weekly `Antigravity SDK smoke test` (`sdk-smoke.yml`) runs across GitHub-hosted and self-hosted DGX Spark ARM64 runners to catch silent regressions, runner drift, or expired credentials early.
 
 ### Sandbox engine
+- **Host-side `proxyManaged` credential injection**: Evaluate injecting upstream API/MCP tokens via a host-side TLS egress proxy so isolated sandbox containers never hold raw long-lived API keys in environment variables or on disk.
 - **Distrobox-based sandbox mode**: Evaluate replacing the raw podman/docker sandbox engine with distrobox `--unshare-all` + custom `--home` (must not regress Bluefin workstation mode).
