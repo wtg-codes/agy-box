@@ -11,9 +11,13 @@ Container images are published to `ghcr.io/wtg-codes/agy-box` (`:<version>`, `:<
 
 ### Added
 - **Security Policy (`SECURITY.md`)**: Added vulnerability reporting instructions (GitHub Private Vulnerability Reporting and fallback email), supported version policy, and SLSA build provenance / SPDX SBOM verification guidance.
+- **Scoped Gitleaks Configuration (`.gitleaks.toml`)**: Extended the default `gitleaks` ruleset with a path-and-line-scoped allowlist for the two RFC 6455 §4.1 sample WebSocket handshake nonce (`Sec-WebSocket-Key`) test headers in `agy-box-manager` and `scripts/test-box.sh`.
 
 ### Changed
-- **Compliance & CI Hardening Roadmap (`TODO.md`)**: Tracked follow-ups for SHA-pinning remaining mutable GitHub Actions across workflows, monitoring scheduled CI/CD runs, integrating `gitleaks` with RFC 6455 false-positive allowlisting, enforcing SPDX/REUSE license headers, and removing the hardcoded fallback LAN IP in `sdk-smoke.yml`.
+- **GitHub Pages Workflow Supply-Chain Pinning (`.github/workflows/pages.yml`)**: Pinned `actions/checkout`, `actions/configure-pages`, `actions/upload-pages-artifact`, and `actions/deploy-pages` to full 40-character commit SHAs with version comments.
+- **SDK Smoke Workflow Endpoint Hygiene (`.github/workflows/sdk-smoke.yml`)**: Removed the hardcoded fallback private LAN IP so `spark-cluster` relies solely on `vars.SDK_SMOKE_BASE_URL` and skips cleanly with a notice when unset.
+- **MCP Settings Documentation (`docs/settings-reference.md`)**: Updated global Antigravity MCP configuration path to `~/.gemini/config/mcp_config.json` and documented Nov 11 Workspace OAuth configuration.
+- **Compliance & CI Hardening Roadmap (`TODO.md`)**: Tracked remaining follow-ups for SHA-pinning remaining workflows, wiring `gitleaks` into CI, monitoring scheduled CI/CD runs, and enforcing SPDX/REUSE license headers.
 
 ### Fixed
 - **Self-Hosted Runner Test Hermeticity (`tests/lifecycle.bats`)**: Mocked `curl` alongside `ss` in `setup()` so `vdi_ws_ready` never probes a live VDI server on `127.0.0.1:6080` on self-hosted DGX Spark CI runners.

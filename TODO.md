@@ -30,9 +30,9 @@
 - ~~**Security Policy (`SECURITY.md`)**: Document vulnerability reporting, supported versions, and supply-chain provenance verification.~~ ✅ Done ([SECURITY.md](SECURITY.md)).
 - **Container Vulnerability Scanning**: Integrate `Trivy` or `Grype` into the CI/CD pipeline to automatically block builds that introduce critical CVEs.
   - *Status (v0.6.0)*: Grype scans the Syft SBOM on every build, but **informationally** (`--only-fixed`, no `--fail-on`). Blocking is tracked under [Possible future work](#possible-future-work).
-- **Secret Scanning (`gitleaks`) in CI & Allowlist**: Run `gitleaks` in the lint workflow and add a scoped `.gitleaksignore` or `.gitleaks.toml` allowlist for the two RFC 6455 sample WebSocket handshake nonce (`Sec-WebSocket-Key`) false positives in `scripts/test-box.sh` and `agy-box-manager`.
+- **Secret Scanning (`gitleaks`) in CI & Allowlist**: Added scoped [`.gitleaks.toml`](.gitleaks.toml) allowlisting only the two RFC 6455 §4.1 sample WebSocket handshake nonce (`Sec-WebSocket-Key`) false positives in `scripts/test-box.sh` and `agy-box-manager`; next step is wiring `gitleaks` into the `Lint Codebase` workflow job.
 - **OSS License Header Compliance (`SPDX` / `REUSE`)**: Standardize `SPDX-License-Identifier: MIT` headers (matching [`LICENSE`](LICENSE)) across shell scripts, `agy-box-manager`, and `rootfs/` executables, and enforce via `reuse lint` or `addlicense -check` in CI.
-- **Private Endpoint Configuration**: Remove the hardcoded fallback private LAN IP in [`.github/workflows/sdk-smoke.yml`](.github/workflows/sdk-smoke.yml) and rely solely on `vars.SDK_SMOKE_BASE_URL` (skipping cleanly when unset).
+- ~~**Private Endpoint Configuration**: Remove the hardcoded fallback private LAN IP in [`.github/workflows/sdk-smoke.yml`](.github/workflows/sdk-smoke.yml) and rely solely on `vars.SDK_SMOKE_BASE_URL` (skipping cleanly when unset).~~ ✅ Done ([`.github/workflows/sdk-smoke.yml`](.github/workflows/sdk-smoke.yml)).
 
 ## Possible future work
 
@@ -63,7 +63,7 @@ Ideas that are not scheduled yet. Each needs a decision before implementation.
 - **Shared reusable workflows**: Share lint, GHCR cleanup, Pages, and build-publish as reusable workflows in `wtg-codes/.github`.
 - **Runner tooling in cluster provisioning**: Move CI runner tooling (yamllint, shellcheck, distrobox, syft, grype, buildx builder) into the `wtg-dgx-spark-cluster` runner provisioning instead of installing it per job.
 - **Centralized version pins**: Source toolchain version pins from `wtg-codes/agy-easy-install`'s `versions.json` or Renovate regex managers.
-- **SHA-pin remaining mutable GitHub Actions**: Pin all remaining tag-referenced actions across `ci.yml` (21 uses), `compile-diagrams.yml` (3 uses), `pages.yml` (4 uses), and `sdk-smoke.yml` (2 uses) to immutable 40-character commit SHAs with version comments (matching `dataaxiom/ghcr-cleanup-action` in `ghcr-cleanup.yml`), kept current by [`.github/dependabot.yml`](.github/dependabot.yml).
+- **SHA-pin remaining mutable GitHub Actions**: Pin all remaining tag-referenced actions across `ci.yml` (21 uses), `compile-diagrams.yml` (3 uses), and `sdk-smoke.yml` (2 uses) to immutable 40-character commit SHAs with version comments (matching `ghcr-cleanup.yml` and `pages.yml`), kept current by [`.github/dependabot.yml`](.github/dependabot.yml).
 - **Monitor scheduled CI/CD & maintenance runs**: Track nightly `CI/CD` (`ci.yml`), weekly `GHCR cleanup` (`ghcr-cleanup.yml`), and weekly `Antigravity SDK smoke test` (`sdk-smoke.yml`) runs across GitHub-hosted and self-hosted DGX Spark ARM64 runners to catch silent regressions, runner drift, or expired credentials early.
 
 ### Sandbox engine

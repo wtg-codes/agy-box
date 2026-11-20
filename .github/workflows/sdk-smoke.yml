@@ -24,14 +24,14 @@ permissions:
 
 jobs:
   # Local inference on the DGX Spark cluster (OpenAI-compatible vLLM endpoint):
-  # no cloud credentials. Override with repository variables
-  # SDK_SMOKE_BASE_URL / SDK_SMOKE_MODEL.
+  # no cloud credentials. Configure via repository variables
+  # SDK_SMOKE_BASE_URL (skipped cleanly when unset) and SDK_SMOKE_MODEL.
   spark-cluster:
     name: SDK → DGX Spark cluster (LocalOpenAIAgentConfig)
     runs-on: [self-hosted, Linux, ARM64, dgx-spark]
     timeout-minutes: 15
     env:
-      SDK_SMOKE_BASE_URL: ${{ vars.SDK_SMOKE_BASE_URL || 'http://10.0.0.1:8000/v1' }}
+      SDK_SMOKE_BASE_URL: ${{ vars.SDK_SMOKE_BASE_URL }}
       SDK_SMOKE_MODEL: ${{ vars.SDK_SMOKE_MODEL || 'deepseek-v4.1-flash' }}
     steps:
       - name: Checkout repository
@@ -40,7 +40,10 @@ jobs:
       - name: Check cluster endpoint
         id: probe
         run: |
-          if curl -fsS -m 10 "${SDK_SMOKE_BASE_URL}/models" > /dev/null; then
+          if [ -z "${SDK_SMOKE_BASE_URL}" ]; then
+            echo "up=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::SDK_SMOKE_BASE_URL repository variable is not set; skipping the live cluster test."
+          elif curl -fsS -m 10 "${SDK_SMOKE_BASE_URL}/models" > /dev/null; then
             echo "up=true" >> "$GITHUB_OUTPUT"
           else
             echo "up=false" >> "$GITHUB_OUTPUT"
