@@ -342,6 +342,7 @@ EOF2
 }
 
 @test "agy-doctor validates mcp_config.json 0600 permissions and warns on workspace clientSecret literals" {
+  local doctor_bin="$BATS_TEST_DIRNAME/../rootfs/usr/local/bin/agy-doctor"
   for tool in agy antigravity gemini adk google-chrome-stable code zed git; do
     create_mock "$tool" 'exit 0'
   done
@@ -351,7 +352,7 @@ EOF2
   echo '{"mcpServers":{}}' > "$HOME/.gemini/config/mcp_config.json"
   chmod 0600 "$HOME/.gemini/config/mcp_config.json"
 
-  run bash -c "cd '$TEST_DIR/proj' && '$OLDPWD/rootfs/usr/local/bin/agy-doctor'"
+  run bash -c "cd '$TEST_DIR/proj' && '$doctor_bin'"
   echo "$output"
   [ "$status" -eq 0 ]
   [[ "$output" == *"[OK] mcp_config:"* ]]
@@ -360,7 +361,7 @@ EOF2
   chmod 0644 "$HOME/.gemini/config/mcp_config.json"
   echo '{"mcpServers":{"demo":{"oauth":{"clientSecret":"placeholder"}}}}' > "$TEST_DIR/proj/.agents/mcp_config.json"
 
-  run bash -c "cd '$TEST_DIR/proj' && '$OLDPWD/rootfs/usr/local/bin/agy-doctor'"
+  run bash -c "cd '$TEST_DIR/proj' && '$doctor_bin'"
   echo "$output"
   [ "$status" -eq 0 ]
   [[ "$output" == *"recommend chmod 0600"* ]]
