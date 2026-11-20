@@ -9,6 +9,20 @@ Container images are published to `ghcr.io/wtg-codes/agy-box` (`:<version>`, `:<
 
 ## [Unreleased]
 
+### Added
+- **Security Policy (`SECURITY.md`)**: Added vulnerability reporting instructions via GitHub Private Vulnerability Reporting, supported version policy, and SLSA build provenance / SPDX SBOM verification guidance.
+- **Scoped Gitleaks Configuration (`.gitleaks.toml`)**: Extended the default `gitleaks` ruleset with a path-and-line-scoped allowlist for the two RFC 6455 §4.1 sample WebSocket handshake nonce (`Sec-WebSocket-Key`) test headers in `agy-box-manager` and `scripts/test-box.sh`.
+
+### Changed
+- **GitHub Actions Supply-Chain Pinning (`.github/workflows/*.yml`, `.github/actionlint.yaml`)**: Pinned all third-party actions across `ci.yml`, `compile-diagrams.yml`, `pages.yml`, and `sdk-smoke.yml` (matching `ghcr-cleanup.yml`) to immutable 40-character commit SHAs with version comments, and scoped `.github/actionlint.yaml` runner labels to generic `dgx-spark` / `agy-box`.
+- **SDK Smoke Workflow & Community Reporting Hygiene (`.github/workflows/sdk-smoke.yml`, `CODE_OF_CONDUCT.md`)**: Removed the hardcoded fallback private LAN IP so `spark-cluster` relies solely on `vars.SDK_SMOKE_BASE_URL` (skipping cleanly when unset), and routed private `CODE_OF_CONDUCT.md` enforcement reports to GitHub Private Vulnerability Reporting.
+- **MCP Settings & Egress Allowlist Documentation (`docs/settings-reference.md`)**: Updated global Antigravity MCP configuration path to `~/.gemini/config/mcp_config.json`, documented Nov 11 Workspace OAuth configuration, aligned `config.env` reference with `v0.8.0` (`~/.config/agy-box/homes/<box-name>` and `AGY_DEFAULT_MODE="sandbox"`), and added the 16-domain HTTPS (`:443`) container egress allowlist + `docker/mcp-gateway` reference.
+- **`agy-doctor` MCP Credential Hygiene Check (`rootfs/usr/local/bin/agy-doctor`, `tests/toolchain.bats`)**: Added non-blocking `check_mcp_hygiene` diagnostics verifying `0600` permissions on `~/.gemini/config/mcp_config.json` and warning if project-scoped `.agents/mcp_config.json` contains literal `"clientSecret"` values.
+- **Compliance & CI Hardening Roadmap (`TODO.md`)**: Tracked remaining follow-ups for wiring `gitleaks` into CI, monitoring scheduled CI/CD runs, and enforcing SPDX/REUSE license headers.
+
+### Fixed
+- **Self-Hosted Runner Test Hermeticity (`tests/lifecycle.bats`)**: Mocked `curl` alongside `ss` in `setup()` so `vdi_ws_ready` never probes a live VDI server on `127.0.0.1:6080` on self-hosted DGX Spark CI runners.
+
 ## [0.8.0] - 2026-11-12
 
 - **Unified Multi-Box Fleet Architecture (Zero Singleton Special Cases)**:

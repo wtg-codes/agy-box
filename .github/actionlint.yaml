@@ -1,6 +1,4 @@
 self-hosted-runner:
   labels:
     - dgx-spark
-    - spark-01
-    - spark-02
     - agy-box

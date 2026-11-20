@@ -24,8 +24,9 @@ EOF2
     chmod +x "$MOCK_BIN/$cmd"
   }
 
-  # Mock ss by default so host open sockets (e.g. 6080) never affect deterministic port offset tests
+  # Mock ss and curl by default so host open sockets (e.g. live VDI on 6080 on self-hosted runners) never affect deterministic tests
   create_mock "ss" 'exit 0'
+  create_mock "curl" 'exit 1'
 
   export ORIGINAL_PATH="$PATH"
   export ORIGINAL_HOME="$HOME"

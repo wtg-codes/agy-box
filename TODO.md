@@ -27,8 +27,12 @@
 - ~~**Settings Schema Mapping**: Document user settings schema for Antigravity IDE and CLI in a dedicated `docs/settings-reference.md` file.~~ ✅ Done ([docs/settings-reference.md](docs/settings-reference.md)).
 
 ## Security
+- ~~**Security Policy (`SECURITY.md`)**: Document vulnerability reporting, supported versions, and supply-chain provenance verification.~~ ✅ Done ([SECURITY.md](SECURITY.md)).
 - **Container Vulnerability Scanning**: Integrate `Trivy` or `Grype` into the CI/CD pipeline to automatically block builds that introduce critical CVEs.
   - *Status (v0.6.0)*: Grype scans the Syft SBOM on every build, but **informationally** (`--only-fixed`, no `--fail-on`). Blocking is tracked under [Possible future work](#possible-future-work).
+- **Secret Scanning (`gitleaks`) in CI & Allowlist**: Added scoped [`.gitleaks.toml`](.gitleaks.toml) allowlisting only the two RFC 6455 §4.1 sample WebSocket handshake nonce (`Sec-WebSocket-Key`) false positives in `scripts/test-box.sh` and `agy-box-manager`; next step is wiring `gitleaks` into the `Lint Codebase` workflow job.
+- **OSS License Header Compliance (`SPDX` / `REUSE`)**: Standardize `SPDX-License-Identifier: MIT` headers (matching [`LICENSE`](LICENSE)) across shell scripts, `agy-box-manager`, and `rootfs/` executables, and enforce via `reuse lint` or `addlicense -check` in CI.
+- ~~**Private Endpoint Configuration**: Remove the hardcoded fallback private LAN IP in [`.github/workflows/sdk-smoke.yml`](.github/workflows/sdk-smoke.yml) and rely solely on `vars.SDK_SMOKE_BASE_URL` (skipping cleanly when unset).~~ ✅ Done ([`.github/workflows/sdk-smoke.yml`](.github/workflows/sdk-smoke.yml)).
 
 ## Possible future work
 
@@ -37,7 +41,7 @@ Ideas that are not scheduled yet. Each needs a decision before implementation.
 ### Images & platforms
 - ~~**Batteries-Included Toolchain & Honest SBOM (Option A)**: Bake the developer toolchain (Google Antigravity Agent UI, IDE/VS Code extension, CLI `agy`, Python SDK, and Google ADK) directly into system paths (`/usr/local/bin`, `/opt`) at container build time. This ensures Syft generates a 100% authentic, comprehensive `sbom.spdx.json` that Grype scans in CI, while eliminating slow and error-prone user-space downloads on first boot.~~ ✅ Done (PR #29).
 - **Upstream Version Sync via `agy-easy-install`**: Source upstream release URLs, versions, and verified SHA256 checksums from `wtg-codes/agy-easy-install`'s `versions.json` (scraped nightly) as build arguments in GitHub Actions CI.
-- **Googlebook (ChromeOS / Crostini) Support**: Validate and document running `agy-box` / `agy-box-manager` inside ChromeOS Crostini Linux container (both x86_64 and ARM64 Googlebook devices), including localhost port forwarding for the noVNC VDI (`6080`).
+- **Chromebook (ChromeOS Crostini & Android Linux VM) Support**: Validate and document running `agy-box` / `agy-box-manager` inside ChromeOS Crostini Linux containers and Android Linux VMs (both x86_64 and ARM64 Chromebook devices), including localhost port forwarding for the noVNC VDI (`6080`).
 - ~~**Antigravity IDE Extension Transition**: With Google deprecating the Standalone Antigravity IDE in favor of editor extensions, package VS Code / VSCodium with the official `Google Antigravity` extension pre-configured inside the VDI desktop, keeping the standalone IDE as a legacy option.~~ ✅ Done (PR #33, updated): VS Code and Zed Editor baked into the container image with `/etc/skel/.vscode/extensions.json` recommending `Google.google-antigravity` and Zed `auto_install_extensions` (build-time root Electron `code --install-extension` sunsetted for deterministic builds; user-space installation available on demand via `agy-install-toolchain` or `agy-box-manager update --ides`), plus on-demand JetBrains installer (`agy-install-ide`).
 - ~~**Optional CUDA PyTorch variant for Open WebUI**: Offer CUDA-enabled PyTorch either as a separate image tag (e.g. `ghcr.io/wtg-codes/agy-box:<version>-cuda`) or as an opt-in installer inside the box.~~ ✅ Dropped: Open WebUI was removed from the image (not core to agy-box; run the official Open WebUI container next to the box if wanted).
 - ~~**Real arm64 support (NVIDIA DGX Spark / Apple Silicon / Crostini)**: Moved to multi-arch base image `quay.io/toolbx/ubuntu-toolbox:24.04` (publishing native `amd64` and `arm64`) with parallel native GitHub Actions runners (`ubuntu-24.04` and `ubuntu-24.04-arm`). Updated `scripts/install-agent-toolchain.sh` with Google's official Linux ARM64 binaries and checksums. Added `--nvidia` GPU auto-detection in `agy-box-manager` for NVIDIA Grace Blackwell workstations.~~ ✅ Done (`feat/nvidia-dgx-spark-arm64`).
@@ -59,6 +63,9 @@ Ideas that are not scheduled yet. Each needs a decision before implementation.
 - **Shared reusable workflows**: Share lint, GHCR cleanup, Pages, and build-publish as reusable workflows in `wtg-codes/.github`.
 - **Runner tooling in cluster provisioning**: Move CI runner tooling (yamllint, shellcheck, distrobox, syft, grype, buildx builder) into the `wtg-dgx-spark-cluster` runner provisioning instead of installing it per job.
 - **Centralized version pins**: Source toolchain version pins from `wtg-codes/agy-easy-install`'s `versions.json` or Renovate regex managers.
+- ~~**SHA-pin remaining mutable GitHub Actions**: Pin all remaining tag-referenced actions across `ci.yml`, `compile-diagrams.yml`, `pages.yml`, and `sdk-smoke.yml` to immutable 40-character commit SHAs with version comments (matching `ghcr-cleanup.yml`), kept current by [`.github/dependabot.yml`](.github/dependabot.yml).~~ ✅ Done.
+- **Monitor scheduled CI/CD & maintenance runs**: Track nightly `CI/CD` (`ci.yml`), weekly `GHCR cleanup` (`ghcr-cleanup.yml`), and weekly `Antigravity SDK smoke test` (`sdk-smoke.yml`) runs across GitHub-hosted and self-hosted DGX Spark ARM64 runners to catch silent regressions, runner drift, or expired credentials early.
 
 ### Sandbox engine
+- **Host-side `proxyManaged` credential injection**: Evaluate injecting upstream API/MCP tokens via a host-side TLS egress proxy so isolated sandbox containers never hold raw long-lived API keys in environment variables or on disk.
 - **Distrobox-based sandbox mode**: Evaluate replacing the raw podman/docker sandbox engine with distrobox `--unshare-all` + custom `--home` (must not regress Bluefin workstation mode).

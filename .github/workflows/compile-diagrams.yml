@@ -24,12 +24,12 @@ jobs:
       # require CI" ruleset, and (unlike GITHUB_TOKEN) its push triggers the
       # Pages deploy for the fresh renders.
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           ssh-key: ${{ secrets.DIAGRAMS_DEPLOY_KEY }}
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7
         with:
           node-version: 24
           # setup-node v5+ auto-enables caching; there is no package.json here.
@@ -54,7 +54,7 @@ jobs:
           done
 
       - name: Commit and push changes
-        uses: stefanzweifel/git-auto-commit-action@v7
+        uses: stefanzweifel/git-auto-commit-action@d0b01107b5db882071f96de5dd4b54961ea93f4c  # v7
         with:
           # CI/CD ignores docs-only pushes, so no skip directive is needed (and
           # one would leak into squash-merge messages).

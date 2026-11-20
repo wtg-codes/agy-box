@@ -1,0 +1,16 @@
+title = "agy-box gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "RFC 6455 Section 4.1 literal 'the sample nonce' WebSocket handshake test header"
+condition = "AND"
+regexTarget = "line"
+paths = [
+  '''(^|/)agy-box-manager$''',
+  '''(^|/)scripts/test-box\.sh$''',
+]
+regexes = [
+  '''Sec-WebSocket-Key:\s*dGhlIHNhbXBsZSBub25jZQ==''',
+]

@@ -62,15 +62,17 @@ except Exception as e: print(f"probe_failed: {e}"); sys.exit(3)
 }
 check_keyring() { if [[ "${AGY_IN_TIMED:-0}" == "1" ]]; then _keyring_py; else run_timed_check 5 check_keyring _keyring_py; fi; }
 check_dbus() { run_timed_check 3 check_dbus dbus-send --session --reply-timeout=2000 --dest=org.freedesktop.DBus --type=method_call --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListNames; }
-export -f _doc_log run_timed_check _keyring_py check_keyring check_dbus
+check_mcp_hygiene() { local gm="${HOME:-/tmp}/.gemini/config/mcp_config.json" m="" seen="" wm
+    if [[ -f "$gm" ]]; then m=$(stat -c '%a' "$gm" 2>/dev/null || stat -f '%Lp' "$gm" 2>/dev/null || true); if [[ -n "$m" && "${m: -2}" != "00" ]]; then printf '[WARN] mcp_config: %s has mode %s (recommend chmod 0600)\n' "$gm" "$m"; _doc_log "[WARN] mcp_config=$gm mode=$m status=overly_permissive"; else printf '[OK] mcp_config: %s (mode %s)\n' "$gm" "${m:-600}"; _doc_log "[INFO] mcp_config=$gm mode=${m:-600} status=ok"; fi; fi
+    for wm in "${PWD:-}/.agents/mcp_config.json" "/workspace/.agents/mcp_config.json"; do [[ -f "$wm" && "$wm" != "$seen" ]] || continue; seen="$wm"; if grep -Eq '"clientSecret"[[:space:]]*:[[:space:]]*"[^"]+' "$wm" 2>/dev/null; then printf '[WARN] mcp_config: %s contains literal clientSecret (move OAuth secrets to ~/.gemini/config/mcp_config.json)\n' "$wm"; _doc_log "[WARN] workspace_mcp=$wm status=client_secret_in_project"; fi; done; }
+export -f _doc_log run_timed_check _keyring_py check_keyring check_dbus check_mcp_hygiene
 main() {
     case "${1:-}" in -v|--version) echo "agy-doctor version ${VERSION}"; return 0 ;; -h|--help) echo "Usage: agy-doctor [--version|--help]"; return 0 ;; esac
-    local fail=0 kr_rc=0 c
-    for c in agy antigravity gemini adk google-chrome-stable code zed git; do
+    local fail=0 kr_rc=0 c; for c in agy antigravity gemini adk google-chrome-stable code zed git; do
         if command -v "$c" &>/dev/null; then printf '[OK] %s\n' "$c"; _doc_log "[INFO] tool=$c status=ok"; else printf '[WARN] %s missing\n' "$c"; _doc_log "[WARN] tool=$c status=missing"; fail=1; fi
     done
     check_keyring || kr_rc=$?
     case "$kr_rc" in 0) echo "[OK] keyring: healthy" ;; 3) echo "[INFO] keyring: basic password-store fallback" ;; 5) echo "[WARN] keyring: host D-Bus collection is locked" ;; *) echo "[WARN] keyring: check exited rc=${kr_rc}" ;; esac
-    return "$fail"
+    check_mcp_hygiene; return "$fail"
 }
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then main "$@"; fi
