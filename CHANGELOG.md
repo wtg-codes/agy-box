@@ -15,6 +15,9 @@ Container images are published to `ghcr.io/wtg-codes/agy-box` (`:<version>`, `:<
 ### Changed
 - **Compliance & CI Hardening Roadmap (`TODO.md`)**: Tracked follow-ups for SHA-pinning remaining mutable GitHub Actions across workflows, monitoring scheduled CI/CD runs, integrating `gitleaks` with RFC 6455 false-positive allowlisting, enforcing SPDX/REUSE license headers, and removing the hardcoded fallback LAN IP in `sdk-smoke.yml`.
 
+### Fixed
+- **Self-Hosted Runner Test Hermeticity (`tests/lifecycle.bats`)**: Mocked `curl` alongside `ss` in `setup()` so `vdi_ws_ready` never probes a live VDI server on `127.0.0.1:6080` on self-hosted DGX Spark CI runners.
+
 ## [0.8.0] - 2026-11-12
 
 - **Unified Multi-Box Fleet Architecture (Zero Singleton Special Cases)**:
