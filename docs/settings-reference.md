@@ -14,8 +14,8 @@ In Linux environments (and inside the `agy-box` container), configurations are d
 | **IDE Keybindings** | `~/.config/Antigravity/User/keybindings.json` | Custom keyboard shortcuts for the IDE. |
 | **Workspace Settings** | `<project-root>/.vscode/settings.json` | Repository-specific overrides for editor settings. |
 | **CLI Settings** | `~/.gemini/antigravity-cli/settings.json` | Global CLI agent settings (model, tool permissions, trusted workspaces). |
-| **Global MCP Servers** | `~/.gemini/settings.json` | Model Context Protocol (MCP) server definitions (stdio and SSE/HTTP). |
-| **Global Customizations** | `~/.gemini/config/` | Machine-wide skills, rules, plugins, and hooks. |
+| **Global MCP Servers** | `~/.gemini/config/mcp_config.json` (workspace: `<project-root>/.agents/mcp_config.json`) | Model Context Protocol (MCP) server definitions (stdio and Streamable HTTP/SSE). |
+| **Global Customizations** | `~/.gemini/config/` | Machine-wide skills (`skills/`), rules, plugins, and hooks (`hooks.json`). |
 | **Project Customizations** | `<project-root>/.agents/` (or `.agent/`, `GEMINI.md`, `AGENTS.md`) | Repository-level agent instructions, custom skills, and rules. |
 | **Skel Seed Configuration** | `/etc/skel/.gemini/antigravity-cli/settings.json` | Default template seeded to new user home directories inside `agy-box`. |
 
@@ -70,9 +70,14 @@ The Antigravity CLI (`agy`) reads its primary configuration from `~/.gemini/anti
 
 ---
 
-## 3. Global MCP Configuration (`~/.gemini/settings.json`)
+## 3. Global MCP Configuration (`~/.gemini/config/mcp_config.json`)
 
-Model Context Protocol (MCP) servers allow the agent to connect to local tools and remote services. Global MCP servers are configured in `~/.gemini/settings.json`.
+Model Context Protocol (MCP) servers allow the agent to connect to local tools and remote services. Global MCP servers are configured in `~/.gemini/config/mcp_config.json` (and per-workspace servers in `<project-root>/.agents/mcp_config.json`).
+
+> [!IMPORTANT]
+> - **Never commit OAuth `clientSecret` values into `<project-root>/.agents/mcp_config.json`:** `agy` does not expand shell environment variables inside `mcp_config.json`; keep credentialed entries strictly in user-scoped `~/.gemini/config/mcp_config.json` (`chmod 0600`).
+> - **Google Workspace Remote MCP (`/mcp/v1`) Requirements (as of Nov 11, 2026):** All 10 official Google Workspace Remote MCP endpoints require the `/mcp/v1` suffix, an OAuth Web Client with **"Use this client for an AI-powered agent"** enabled (`access_type=offline`), and Model Armor floor settings where enforced by org policy. (Only Google Developer Knowledge uses `/mcp` without `/v1`.)
+> - **Nested Container Sandbox Note:** Inside rootless Podman/Docker or Distrobox containers without unprivileged user namespaces, nested `agy --sandbox` disables automatically because the outer `agy-box` / `OpenShell` container provides workspace isolation.
 
 ### Schema & Examples
 
@@ -96,7 +101,7 @@ Model Context Protocol (MCP) servers allow the agent to connect to local tools a
 }
 ```
 
-#### Remote HTTP / SSE Transport
+#### Remote Streamable HTTP / SSE Transport
 
 ```json
 {
@@ -107,6 +112,12 @@ Model Context Protocol (MCP) servers allow the agent to connect to local tools a
         "clientId": "<CLIENT_ID>",
         "clientSecret": "<CLIENT_SECRET>"
       }
+    },
+    "gws-workspace-search": {
+      "serverUrl": "https://workspacemcp.googleapis.com/mcp/v1"
+    },
+    "google-developer-knowledge": {
+      "serverUrl": "https://developerknowledge.googleapis.com/mcp"
     }
   }
 }
