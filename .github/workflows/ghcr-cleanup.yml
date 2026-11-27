@@ -87,7 +87,7 @@ jobs:
           echo "Event: ${EVENT_NAME}  dry_run: ${dry_run}  older_than: ${older_than}" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Delete untagged images (multi-arch / attestation aware)
-        uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f  # v1.2.2
+        uses: dataaxiom/ghcr-cleanup-action@ac45a8c04b1eb4b27974ca79a0a74f344c93664b  # v1.3.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           owner: ${{ github.repository_owner }}
