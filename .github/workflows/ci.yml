@@ -207,11 +207,11 @@ jobs:
 
       - name: Install Syft
         id: syft
-        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610  # v0
+        uses: anchore/sbom-action/download-syft@dfcb83b97731532d72be422cbc51ee64adb6fd56  # v0.24.4
 
       - name: Install Grype
         id: grype
-        uses: anchore/scan-action/download-grype@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2  # v7
+        uses: anchore/scan-action/download-grype@11983a512817154c80a9db660c1a184be7513ed6  # v7.4.3
 
       # Cataloging the multi-GB image (~3 min) and downloading the Grype DB are
       # independent of the integration tests, so run them in the background
